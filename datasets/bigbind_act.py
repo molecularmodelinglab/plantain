@@ -1,11 +1,11 @@
-import warnings
 from rdkit import Chem
 from Bio.PDB import PDBParser
 from Bio.PDB.PDBExceptions import PDBConstructionWarning
 
 from datasets.bigbind import BigBindDataset
-from datasets.graphs.mol_graph import MolGraph
-from datasets.graphs.prot_graph import ProtGraph
+from datasets.graphs.mol_graph import MolGraph, mol_graph_from_sdf
+from datasets.graphs.prot_graph import ProtGraph, prot_graph_from_pdb
+from datasets.data_types import ActivityData
 
 class BigBindActDataset(BigBindDataset):
 
@@ -25,17 +25,18 @@ class BigBindActDataset(BigBindDataset):
     def get_item_pre_cache(self, index):
         lig_file = self.dir + "/" + self.activities.lig_file[index]
         rec_file = self.dir + "/" + self.activities.ex_rec_pocket_file[index]
-        activity = self.activities.pchembl_value[index]
         
-        lig = next(Chem.SDMolSupplier(lig_file, sanitize=True))
+        activity = torch.tensor(self.activities.pchembl_value[index], dtype=torch.float32)
 
-        parser = PDBParser()
-        with warnings.catch_warnings():
-            warnings.filterwarnings("ignore", category=PDBConstructionWarning)
-            structure = parser.get_structure('random_id', rec_file)
-            rec = structure[0]
+        lig_graph = mol_graph_from_sdf(self.cfg, lig_file)
+        rec_graph = prot_graph_from_pdb(self.cfg, rec_file)
 
-        lig_graph = MolGraph(self.cfg, lig)
-        rec_graph = ProtGraph(self.cfg, rec)
+        return ActivityData(lig_graph, rec_graph, activity)
 
-        return lig_graph, rec_graph, activity
+    def get_variance(self):
+        return {
+            "activity": self.activities.pchembl_value.var(),
+        }
+
+    def get_type_data(self):
+        return ActivityData.get_type_data(self.cfg)

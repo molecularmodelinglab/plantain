@@ -31,5 +31,6 @@ def make_dataloader(cfg, split):
 if __name__ == "__main__":
     from common.cfg_utils import get_config
     cfg = get_config()
+    cfg.data.cache = False
     loader = make_dataloader(cfg, "val")
-    print(next(iter(loader)))
+    print(next(iter(loader)).lig)
