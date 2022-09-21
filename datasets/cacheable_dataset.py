@@ -8,7 +8,7 @@ from random import random
 
 from datasets.utils import dict_to_id_str
 
-CACHE_VERSION = 0.3
+CACHE_VERSION = 0.4
 
 class CacheableDataset(data.Dataset):
 

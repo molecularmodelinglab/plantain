@@ -28,7 +28,7 @@ class BigBindActDataset(BigBindDataset):
         """ same as above """
         if not self.cfg.data.use_rec:
             index = 0
-        return self.dir + "/" + self.activities.ex_rec_file[index]
+        return self.dir + "/" + self.activities.ex_rec_pocket_file[index]
 
     def get_cache_key(self, index):
 
