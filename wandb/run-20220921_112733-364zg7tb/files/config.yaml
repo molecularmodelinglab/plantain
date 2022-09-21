@@ -1,0 +1,188 @@
+wandb_version: 1
+
+_wandb:
+  desc: null
+  value:
+    cli_version: 0.12.16
+    framework: lightning
+    is_jupyter_run: false
+    is_kaggle_kernel: false
+    m:
+    - 1: trainer/global_step
+      6:
+      - 3
+    - 1: train_loss
+      5: 1
+      6:
+      - 1
+    - 1: train_act_mse
+      5: 1
+      6:
+      - 1
+    - 1: train_act_r2
+      5: 1
+      6:
+      - 1
+    - 1: epoch
+      5: 1
+      6:
+      - 1
+    python_version: 3.8.5
+    start_time: 1663774053
+    t:
+      1:
+      - 1
+      - 5
+      - 9
+      - 41
+      - 50
+      - 51
+      - 53
+      - 55
+      3:
+      - 7
+      - 13
+      4: 3.8.5
+      5: 0.12.16
+      8:
+      - 5
+batch_size:
+  desc: null
+  value: 2
+data/cache:
+  desc: null
+  value: true
+data/lig_graph/atom_feats:
+  desc: null
+  value:
+  - element
+  - formal_charge
+  - hybridization
+  - is_aromatic
+  - numH
+data/lig_graph/bond_feats/bond_order:
+  desc: null
+  value: true
+data/rec_graph/atom_feats:
+  desc: null
+  value:
+  - atom_type
+data/rec_graph/edge_feats:
+  desc: null
+  value:
+  - dist
+data/rec_graph/edge_method/knn_rad:
+  desc: null
+  value: 20
+data/rec_graph/edge_method/max_neighbors:
+  desc: null
+  value: None
+data/rec_graph/edge_method/type:
+  desc: null
+  value: knn
+data/rec_graph/include_h:
+  desc: null
+  value: false
+data/rec_graph/node_type:
+  desc: null
+  value: residue
+data/rec_graph/only_pocket:
+  desc: null
+  value: true
+data/rec_graph/residue_feats:
+  desc: null
+  value:
+  - residue_type
+dataset:
+  desc: null
+  value: bigbind_act
+learn_rate:
+  desc: null
+  value: 0.0001
+losses/act_mse_lambda:
+  desc: null
+  value: 1.0
+max_epochs:
+  desc: null
+  value: 1000
+metrics:
+  desc: null
+  value:
+  - act_r2
+model/lig_encoder/edge_embed_size:
+  desc: null
+  value: 32
+model/lig_encoder/edge_hidden_size:
+  desc: null
+  value: 32
+model/lig_encoder/node_embed_size:
+  desc: null
+  value: 8
+model/lig_encoder/node_hidden_sizes:
+  desc: null
+  value:
+  - 64
+  - 64
+  - 64
+  - 64
+  - 64
+model/lig_encoder/num_mpnn_layers:
+  desc: null
+  value: 2
+model/out_mlp_sizes:
+  desc: null
+  value:
+  - 64
+model/rec_encoder/edge_embed_size:
+  desc: null
+  value: 32
+model/rec_encoder/edge_hidden_size:
+  desc: null
+  value: 8
+model/rec_encoder/node_embed_size:
+  desc: null
+  value: 32
+model/rec_encoder/node_hidden_sizes:
+  desc: null
+  value:
+  - 64
+  - 64
+  - 64
+  - 64
+  - 64
+model/rec_encoder/num_mpnn_layers:
+  desc: null
+  value: 1
+model/type:
+  desc: null
+  value: gnn_bind
+model/use_lig:
+  desc: null
+  value: true
+model/use_rec:
+  desc: null
+  value: true
+name:
+  desc: null
+  value: test_0
+optimizer:
+  desc: null
+  value: adamw
+platform/bigbind_dir:
+  desc: null
+  value: /home/boris/Data/BigBindNew
+platform/cache_dir:
+  desc: null
+  value: /home/boris/Data/e2ebind_cache
+platform/num_workers:
+  desc: null
+  value: 0
+project:
+  desc: null
+  value: direct_bind
+resume_id:
+  desc: null
+  value: None
+val_check_interval:
+  desc: null
+  value: 50000

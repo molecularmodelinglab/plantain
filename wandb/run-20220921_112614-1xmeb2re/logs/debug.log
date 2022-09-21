@@ -1,0 +1,137 @@
+2022-09-21 11:26:14,286 INFO    MainThread:458220 [wandb_setup.py:_flush():76] Loading settings from /home/boris/.config/wandb/settings
+2022-09-21 11:26:14,286 INFO    MainThread:458220 [wandb_setup.py:_flush():76] Loading settings from /home/boris/Repos/e2ebind/wandb/settings
+2022-09-21 11:26:14,286 INFO    MainThread:458220 [wandb_setup.py:_flush():76] Loading settings from environment variables: {}
+2022-09-21 11:26:14,286 INFO    MainThread:458220 [wandb_setup.py:_flush():76] Inferring run settings from compute environment: {'program_relpath': 'train.py', 'program': 'train.py'}
+2022-09-21 11:26:14,286 INFO    MainThread:458220 [wandb_init.py:_log_setup():428] Logging user logs to /home/boris/Repos/e2ebind/wandb/run-20220921_112614-1xmeb2re/logs/debug.log
+2022-09-21 11:26:14,286 INFO    MainThread:458220 [wandb_init.py:_log_setup():429] Logging internal logs to /home/boris/Repos/e2ebind/wandb/run-20220921_112614-1xmeb2re/logs/debug-internal.log
+2022-09-21 11:26:14,286 INFO    MainThread:458220 [wandb_init.py:init():462] calling init triggers
+2022-09-21 11:26:14,286 INFO    MainThread:458220 [wandb_init.py:init():465] wandb.init called with sweep_config: {}
+config: {}
+2022-09-21 11:26:14,287 INFO    MainThread:458220 [wandb_init.py:init():515] starting backend
+2022-09-21 11:26:14,287 INFO    MainThread:458220 [backend.py:_multiprocessing_setup():97] multiprocessing start_methods=fork,spawn,forkserver, using: spawn
+2022-09-21 11:26:14,295 INFO    MainThread:458220 [backend.py:ensure_launched():217] starting backend process...
+2022-09-21 11:26:14,302 INFO    MainThread:458220 [backend.py:ensure_launched():222] started backend process with pid: 458282
+2022-09-21 11:26:14,303 INFO    MainThread:458220 [wandb_init.py:init():525] backend started and connected
+2022-09-21 11:26:14,308 INFO    MainThread:458220 [wandb_init.py:init():596] updated telemetry
+2022-09-21 11:26:14,323 INFO    MainThread:458220 [wandb_init.py:init():627] communicating run to backend with 30 second timeout
+2022-09-21 11:26:15,695 INFO    MainThread:458220 [wandb_run.py:_on_init():1924] communicating current version
+2022-09-21 11:26:15,839 INFO    MainThread:458220 [wandb_run.py:_on_init():1928] got version response upgrade_message: "wandb version 0.13.3 is available!  To upgrade, please run:\n $ pip install wandb --upgrade"
+
+2022-09-21 11:26:15,839 INFO    MainThread:458220 [wandb_init.py:init():662] starting run threads in backend
+2022-09-21 11:26:20,850 INFO    MainThread:458220 [wandb_run.py:_console_start():1898] atexit reg
+2022-09-21 11:26:20,850 INFO    MainThread:458220 [wandb_run.py:_redirect():1771] redirect: SettingsConsole.REDIRECT
+2022-09-21 11:26:20,851 INFO    MainThread:458220 [wandb_run.py:_redirect():1776] Redirecting console.
+2022-09-21 11:26:20,852 INFO    MainThread:458220 [wandb_run.py:_redirect():1832] Redirects installed.
+2022-09-21 11:26:20,852 INFO    MainThread:458220 [wandb_init.py:init():688] run started, returning control to user process
+2022-09-21 11:26:20,854 INFO    MainThread:458220 [wandb_run.py:_config_callback():1136] config_cb None None {'project': 'direct_bind', 'resume_id': 'None', 'name': 'test_0', 'val_check_interval': 50000, 'dataset': 'bigbind_act', 'data/cache': True, 'data/lig_graph/atom_feats': ['element', 'formal_charge', 'hybridization', 'is_aromatic', 'numH'], 'data/lig_graph/bond_feats/bond_order': True, 'data/rec_graph/only_pocket': True, 'data/rec_graph/node_type': 'residue', 'data/rec_graph/atom_feats': ['atom_type'], 'data/rec_graph/residue_feats': ['residue_type'], 'data/rec_graph/edge_method/type': 'knn', 'data/rec_graph/edge_method/knn_rad': 20, 'data/rec_graph/edge_method/max_neighbors': 'None', 'data/rec_graph/edge_feats': ['dist'], 'data/rec_graph/include_h': False, 'losses/act_mse_lambda': 1.0, 'metrics': ['act_r2'], 'batch_size': 2, 'optimizer': 'adamw', 'learn_rate': 0.0001, 'max_epochs': 1000, 'model/type': 'gnn_bind', 'model/use_rec': True, 'model/use_lig': True, 'model/rec_encoder/node_embed_size': 32, 'model/rec_encoder/edge_embed_size': 32, 'model/rec_encoder/num_mpnn_layers': 1, 'model/rec_encoder/edge_hidden_size': 8, 'model/rec_encoder/node_hidden_sizes': [64, 64, 64, 64, 64], 'model/lig_encoder/node_embed_size': 8, 'model/lig_encoder/edge_embed_size': 32, 'model/lig_encoder/num_mpnn_layers': 2, 'model/lig_encoder/edge_hidden_size': 32, 'model/lig_encoder/node_hidden_sizes': [64, 64, 64, 64, 64], 'model/out_mlp_sizes': [64], 'platform/bigbind_dir': '/home/boris/Data/BigBindNew', 'platform/cache_dir': '/home/boris/Data/e2ebind_cache', 'platform/num_workers': 0}
+2022-09-21 11:26:20,855 INFO    MainThread:458220 [wandb_run.py:_atexit_cleanup():1867] got exitcode: 1
+2022-09-21 11:26:20,859 INFO    MainThread:458220 [wandb_run.py:_restore():1839] restore
+2022-09-21 11:26:23,757 INFO    MainThread:458220 [wandb_run.py:_on_finish():1996] got exit ret: file_counts {
+}
+pusher_stats {
+}
+
+2022-09-21 11:26:24,057 INFO    MainThread:458220 [wandb_run.py:_on_finish():1996] got exit ret: file_counts {
+  wandb_count: 1
+}
+pusher_stats {
+  uploaded_bytes: 764
+  total_bytes: 764
+}
+
+2022-09-21 11:26:24,725 INFO    MainThread:458220 [wandb_run.py:_on_finish():1996] got exit ret: file_counts {
+  wandb_count: 3
+}
+pusher_stats {
+  uploaded_bytes: 764
+  total_bytes: 11504
+}
+
+2022-09-21 11:26:24,827 INFO    MainThread:458220 [wandb_run.py:_on_finish():1996] got exit ret: file_counts {
+  wandb_count: 6
+}
+pusher_stats {
+  uploaded_bytes: 764
+  total_bytes: 20098
+}
+
+2022-09-21 11:26:24,930 INFO    MainThread:458220 [wandb_run.py:_on_finish():1996] got exit ret: file_counts {
+  wandb_count: 6
+}
+pusher_stats {
+  uploaded_bytes: 764
+  total_bytes: 20098
+}
+
+2022-09-21 11:26:25,033 INFO    MainThread:458220 [wandb_run.py:_on_finish():1996] got exit ret: file_counts {
+  wandb_count: 6
+}
+pusher_stats {
+  uploaded_bytes: 20098
+  total_bytes: 20098
+}
+
+2022-09-21 11:26:25,136 INFO    MainThread:458220 [wandb_run.py:_on_finish():1996] got exit ret: file_counts {
+  wandb_count: 6
+}
+pusher_stats {
+  uploaded_bytes: 20098
+  total_bytes: 20098
+}
+
+2022-09-21 11:26:25,240 INFO    MainThread:458220 [wandb_run.py:_on_finish():1996] got exit ret: file_counts {
+  wandb_count: 6
+}
+pusher_stats {
+  uploaded_bytes: 20098
+  total_bytes: 20098
+}
+
+2022-09-21 11:26:25,343 INFO    MainThread:458220 [wandb_run.py:_on_finish():1996] got exit ret: file_counts {
+  wandb_count: 6
+}
+pusher_stats {
+  uploaded_bytes: 20098
+  total_bytes: 20098
+}
+
+2022-09-21 11:26:25,446 INFO    MainThread:458220 [wandb_run.py:_on_finish():1996] got exit ret: file_counts {
+  wandb_count: 6
+}
+pusher_stats {
+  uploaded_bytes: 20098
+  total_bytes: 20098
+}
+
+2022-09-21 11:26:25,549 INFO    MainThread:458220 [wandb_run.py:_on_finish():1996] got exit ret: file_counts {
+  wandb_count: 6
+}
+pusher_stats {
+  uploaded_bytes: 20098
+  total_bytes: 20098
+}
+
+2022-09-21 11:26:25,800 INFO    MainThread:458220 [wandb_run.py:_on_finish():1996] got exit ret: file_counts {
+  wandb_count: 6
+}
+pusher_stats {
+  uploaded_bytes: 20098
+  total_bytes: 20098
+}
+
+2022-09-21 11:26:26,253 INFO    MainThread:458220 [wandb_run.py:_on_finish():1996] got exit ret: done: true
+exit_result {
+}
+file_counts {
+  wandb_count: 6
+}
+pusher_stats {
+  uploaded_bytes: 20098
+  total_bytes: 20098
+}
+local_info {
+}
+
+2022-09-21 11:26:27,401 INFO    MainThread:458220 [wandb_run.py:_footer_history_summary_info():3104] rendering history
+2022-09-21 11:26:27,401 INFO    MainThread:458220 [wandb_run.py:_footer_history_summary_info():3136] rendering summary
+2022-09-21 11:26:27,403 INFO    MainThread:458220 [wandb_run.py:_footer_sync_info():3060] logging synced files

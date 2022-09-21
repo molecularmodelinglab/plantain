@@ -1,0 +1,6 @@
+Traceback (most recent call last):
+  File "train.py", line 37, in <module>
+    train(cfg)
+  File "train.py", line 33, in train
+    routine.fit(logger, callbacks)
+UnboundLocalError: local variable 'routine' referenced before assignment

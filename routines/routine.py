@@ -54,12 +54,12 @@ class Routine(pl.LightningModule):
     def configure_optimizers(self):
         return torch.optim.AdamW(self.parameters(), lr=self.learn_rate)
 
-    def fit(self, logger, callbacks, checkpoint_dir):
+    def fit(self, logger, callbacks):
         gpus = int(torch.cuda.is_available())
         trainer = pl.Trainer(gpus=gpus,
                              max_epochs=self.cfg.max_epochs,
                              val_check_interval=self.cfg.val_check_interval,
                              logger=logger,
                              callbacks=callbacks,
-                             resume_from_checkpoint=checkpoint_dir)
+                             resume_from_checkpoint=self.checkpoint_file)
         trainer.fit(self, self.train_dataloader, self.val_dataloader)
