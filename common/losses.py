@@ -10,7 +10,7 @@ def combine_losses(loss_cfg, loss_fns, *args):
     for fn in loss_fns:
         loss = fn(*args)
         name = '_'.join(fn.__name__.split('_')[:-1])
-        lam = getattr(cfg, name + "_lambda")
+        lam = getattr(loss_cfg, name + "_lambda")
         if lam:
             ret += lam*loss
             terms[name] = loss
@@ -21,4 +21,4 @@ def get_losses(cfg, batch, y_pred):
     to the loss value """
     losses = [ act_mse_loss ]
     loss_cfg = cfg.losses
-    return combine_losses(loss_cfg, batch, y_pred)
+    return combine_losses(loss_cfg, losses, batch, y_pred)

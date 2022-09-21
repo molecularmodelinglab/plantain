@@ -1,4 +1,6 @@
 from rdkit import Chem
+import torch
+from traceback import print_exc
 from Bio.PDB import PDBParser
 from Bio.PDB.PDBExceptions import PDBConstructionWarning
 
@@ -23,13 +25,20 @@ class BigBindActDataset(BigBindDataset):
         return lig_file + "_" + rec_file
 
     def get_item_pre_cache(self, index):
+        
         lig_file = self.dir + "/" + self.activities.lig_file[index]
         rec_file = self.dir + "/" + self.activities.ex_rec_pocket_file[index]
         
         activity = torch.tensor(self.activities.pchembl_value[index], dtype=torch.float32)
 
-        lig_graph = mol_graph_from_sdf(self.cfg, lig_file)
-        rec_graph = prot_graph_from_pdb(self.cfg, rec_file)
+        try:
+            lig_graph = mol_graph_from_sdf(self.cfg, lig_file)
+            rec_graph = prot_graph_from_pdb(self.cfg, rec_file)
+        except:
+            print(f"Error proccessing item at {index=}")
+            print(f"{lig_file=}")
+            print(f"{rec_file=}")
+            raise
 
         return ActivityData(lig_graph, rec_graph, activity)
 

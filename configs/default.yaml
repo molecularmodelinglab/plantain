@@ -2,8 +2,7 @@ project: 'direct_bind'
 resume_id: null
 name: test_run
 
-val_check_interval: 10000
-max_val_size: 10000
+val_check_interval: 50000
 
 dataset: bigbind_act
 data:
@@ -45,14 +44,17 @@ model:
   use_lig: true
   
   rec_encoder:
-    embed_size: 32
+    node_embed_size: 32
+    edge_embed_size: 32
     num_mpnn_layers: 1
     edge_hidden_size: 8
-    node_hidden_sizes: [128, 128, 128, 128, 128]
+    node_hidden_sizes: [ 64, 64, 64, 64, 64 ]
 
   lig_encoder:
+    node_embed_size: 8
+    edge_embed_size: 32
     num_mpnn_layers: 2
     edge_hidden_size: 32
-    node_hidden_sizes: [128, 128, 128, 128, 128]
+    node_hidden_sizes: [ 64, 64, 64, 64, 64 ]
     
   out_mlp_sizes: [64]

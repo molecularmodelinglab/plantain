@@ -52,7 +52,7 @@ def get_numH(atom, mol):
     return atom.GetTotalNumHs()
 
 possible_atom_feats = {
-    "element": [ "H", "C", "N", "O", "F", "S", "P", "Cl", "Br", "I" ],
+    "element": [ "H", "C", "N", "O", "F", "S", "P", "Cl", "Br", "I", "misc" ],
     "formal_charge": [-5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 'misc'],
     "hybridization": [ 'SP', 'SP2', 'SP3', 'SP3D', 'SP3D2', 'misc'],
     "is_aromatic": [ True, False, 'misc' ],
@@ -87,7 +87,8 @@ class AtomNode(Node3d):
             feat = safe_index(possible, get_feat(atom, mol))
             cat_feats.append(feat)
         
-        coord = mol.GetConformer().GetPositions()[atom.GetIdx()]
+        point = mol.GetConformer().GetAtomPosition(atom.GetIdx())
+        coord = [ point.x, point.y, point.z ]
 
         coord = torch.tensor(coord, dtype=torch.float32)
         cat_feats = torch.tensor(cat_feats, dtype=torch.long)

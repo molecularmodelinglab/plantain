@@ -1,5 +1,5 @@
 
-def safe_index(list, item, debug=True):
+def safe_index(list, item, debug=False):
     """ Taken from the equibind code -- basically, just make sure we don't throw
     an error if e.g. some weird hybridization occurs on our mol """
     if item in list:
