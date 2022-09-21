@@ -65,7 +65,7 @@ class GNNBind(nn.Module):
                                  self.rec_edge_embed.total_dim,
                                  rec_cfg.edge_hidden_size,
                                  rec_cfg.num_mpnn_layers)
-
+                                 
         self.attentions = nn.ModuleList()
         self.lig_combiners = nn.ModuleList()
         for lig_sz, rec_sz in zip(lig_cfg.node_hidden_sizes, rec_cfg.node_hidden_sizes):

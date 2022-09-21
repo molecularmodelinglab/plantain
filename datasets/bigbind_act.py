@@ -17,17 +17,30 @@ class BigBindActDataset(BigBindDataset):
     def __len__(self):
         return len(self.activities)
 
+    def get_lig_file(self, index):
+        """ returns the first lig file if use_lig is false, to ensure
+        that all ligs are the same """
+        if self.cfg.data.use_lig:
+            index = 0
+        return self.dir + "/" + self.activities.lig_file[index]
+
+    def get_rec_file(self, index):
+        """ same as above """
+        if self.cfg.data.use_rec:
+            index = 0
+        return self.dir + "/" + self.activities.ex_rec_file[index]
+
     def get_cache_key(self, index):
 
-        lig_file = self.activities.lig_file[index].split("/")[-1]
-        rec_file = self.activities.ex_rec_file[index].split("/")[-1]
+        lig_file = self.get_lig_file(index).split("/")[-1]
+        rec_file = self.get_rec_file(index).split("/")[-1]
 
         return lig_file + "_" + rec_file
 
     def get_item_pre_cache(self, index):
         
-        lig_file = self.dir + "/" + self.activities.lig_file[index]
-        rec_file = self.dir + "/" + self.activities.ex_rec_pocket_file[index]
+        lig_file = self.get_lig_file(index)
+        rec_file = self.get_rec_file(index)
         
         activity = torch.tensor(self.activities.pchembl_value[index], dtype=torch.float32)
 

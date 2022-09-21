@@ -7,6 +7,9 @@ val_check_interval: 50000
 dataset: bigbind_act
 data:
   cache: true
+
+  use_rec: true
+  use_lig: true
   
   lig_graph:
     atom_feats: [ "element", "formal_charge", "hybridization", "is_aromatic", "numH"]
