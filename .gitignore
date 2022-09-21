@@ -6,3 +6,4 @@
 !*/.gitkeep
 configs/local.yaml
 *.prof
+checkpoints
