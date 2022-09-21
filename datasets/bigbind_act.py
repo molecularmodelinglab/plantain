@@ -20,13 +20,13 @@ class BigBindActDataset(BigBindDataset):
     def get_lig_file(self, index):
         """ returns the first lig file if use_lig is false, to ensure
         that all ligs are the same """
-        if self.cfg.data.use_lig:
+        if not self.cfg.data.use_lig:
             index = 0
         return self.dir + "/" + self.activities.lig_file[index]
 
     def get_rec_file(self, index):
         """ same as above """
-        if self.cfg.data.use_rec:
+        if not self.cfg.data.use_rec:
             index = 0
         return self.dir + "/" + self.activities.ex_rec_file[index]
 
