@@ -1,7 +1,7 @@
 import torch.nn.functional as F
 
 def act_r2(batch, y_pred, variance_dict):
-    return F.mse_loss(batch.activity, y_pred)/variance_dict["activity"]
+    return 1.0 - F.mse_loss(batch.activity, y_pred)/variance_dict["activity"]
 
 def get_metrics(cfg, batch, y_pred, variance_dict):
     ret = {}
