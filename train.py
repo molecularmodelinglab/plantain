@@ -1,12 +1,19 @@
+from rdkit import Chem
+import torch
+torch.multiprocessing.set_sharing_strategy('file_system')
+
 import os
 import wandb
 # needed because dgllife is stupid and can't find rdkit otherwise...
-from rdkit import Chem
 from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.callbacks import ModelCheckpoint
 
 from routines.routine import Routine
 from common.cfg_utils import get_config
+
+import resource
+rlimit = resource.getrlimit(resource.RLIMIT_NOFILE)
+resource.setrlimit(resource.RLIMIT_NOFILE, (4096, rlimit[1]))
 
 def train(cfg):
 
