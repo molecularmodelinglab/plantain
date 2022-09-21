@@ -1,3 +1,4 @@
+from rdkit import Chem
 from routines.routine import Routine
 from common.cfg_utils import get_config
 
