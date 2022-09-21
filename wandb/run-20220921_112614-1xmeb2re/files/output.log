@@ -1,6 +1,0 @@
-Traceback (most recent call last):
-  File "train.py", line 35, in <module>
-    train(cfg)
-  File "train.py", line 23, in train
-    if "SLURM_JOB_ID" in os.environ:
-NameError: name 'os' is not defined
