@@ -17,9 +17,9 @@ losses:
 metrics:
   - act_r2
 
-batch_size: 2
+batch_size: 16
 optimizer: adamw
-learn_rate: 1e-4
+learn_rate: 1e-3
 max_epochs: 1000
 
 model:
