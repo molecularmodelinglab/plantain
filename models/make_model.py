@@ -1,7 +1,9 @@
 from models.gnn_bind import GNNBind
+from models.fp_nn import FpNN
 
 name2model_cls = {
-   "gnn_bind": GNNBind
+   "gnn_bind": GNNBind,
+   "fp_nn": FpNN
 }
 
 def get_model_cls(cfg):

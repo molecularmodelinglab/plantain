@@ -1,8 +1,10 @@
 
 import torch.nn.functional as F
 
+from common.utils import get_activity
+
 def act_mse_loss(batch, y_pred):
-    return F.mse_loss(batch.activity, y_pred)
+    return F.mse_loss(get_activity(batch), y_pred)
 
 def combine_losses(loss_cfg, loss_fns, *args):
     ret = 0

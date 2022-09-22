@@ -1,3 +1,6 @@
+import sys
+sys.path.insert(0, './terrace')
+
 from rdkit import Chem
 import torch
 torch.multiprocessing.set_sharing_strategy('file_system')
@@ -8,7 +11,7 @@ import wandb
 from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.callbacks import ModelCheckpoint
 
-from routines.routine import Routine
+from routines.ai_routine import AIRoutine
 from common.cfg_utils import get_config
 
 import resource
@@ -33,13 +36,17 @@ def train(cfg):
             logger.log_hyperparams({ "slurm_job_id": os.environ["SLURM_JOB_ID"] })
         checkpoint_callback = ModelCheckpoint(monitor="val_loss", mode="min")
         callbacks.append(checkpoint_callback)
-        routine = Routine(cfg)
+        routine = AIRoutine(cfg)
     else:
-        routine = Routine(cfg)
+        routine = AIRoutine(cfg)
         logger = None
 
     routine.fit(logger, callbacks)
 
 if __name__ == "__main__":
-    cfg = get_config()
+    if len(sys.argv) > 1 and '=' not in sys.argv[1]:
+        cfg_name = sys.argv[1]
+    else:
+        cfg_name = "default"
+    cfg = get_config(cfg_name=cfg_name)
     train(cfg)

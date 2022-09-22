@@ -1,0 +1,46 @@
+project: 'direct_bind'
+resume_id: null
+name: test_run
+
+val_check_interval: 50000
+
+dataset: bigbind_fp
+data:
+  cache: true
+  fp_type: "morgan"
+  morgan_radius: 2
+  morgan_bits: 2048
+  
+losses:
+  act_mse_lambda: 1.0
+
+metrics:
+  - act_r2
+
+batch_size: 2
+optimizer: adamw
+learn_rate: 1e-4
+max_epochs: 1000
+
+model:
+
+  type: gnn_bind
+
+  use_rec: true
+  use_lig: true
+  
+  rec_encoder:
+    node_embed_size: 32
+    edge_embed_size: 32
+    num_mpnn_layers: 1
+    edge_hidden_size: 8
+    node_hidden_sizes: [ 64, 64, 64, 64, 64 ]
+
+  lig_encoder:
+    node_embed_size: 8
+    edge_embed_size: 32
+    num_mpnn_layers: 2
+    edge_hidden_size: 32
+    node_hidden_sizes: [ 64, 64, 64, 64, 64 ]
+    
+  out_mlp_sizes: [64]

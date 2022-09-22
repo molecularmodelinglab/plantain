@@ -7,7 +7,7 @@ from datasets.make_dataset import make_dataloader
 from common.losses import get_losses
 from common.metrics import get_metrics
 
-class Routine(pl.LightningModule):
+class AIRoutine(pl.LightningModule):
     """ A "Routine" is basically just a lightning module -- something that's model
     agnostic, but defines how the training and eval is performed for a particular
     type of model (e.g. activitity prediction) """
@@ -63,3 +63,4 @@ class Routine(pl.LightningModule):
                              callbacks=callbacks,
                              resume_from_checkpoint=self.checkpoint_file)
         trainer.fit(self, self.train_dataloader, self.val_dataloader)
+        # trainer.validate(self, self.val_dataloader)

@@ -112,7 +112,7 @@ class ProtResidueNode(Node3d):
         super(ProtResidueNode, self).__init__(coord, cat_feat, scal_feat)
 
     def get_color(self):
-        resname = possible_residue_feats["type"][self.cat_feat[0]]
+        resname = possible_residue_feats["residue_type"][self.cat_feat[0]]
         if resname in RESIDUE_COLORS:
             return RESIDUE_COLORS[resname]
         else:

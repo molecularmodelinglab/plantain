@@ -22,9 +22,9 @@ def get_run_config(run, cfg=None):
         ret.platform = cfg.platform
     return ret
 
-def get_config(folder="./configs"):
+def get_config(folder="./configs", cfg_name="default"):
     """ Loads the config file and merges in the platform cfg """
-    base_conf = OmegaConf.load(folder + "/default.yaml")
+    base_conf = OmegaConf.load(folder + f"/{cfg_name}.yaml")
     platform_conf = OmegaConf.load(folder + "/local.yaml")
     cli_conf = OmegaConf.from_cli()
     return OmegaConf.merge(base_conf, platform_conf, cli_conf)

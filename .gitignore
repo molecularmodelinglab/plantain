@@ -8,3 +8,4 @@ configs/local.yaml
 *.prof
 checkpoints
 wandb
+direct_bind
