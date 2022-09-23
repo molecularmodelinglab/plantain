@@ -8,7 +8,7 @@ def act_r2(batch, y_pred, variance_dict):
 def get_metrics(cfg, batch, y_pred, variance_dict):
     ret = {}
     for metric_name in cfg.metrics:
-        # unsafe, but I'm taking taking some random cfg file from the internet
+        # unsafe, but I'm not taking taking some random cfg file from the internet
         f = globals()[metric_name]
         ret[metric_name] = f(batch, y_pred, variance_dict)
     return ret

@@ -71,7 +71,12 @@ class GNNBind(nn.Module):
         for lig_sz, rec_sz in zip(lig_cfg.node_hidden_sizes, rec_cfg.node_hidden_sizes):
             # todo: this doesn't work when lig_size != rec_sz
             self.attentions.append(nn.MultiheadAttention(lig_sz, 1, kdim=rec_sz, vdim=rec_sz))
-            self.lig_combiners.append(nn.Linear(lig_sz+rec_sz, lig_sz))
+            comb_sz = lig_sz*2 #+rec_sz
+            self.lig_combiners.append(nn.Sequential(
+                nn.Linear(comb_sz, lig_sz),
+                nn.LayerNorm(lig_sz),
+                nn.LeakyReLU()
+            ))
 
         assert len(self.lig_gnns) == len(self.rec_gnns)
 
@@ -83,6 +88,7 @@ class GNNBind(nn.Module):
         for prev, size in zip([combined_hid_sz] + list(cfg.model.out_mlp_sizes), cfg.model.out_mlp_sizes):
             self.out_nns.append(nn.Sequential(
                 nn.Linear(prev, size),
+                nn.LayerNorm(size),
                 nn.LeakyReLU()
             ))
         self.out = nn.Linear(cfg.model.out_mlp_sizes[-1], 1)

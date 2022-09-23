@@ -51,13 +51,13 @@ model:
     edge_embed_size: 32
     num_mpnn_layers: 1
     edge_hidden_size: 8
-    node_hidden_sizes: [ 64, 64, 64, 64, 64 ]
+    node_hidden_sizes: [ 32, 32, 32 ]
 
   lig_encoder:
     node_embed_size: 8
     edge_embed_size: 32
     num_mpnn_layers: 2
     edge_hidden_size: 32
-    node_hidden_sizes: [ 64, 64, 64, 64, 64 ]
+    node_hidden_sizes: [ 32, 32, 32 ]
     
   out_mlp_sizes: [64]
