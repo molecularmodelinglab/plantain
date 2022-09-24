@@ -58,4 +58,4 @@ model:
   out_size: 32
   trans_dist: 5
   inner_optim_steps: 10
-  inner_optim_lr: 0.1
+  inner_optim_lr: 0.5

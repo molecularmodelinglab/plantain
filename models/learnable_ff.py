@@ -56,34 +56,37 @@ class LearnableFF(nn.Module):
             lig_feat = batch_lig_feat[tot_lig:tot_lig+l]
             rec_feat = batch_rec_feat[tot_rec:tot_rec+r]
 
-            init_lig_coord =  batch.lig.ndata.coord[tot_lig:tot_lig+l]
+            lig_coord =  batch.lig.ndata.coord[tot_lig:tot_lig+l]
             rec_coord =  batch.rec.ndata.coord[tot_rec:tot_rec+r]
 
             # ensure the centroids of both lig and rec are at origin
-            init_lig_coord = init_lig_coord - init_lig_coord.mean(0)
+            lig_coord = lig_coord - lig_coord.mean(0)
             rec_coord = rec_coord - rec_coord.mean(0)
 
             # initialize random rot and translation
-            rot, _ = torch.linalg.qr(torch.randn((3,3), device=init_lig_coord.device))
-            trans = torch.randn((3,), device=init_lig_coord.device) * self.cfg.model.trans_dist
+            rot, _ = torch.linalg.qr(torch.randn((3,3), device=lig_coord.device, requires_grad=True))
+            trans = torch.randn((3,), device=lig_coord.device, requires_grad=True) * self.cfg.model.trans_dist
 
-            rot = nn.Parameter(rot)
-            trans = nn.Parameter(trans)
-            optim = torch.optim.AdamW([rot, trans], self.cfg.model.inner_optim_lr)
-
+            all_lig_coords = []
+            all_Us = []
             #optimize rot and trans!
             for i in range(self.cfg.model.inner_optim_steps):
                 # move ligand
-                lig_coord = torch.einsum('ij,bj->bi', rot, init_lig_coord) + trans
+                new_lig_coord = torch.einsum('ij,bj->bi', rot, lig_coord) + trans
+                all_lig_coords.append(new_lig_coord)
 
                 atn_coefs = torch.einsum('lf,rf->lr', lig_feat, rec_feat)
-                dists = torch.cdist(lig_coord, rec_coord)
+                dists = torch.cdist(new_lig_coord, rec_coord)
 
                 U = (atn_coefs/(dists**2)).mean()
-                U.backward(retain_graph=True)
-                optim.step()
-                optim.zero_grad()
+                all_Us.append(U)
+                print(U)
 
+                rot_grad, trans_grad = torch.autograd.grad(U, [rot, trans], create_graph=True)
+                rot = rot - rot_grad*self.cfg.model.inner_optim_lr
+                trans = trans - trans_grad*self.cfg.model.inner_optim_lr
+
+            return
             Us.append(U)
 
             tot_rec += r
