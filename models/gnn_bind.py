@@ -5,6 +5,8 @@ import torch.nn.functional as F
 from dgllife.model.gnn import MPNNGNN
 from dgllife.model import WeightedSumAndMax
 
+from models.cat_scal_embedding import CatScalEmbedding
+
 def get_gnns(init_node_sz,
              hid_node_sizes,
              init_edge_sz,
@@ -15,24 +17,6 @@ def get_gnns(init_node_sz,
     for ps, cs in zip(node_sizes, node_sizes[1:]):
         ret.append(MPNNGNN(ps, init_edge_sz, cs, hid_edge_sz, num_mpnn_layers))
     return ret
-
-class CatScalEmbedding(nn.Module):
-
-    def __init__(self, embed_size, td):
-        super().__init__()
-        self.embeddings = nn.ModuleList()
-        total_dim = td.scal_feat.shape[-1]
-        for i, val in enumerate(td.cat_feat.max_values):
-            embedding = nn.Embedding(val, embed_size)
-            total_dim += embed_size
-            self.embeddings.append(embedding)
-        self.total_dim = total_dim
-
-    def forward(self, batch):
-        ret = [ batch.scal_feat ]
-        for i, embed in enumerate(self.embeddings):
-            ret.append(embed(batch.cat_feat[:,i]))
-        return torch.cat(ret, -1)
 
 class GNNBind(nn.Module):
     def __init__(self, cfg, in_node):

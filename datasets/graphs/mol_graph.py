@@ -97,7 +97,7 @@ class AtomNode(Node3d):
         super(AtomNode, self).__init__(coord, cat_feats, scal_feats)
 
     def get_element(self) -> str:
-        return ALLOWED_ELEMENTS[int(self.cat_feat[0])]
+        return possible_atom_feats["element"][int(self.cat_feat[0])]
 
     def get_radius(self) -> float:
         # decrease radius so we can actually see the bonds
