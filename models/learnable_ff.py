@@ -63,31 +63,62 @@ class LearnableFF(nn.Module):
             lig_coord = lig_coord - lig_coord.mean(0)
             rec_coord = rec_coord - rec_coord.mean(0)
 
-            # initialize random rot and translation
-            rot, _ = torch.linalg.qr(torch.randn((3,3), device=lig_coord.device, requires_grad=True))
-            trans = torch.randn((3,), device=lig_coord.device, requires_grad=True) * self.cfg.model.trans_dist
+            # needed because we set torch.no_grad at validation time
+            with torch.set_grad_enabled(True):
 
-            all_lig_coords = []
-            all_Us = []
-            #optimize rot and trans!
-            for i in range(self.cfg.model.inner_optim_steps):
-                # move ligand
-                new_lig_coord = torch.einsum('ij,bj->bi', rot, lig_coord) + trans
-                all_lig_coords.append(new_lig_coord)
+                # initialize random rot and translation
+                # pre_rot is an arbitrary matrix, use QR decomp to turn to a proper rotation mat
+                pre_rot = torch.randn((3,3), device=lig_coord.device)
+                trans = torch.randn((3,), device=lig_coord.device) * self.cfg.model.trans_dist
+                
+                pre_rot.requires_grad_()
+                trans.requires_grad_()
 
-                atn_coefs = torch.einsum('lf,rf->lr', lig_feat, rec_feat)
-                dists = torch.cdist(new_lig_coord, rec_coord)
+                transforms = [] # rot, trans pairs
+                all_lig_coords = []
+                all_Us = []
 
-                U = (atn_coefs/(dists**2)).mean()
-                all_Us.append(U)
-                print(U)
+                #optimize rot and trans!
+                for i in range(self.cfg.model.inner_optim_steps):
+                    
+                    rot, _ = torch.linalg.qr(pre_rot)
 
-                rot_grad, trans_grad = torch.autograd.grad(U, [rot, trans], create_graph=True)
-                rot = rot - rot_grad*self.cfg.model.inner_optim_lr
-                trans = trans - trans_grad*self.cfg.model.inner_optim_lr
+                    # move ligand
+                    new_lig_coord = torch.einsum('ij,bj->bi', rot, lig_coord) + trans
 
-            return
-            Us.append(U)
+                    atn_coefs = torch.einsum('lf,rf->lr', lig_feat, rec_feat)
+
+                    # cdist is the simplest way to compute dist matrix
+                    # dists = torch.cdist(new_lig_coord, rec_coord)
+
+                    # slow loopy way
+                    # dists = torch.zeros((new_lig_coord.shape[0], rec_coord.shape[0]))
+                    # for i, lc in enumerate(new_lig_coord):
+                    #     for j, rc in enumerate(rec_coord):
+                    #         dists[i,j] = torch.linalg.norm(lc - rc)
+
+                    # non-cdist vectorized way
+                    lc_ex = new_lig_coord.unsqueeze(1).expand(-1,rec_coord.size(0),-1)
+                    rc_ex = rec_coord.unsqueeze(0).expand(new_lig_coord.size(0),-1,-1)
+                    dists = torch.sqrt(((lc_ex - rc_ex)**2).sum(-1))
+
+                    U = (atn_coefs/(dists**2)).mean()
+
+                    all_Us.append(U)
+                    all_lig_coords.append(new_lig_coord)
+                    transforms.append((rot, trans))
+
+                    pre_rot_grad, trans_grad = torch.autograd.grad(U, [pre_rot, trans], create_graph=True)
+
+                    pre_rot = pre_rot - pre_rot_grad*self.cfg.model.inner_optim_rot_lr
+                    trans = trans - trans_grad*self.cfg.model.inner_optim_trans_lr
+
+                return all_lig_coords
+
+            # print(all_Us[0], all_Us[-1], min(all_Us))
+            
+            # use the min of the simulation, not just final endpoint
+            Us.append(min(all_Us))
 
             tot_rec += r
             tot_lig += l
