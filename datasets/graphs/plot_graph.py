@@ -1,4 +1,5 @@
 import numpy as np
+from copy import deepcopy
 import plotly.graph_objects as go
 from plotly.offline import init_notebook_mode, iplot
 
@@ -32,10 +33,12 @@ def make_graph_meshes(graph, opacity=1.0):
         meshes.append(go.Scatter3d(x=xs, y=ys, z=zs, hoverinfo='skip', showlegend=False, line={"color": "black"}))
     return meshes
 
-def plot_meshes(meshes):
+def get_plot_layout():
     axis_params = dict(showgrid=False, showbackground=False, showticklabels=False, zeroline=False, titlefont=dict(color='white'), showspikes=False)
-    layout = dict(scene=dict(xaxis=axis_params, yaxis=axis_params, zaxis=axis_params))
-    fig = go.Figure(data=meshes, layout=layout)
+    return dict(scene=dict(xaxis=axis_params, yaxis=axis_params, zaxis=axis_params))
+
+def plot_meshes(meshes):
+    fig = go.Figure(data=meshes, layout=get_plot_layout())
     iplot(fig)
 
 def plot_graph(graph):
@@ -46,3 +49,26 @@ def plot_graphs(graphs):
     for graph in graphs:
         meshes += make_graph_meshes(graph)
     plot_meshes(meshes)
+
+def plot_moving_graph(graph, coord_list, other_graphs=[]):
+    """ Given a list defining the trajectory of the graph,
+    plot an animation of the moving graph """
+    graph = deepcopy(graph)
+    frames = []
+    other_meshes = []
+    for og in other_graphs:
+        other_meshes += make_graph_meshes(og)
+    for coord in coord_list:
+        graph.ndata.coord = coord
+        meshes = make_graph_meshes(graph) + other_meshes
+        frame = go.Frame(data=meshes, layout=get_plot_layout())
+        frames.append(frame)
+    layout = get_plot_layout()
+    layout["updatemenus"] = [dict(
+        type="buttons",
+        buttons=[dict(label="Play",
+                        method="animate",
+                        args=[None])])]
+    return go.Figure(data=frames[0].data,
+                     frames=frames,
+                     layout=layout)

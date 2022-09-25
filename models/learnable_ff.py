@@ -4,7 +4,9 @@ import torch.nn.functional as F
 
 from dgllife.model.gnn import MPNNGNN
 
+from terrace.batch import Batch
 from models.cat_scal_embedding import CatScalEmbedding
+from datasets.data_types import PredData
 
 class LearnableFF(nn.Module):
     def __init__(self, cfg, in_node):
@@ -51,7 +53,8 @@ class LearnableFF(nn.Module):
 
         tot_rec = 0
         tot_lig = 0
-        Us = []
+        coords = []
+        activities = []
         for r, l in zip(rec_graph.batch_num_nodes(), lig_graph.batch_num_nodes()):
             lig_feat = batch_lig_feat[tot_lig:tot_lig+l]
             rec_feat = batch_rec_feat[tot_rec:tot_rec+r]
@@ -102,7 +105,7 @@ class LearnableFF(nn.Module):
                     rc_ex = rec_coord.unsqueeze(0).expand(new_lig_coord.size(0),-1,-1)
                     dists = torch.sqrt(((lc_ex - rc_ex)**2).sum(-1))
 
-                    U = (atn_coefs/(dists**2)).mean()
+                    U = (atn_coefs/(dists)).sum()
 
                     all_Us.append(U)
                     all_lig_coords.append(new_lig_coord)
@@ -113,15 +116,19 @@ class LearnableFF(nn.Module):
                     pre_rot = pre_rot - pre_rot_grad*self.cfg.model.inner_optim_rot_lr
                     trans = trans - trans_grad*self.cfg.model.inner_optim_trans_lr
 
-                return all_lig_coords
+                # return all_lig_coords
 
             # print(all_Us[0], all_Us[-1], min(all_Us))
             
             # use the min of the simulation, not just final endpoint
-            Us.append(min(all_Us))
+            idx, U = min(list(enumerate(all_Us)), key=lambda t: t[1])
+            # negate because affiinity is proportional to negative of energy
+            coord = all_lig_coords[idx]
+            activities.append(-U)
+            coords.append(coord)
 
             tot_rec += r
             tot_lig += l
 
-        # negate because affiinity is proportional to negative of energy
-        return -torch.stack(Us)
+        activities = torch.stack(activities)
+        return Batch(PredData, lig_coord=coords, activity=activities)

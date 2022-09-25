@@ -3,6 +3,7 @@ import torch
 import random
 
 from datasets.bigbind_act import BigBindActDataset
+from datasets.bigbind_struct import BigBindStructDataset
 from datasets.bigbind_fp import BigBindFpDataset
 from terrace.batch import DataLoader
 
@@ -19,6 +20,7 @@ def seed_worker(worker_id):
 def make_dataset(cfg, split):
     return {
         "bigbind_act": BigBindActDataset,
+        "bigbind_struct": BigBindStructDataset,
         "bigbind_fp": BigBindFpDataset,
     }[cfg.dataset](cfg, split)
 

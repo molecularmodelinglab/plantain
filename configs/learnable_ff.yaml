@@ -2,9 +2,9 @@ project: 'direct_bind'
 resume_id: null
 name: test_run
 
-val_check_interval: 50000
+val_check_interval: 5000
 
-dataset: bigbind_act
+dataset: bigbind_struct
 data:
   cache: true
 
@@ -29,14 +29,16 @@ data:
     include_h: False
 
 losses:
-  act_mse_lambda: 1.0
+  coord_mse_lambda: 1.0
+  # act_mse_lambda: 1.0
 
 metrics:
-  - act_r2
+  - coord_rmsd
+  # - act_r2
 
 batch_size: 2
 optimizer: adamw
-learn_rate: 1e-4
+learn_rate: 1e-6
 max_epochs: 1000
 
 model:
@@ -56,6 +58,9 @@ model:
     edge_hidden_size: 32
 
   out_size: 32
-  trans_dist: 5
   inner_optim_steps: 10
-  inner_optim_lr: 0.5
+  inner_optim_rot_lr: 0.5
+  inner_optim_trans_lr: 1.0
+
+  # let's start with centroids aligned for now
+  trans_dist: 0.1
