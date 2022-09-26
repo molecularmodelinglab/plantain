@@ -2,7 +2,7 @@ project: 'direct_bind'
 resume_id: null
 name: test_run
 
-val_check_interval: 50000
+val_check_interval: 20000
 
 dataset: bigbind_act
 data:
@@ -34,7 +34,7 @@ losses:
 metrics:
   - act_r2
 
-batch_size: 2
+batch_size: 16
 optimizer: adamw
 learn_rate: 1e-4
 max_epochs: 1000
@@ -47,17 +47,17 @@ model:
   use_lig: true
   
   rec_encoder:
-    node_embed_size: 32
-    edge_embed_size: 32
+    node_embed_size: 16
+    edge_embed_size: 16
     num_mpnn_layers: 1
     edge_hidden_size: 8
-    node_hidden_sizes: [ 32, 32, 32 ]
+    node_hidden_sizes: [ 16, 16, 16, 16, 16 ]
 
   lig_encoder:
     node_embed_size: 8
-    edge_embed_size: 32
+    edge_embed_size: 16
     num_mpnn_layers: 2
-    edge_hidden_size: 32
-    node_hidden_sizes: [ 32, 32, 32 ]
+    edge_hidden_size: 16
+    node_hidden_sizes: [ 16, 16, 16, 16, 16 ]
     
   out_mlp_sizes: [64]

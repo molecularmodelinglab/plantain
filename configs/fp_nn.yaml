@@ -2,7 +2,7 @@ project: 'direct_bind'
 resume_id: null
 name: test_run
 
-val_check_interval: 50000
+val_check_interval: 10000
 
 dataset: bigbind_fp
 data:
