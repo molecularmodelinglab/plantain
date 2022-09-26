@@ -10,6 +10,8 @@ data:
 
   use_rec: true
   use_lig: true
+
+  only_ki_kd: false
   
   lig_graph:
     atom_feats: [ "element", "formal_charge", "hybridization", "is_aromatic", "numH"]
