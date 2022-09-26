@@ -23,6 +23,9 @@ class AIRoutine(pl.LightningModule):
         self.learn_rate = cfg.learn_rate
         self.train_dataloader = make_dataloader(cfg, "train")
         self.val_dataloader = make_dataloader(cfg, "val")
+
+        batch = next(iter(self.val_dataloader))
+
         self.val_variance = self.val_dataloader.dataset.get_variance()
         in_node = Input(self.val_dataloader.get_type_data())
         self.model = make_model(cfg, in_node)

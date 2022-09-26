@@ -1,5 +1,6 @@
 import torch
 import torch.nn.functional as F
+from omegaconf.errors import ConfigAttributeError
 
 from common.utils import get_activity
 
@@ -18,7 +19,10 @@ def combine_losses(loss_cfg, loss_fns, *args):
     terms = {}
     for fn in loss_fns:
         name = '_'.join(fn.__name__.split('_')[:-1])
-        lam = getattr(loss_cfg, name + "_lambda")
+        try:
+            lam = getattr(loss_cfg, name + "_lambda")
+        except ConfigAttributeError:
+            lam = 0.0
         if lam:
             loss = fn(*args)
             ret += lam*loss

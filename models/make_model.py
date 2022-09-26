@@ -1,11 +1,13 @@
 from models.gnn_bind import GNNBind
 from models.fp_nn import FpNN
 from models.learnable_ff import LearnableFF
+from models.outer_prod_gnn import OuterProdGNN
 
 name2model_cls = {
    "gnn_bind": GNNBind,
    "fp_nn": FpNN,
-   "learnable_ff": LearnableFF
+   "learnable_ff": LearnableFF,
+   "outer_prod_gnn": OuterProdGNN
 }
 
 def get_model_cls(cfg):
