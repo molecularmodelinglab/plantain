@@ -9,3 +9,4 @@ configs/local.yaml
 checkpoints
 wandb
 direct_bind
+artifacts

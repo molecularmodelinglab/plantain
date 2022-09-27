@@ -20,7 +20,7 @@ from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.callbacks import ModelCheckpoint
 
 from routines.ai_routine import AIRoutine
-from common.cfg_utils import get_config
+from common.cfg_utils import get_config, get_run_config
 
 def train(cfg):
 
@@ -28,11 +28,11 @@ def train(cfg):
     if cfg.project is not None:
         if cfg.resume_id:
             run = wandb.init(project=cfg.project, id=cfg.resume_id, resume=True)
-            cfg = get_config(run, cfg)
+            cfg = get_run_config(run, cfg)
             artifact = run.use_artifact(f"{cfg.project}/model-{run.id}:latest", type='model')
             artifact_dir = artifact.download()
             checkpoint_file = artifact_dir + "/model.ckpt"
-            routine = Routine.from_checkpoint(cfg, checkpoint_file)
+            routine = AIRoutine.from_checkpoint(cfg, checkpoint_file)
         
         logger = WandbLogger(project=cfg.project, name=cfg.name, log_model="all")
         logger.log_hyperparams(cfg)
