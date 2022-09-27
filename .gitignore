@@ -10,3 +10,4 @@ checkpoints
 wandb
 direct_bind
 *.sif
+artifacts
