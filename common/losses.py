@@ -7,6 +7,9 @@ from common.utils import get_activity
 def act_mse_loss(batch, y_pred):
     return F.mse_loss(get_activity(batch), y_pred)
 
+def energy_mse_loss(batch, y_pred):
+    return F.mse_loss(batch.energy, y_pred.energy)
+
 def coord_mse_loss(batch, y_pred):
     ret = []
     for lig, cp in zip(batch.lig, y_pred.lig_coord):

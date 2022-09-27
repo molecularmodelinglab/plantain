@@ -5,6 +5,7 @@ import random
 from datasets.bigbind_act import BigBindActDataset
 from datasets.bigbind_struct import BigBindStructDataset
 from datasets.bigbind_fp import BigBindFpDataset
+# from datasets.vina_score import VinaScoreDataset
 from terrace.batch import DataLoader
 
 SEED = 49
@@ -22,6 +23,7 @@ def make_dataset(cfg, split):
         "bigbind_act": BigBindActDataset,
         "bigbind_struct": BigBindStructDataset,
         "bigbind_fp": BigBindFpDataset,
+        # "vina_score": VinaScoreDataset,
     }[cfg.dataset](cfg, split)
 
 def make_dataloader(cfg, split):

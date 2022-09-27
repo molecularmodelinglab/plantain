@@ -9,4 +9,5 @@ configs/local.yaml
 checkpoints
 wandb
 direct_bind
+*.sif
 artifacts

@@ -45,11 +45,10 @@ def train(cfg):
     else:
         routine = AIRoutine(cfg)
         logger = None
-
+        
     routine.fit(logger, callbacks)
 
 if __name__ == "__main__":
-    torch.multiprocessing.set_start_method('spawn')
     if len(sys.argv) > 1 and '=' not in sys.argv[1]:
         cfg_name = sys.argv[1]
     else:
