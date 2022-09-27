@@ -6,7 +6,7 @@ from dgllife.model.gnn import MPNNGNN
 
 from terrace.batch import Batch
 from models.cat_scal_embedding import CatScalEmbedding
-from datasets.data_types import PredData
+from datasets.data_types import PredData, EnergyPredData
 
 class LearnableFF(nn.Module):
     def __init__(self, cfg, in_node):
@@ -50,6 +50,27 @@ class LearnableFF(nn.Module):
 
         batch_rec_feat = self.rec_gnn(rec_graph, rec_hid, rec_edge_feat)
         batch_lig_feat = self.lig_gnn(lig_graph, lig_hid, lig_edge_feat)
+
+        if not self.cfg.model.optimize:
+            coords = []
+            energies = []
+            for r, l in zip(rec_graph.batch_num_nodes(), lig_graph.batch_num_nodes()):
+                lig_feat = batch_lig_feat[tot_lig:tot_lig+l]
+                rec_feat = batch_rec_feat[tot_rec:tot_rec+r]
+
+                lig_coord =  batch.lig.ndata.coord[tot_lig:tot_lig+l]
+                rec_coord =  batch.rec.ndata.coord[tot_rec:tot_rec+r]
+
+                lc_ex = new_lig_coord.unsqueeze(1).expand(-1,rec_coord.size(0),-1)
+                rc_ex = rec_coord.unsqueeze(0).expand(new_lig_coord.size(0),-1,-1)
+                dists = torch.sqrt(((lc_ex - rc_ex)**2).sum(-1))
+
+                U = (atn_coefs/(dists)).sum()
+                energies.append(U)
+                coords.append(lig_coord)
+
+            energies = torch.stack(energies)
+            return Batch(EnergyPredData, lig_coord=coords, energy=energies)
 
         tot_rec = 0
         tot_lig = 0

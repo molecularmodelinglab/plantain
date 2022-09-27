@@ -31,6 +31,18 @@ class ActivityData(StructData):
         act_td = TensorTD((1,))
         return ClassTD(ActivityData, lig=lig_td, rec=rec_td, activity=act_td)
 
+class EnergyData(StructData):
+    lig: MolGraph
+    rec: ProtGraph
+    energy: torch.Tensor
+
+    @staticmethod
+    def get_type_data(cfg: DictConfig):
+        lig_td = MolGraph.get_type_data(cfg)
+        rec_td = ProtGraph.get_type_data(cfg)
+        en_td = TensorTD((1,))
+        return ClassTD(ActivityData, lig=lig_td, rec=rec_td, energy=en_td)
+
 class PredData(Batchable):
 
     # This is a weird case for a batchable class, since coord will have different
@@ -40,3 +52,7 @@ class PredData(Batchable):
     # not the other way around
     lig_coord: torch.Tensor
     activity: torch.Tensor
+
+class EnergyPredData(Batchable):
+    lig_coord: torch.Tensor
+    energy: torch.Tensor

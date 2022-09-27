@@ -44,7 +44,7 @@ def train(cfg):
     else:
         routine = AIRoutine(cfg)
         logger = None
-
+        
     routine.fit(logger, callbacks)
 
 if __name__ == "__main__":
