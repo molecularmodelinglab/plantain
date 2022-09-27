@@ -1,4 +1,5 @@
 import sys
+sys.path = ['', '/opt/conda/lib/python38.zip', '/opt/conda/lib/python3.8', '/opt/conda/lib/python3.8/lib-dynload', '/opt/conda/lib/python3.8/site-packages', '/opt/conda/lib/python3.8/site-packages/torchtext-0.11.0a0-py3.8-linux-x86_64.egg']
 sys.path.insert(0, './terrace')
 
 # needed because dgllife is stupid and can't find rdkit otherwise...
