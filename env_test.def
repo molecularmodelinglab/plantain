@@ -1,0 +1,20 @@
+Bootstrap: docker
+From: nvidia/cuda:11.6.0-runtime-ubuntu20.04
+Stage: build
+
+%files
+    requirements.txt requirements.txt
+
+%post
+    /opt/conda/bin/conda init
+    conda install libgcc
+    conda install -c rdkit rdkit
+    conda install pytorch torchvision torchaudio cudatoolkit=11.6 -c pytorch -c conda-forge
+    conda install -c dglteam dgl-cuda11.6
+    pip install -r requirements.txt
+
+%environment
+    export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/opt/conda/lib
+
+%runscript
+    python $@
