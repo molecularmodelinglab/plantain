@@ -31,15 +31,19 @@ data:
     edge_feats: [ "dist"]
     include_h: False
 
+task: "classification"
+
 losses:
-  act_mse_lambda: 1.0
+  # act_mse_lambda: 1.0
+  act_ce_lambda: 1.0
 
 metrics:
-  - act_r2
+  # - act_r2
+  - act_acc
 
 batch_size: 16
 optimizer: adamw
-learn_rate: 1e-4
+learn_rate: 1e-2
 max_epochs: 1000
 
 model:

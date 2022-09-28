@@ -7,7 +7,7 @@ from Bio.PDB.PDBExceptions import PDBConstructionWarning
 from datasets.bigbind import BigBindDataset
 from datasets.graphs.mol_graph import MolGraph, mol_graph_from_sdf
 from datasets.graphs.prot_graph import ProtGraph, prot_graph_from_pdb
-from datasets.data_types import ActivityData
+from datasets.data_types import ActivityData, IsActiveData
 
 class BigBindActDataset(BigBindDataset):
 
@@ -44,8 +44,6 @@ class BigBindActDataset(BigBindDataset):
         
         lig_file = self.get_lig_file(index)
         rec_file = self.get_rec_file(index)
-        
-        activity = torch.tensor(self.activities.pchembl_value[index], dtype=torch.float32)
 
         try:
             lig_graph = mol_graph_from_sdf(self.cfg, lig_file)
@@ -56,12 +54,25 @@ class BigBindActDataset(BigBindDataset):
             print(f"{rec_file=}")
             raise
 
-        return ActivityData(lig_graph, rec_graph, activity)
+        if self.cfg.task == "regression":
+            activity = torch.tensor(self.activities.pchembl_value[index], dtype=torch.float32)
+            return ActivityData(lig_graph, rec_graph, activity)
+
+        elif self.cfg.task == "classification":
+            is_active = torch.tensor(self.activities.active[index], dtype=bool)
+            return IsActiveData(lig_graph, rec_graph, is_active)
+
+        else:
+            raise AssertionError()
 
     def get_variance(self):
-        return {
-            "activity": self.activities.pchembl_value.var(),
-        }
+        # todo: generalize variance dict
+        if self.cfg.task == "regression":
+            return {
+                "activity": self.activities.pchembl_value.var(),
+            }
+        else:
+            return {}
 
     def get_type_data(self):
         return ActivityData.get_type_data(self.cfg)

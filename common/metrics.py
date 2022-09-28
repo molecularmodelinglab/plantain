@@ -3,12 +3,15 @@ import torch.nn.functional as F
 
 from common.utils import get_activity
 
+def act_acc(batch, y_pred, variance_dict):
+    correct = (y_pred > 0) == batch.is_active
+    return sum(correct)/len(correct)
+
 def act_r2(batch, y_pred, variance_dict):
     return 1.0 - F.mse_loss(get_activity(batch), y_pred)/variance_dict["activity"]
 
 def energy_r2(batch, y_pred, variance_dict):
     return 1.0 - F.mse_loss(batch.energy, y_pred.energy)/variance_dict["energy"]
-
 
 def coord_rmsd(batch, y_pred, variance_dict):
     ret = []
