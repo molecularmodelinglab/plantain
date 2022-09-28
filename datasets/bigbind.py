@@ -23,3 +23,7 @@ class BigBindDataset(CacheableDataset):
         self.activities = self.activities.query("num_pocket_residues >= 5 and pocket_size_x < @max_pocket_size and pocket_size_y < @max_pocket_size and pocket_size_z < @max_pocket_size").reset_index(drop=True)
         if cfg.data.only_ki_kd:
             self.activities = self.activities.query("standard_type == 'Ki' or standard_type == 'Kd' ").reset_index(drop=True)
+
+        if cfg.task == "classification" and "active" not in self.activities:
+            active_pchembl_cutoff = 5
+            self.activities["active"] = self.activities["pchembl_value"] > active_pchembl_cutoff
