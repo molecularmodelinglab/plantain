@@ -54,7 +54,7 @@ class AIRoutine(pl.LightningModule):
         on_epoch = not on_step
         for key, val in metrics.items():
             val(pred, batch)
-            self.log(f"{prefix}_{key}", val, prog_bar=True, on_step=on_step, on_epoch=on_epoch, batch_size=len(batch))
+            self.log(f"{prefix}_{key}", val, prog_bar=False, on_step=on_step, on_epoch=on_epoch, batch_size=len(batch))
         return loss
 
     def training_step(self, batch, batch_idx):
