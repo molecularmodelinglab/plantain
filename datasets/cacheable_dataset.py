@@ -23,6 +23,7 @@ class CacheableDataset(data.Dataset):
         os.makedirs(self.cache_dir, exist_ok=True)
 
     def __getitem__(self, index):
+
         if index >= len(self):
             raise StopIteration
 

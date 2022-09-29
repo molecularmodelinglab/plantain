@@ -31,7 +31,7 @@ def make_dataloader(cfg, split):
     n_workers = cfg.platform.num_workers
     shuffle = (split == "train")
     return DataLoader(dataset, batch_size=cfg.batch_size,
-                      num_workers=n_workers, #pin_memory=True,
+                      num_workers=n_workers, pin_memory=True,
                       shuffle=shuffle, worker_init_fn=seed_worker)
 
 if __name__ == "__main__":
