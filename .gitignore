@@ -11,3 +11,4 @@ wandb
 direct_bind
 *.sif
 artifacts
+lightning_logs
