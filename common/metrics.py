@@ -1,29 +1,25 @@
-import torch
-import torch.nn.functional as F
+from torch import nn
+from torchmetrics import Metric, Accuracy, AUROC
 
-from common.utils import get_activity
+class MetricWrapper(Metric):
 
-def act_acc(batch, y_pred, variance_dict):
-    correct = (y_pred > 0) == batch.is_active
-    return sum(correct)/len(correct)
+    def __init__(self, metric, get_y):
+        super().__init__()
+        self.metric = metric
+        self.get_y = get_y
 
-def act_r2(batch, y_pred, variance_dict):
-    return 1.0 - F.mse_loss(get_activity(batch), y_pred)/variance_dict["activity"]
+    def update(self, pred, batch):
+        y_true = self.get_y(batch)
+        return self.metric.update(pred, y_true)
 
-def energy_r2(batch, y_pred, variance_dict):
-    return 1.0 - F.mse_loss(batch.energy, y_pred.energy)/variance_dict["energy"]
+    def compute(self):
+        return self.metric.compute()
 
-def coord_rmsd(batch, y_pred, variance_dict):
-    ret = []
-    for lig, cp in zip(batch.lig, y_pred.lig_coord):
-        ct = lig.ndata.coord
-        ret.append(torch.sqrt(F.mse_loss(ct, cp)))
-    return torch.stack(ret).mean()
-
-def get_metrics(cfg, batch, y_pred, variance_dict):
-    ret = {}
-    for metric_name in cfg.metrics:
-        # unsafe, but I'm not taking taking some random cfg file from the internet
-        f = globals()[metric_name]
-        ret[metric_name] = f(batch, y_pred, variance_dict)
-    return ret
+def get_metrics(cfg):
+    return {
+        "classification": nn.ModuleDict({
+            "acc": MetricWrapper(Accuracy(), lambda b: b.is_active),
+            "bal_acc": MetricWrapper(Accuracy(average="macro", num_classes=2, multiclass=True), lambda b: b.is_active),
+            "auroc": MetricWrapper(AUROC(), lambda b: b.is_active)
+        })
+    }[cfg.task]

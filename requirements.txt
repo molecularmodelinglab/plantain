@@ -13,3 +13,4 @@ biopandas
 scipy
 dgllife
 sympy
+torchmetrics

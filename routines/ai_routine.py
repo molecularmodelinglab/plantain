@@ -1,11 +1,14 @@
 import pytorch_lightning as pl
 import torch
+import torch.nn as nn
 
 from terrace.comp_node import Input
 from models.make_model import make_model
 from datasets.make_dataset import make_dataloader
 from common.losses import get_losses
 from common.metrics import get_metrics
+
+from torchmetrics import Accuracy, AUROC, MetricCollection
 
 class AIRoutine(pl.LightningModule):
     """ A "Routine" is basically just a lightning module -- something that's model
@@ -23,6 +26,11 @@ class AIRoutine(pl.LightningModule):
         self.learn_rate = cfg.learn_rate
         self.train_dataloader = make_dataloader(cfg, "train")
         self.val_dataloader = make_dataloader(cfg, "val")
+        self.metrics = nn.ModuleDict({
+            "train_metric": get_metrics(cfg),
+            "val_metric": get_metrics(cfg)
+        })
+        self.acc = nn.ModuleDict({ "acc": Accuracy() })
 
         batch = next(iter(self.val_dataloader))
 
@@ -39,10 +47,14 @@ class AIRoutine(pl.LightningModule):
         loss, loss_dict = get_losses(self.cfg, batch, pred)
         self.log(f"{prefix}_loss", loss, prog_bar=True, batch_size=len(batch))
         for key, val in loss_dict.items():
-            self.log(f"{prefix}_{key}", val, prog_bar=False, batch_size=len(batch))
-        metrics = get_metrics(self.cfg, batch, pred, self.val_variance)
+            self.log(f"{prefix}_{key}", val, prog_bar=True, batch_size=len(batch))
+
+        metrics = self.metrics[prefix + "_metric"]
+        on_step = prefix == "train"
+        on_epoch = not on_step
         for key, val in metrics.items():
-            self.log(f"{prefix}_{key}", val, prog_bar=False, batch_size=len(batch))
+            val(pred, batch)
+            self.log(f"{prefix}_{key}", val, prog_bar=True, on_step=on_step, on_epoch=on_epoch, batch_size=len(batch))
         return loss
 
     def training_step(self, batch, batch_idx):
