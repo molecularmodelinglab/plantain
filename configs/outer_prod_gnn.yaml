@@ -11,6 +11,7 @@ data:
   use_rec: true
   use_lig: true
 
+  sna_frac: null
   only_ki_kd: false
   
   lig_graph:
@@ -30,11 +31,11 @@ data:
     edge_feats: [ "dist"]
     include_h: False
 
-losses:
-  act_mse_lambda: 1.0
+task: "classification"
 
-metrics:
-  - act_r2
+losses:
+  # act_mse_lambda: 1.0
+  act_ce_lambda: 1.0
 
 batch_size: 32
 optimizer: adamw
