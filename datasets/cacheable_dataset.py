@@ -2,6 +2,7 @@ import pickle
 import os
 import uuid
 import torch
+from traceback import print_exc
 from torch.utils import data
 from omegaconf import OmegaConf
 from random import random
@@ -40,6 +41,8 @@ class CacheableDataset(data.Dataset):
                 with open(cache_file, "rb") as f:
                     batch = pickle.load(f)
                     return batch
+            except KeyboardInterrupt:
+                raise
             except:
                 # raise
                 pass
@@ -50,8 +53,14 @@ class CacheableDataset(data.Dataset):
             ret = self.get_item_pre_cache(index)
             
         if self.cache:
-            with open(cache_file, "wb") as f:
-                pickle.dump(ret, f)
+            try:
+                with open(cache_file, "wb") as f:
+                    pickle.dump(ret, f)
+            except KeyboardInterrupt:
+                raise
+            except:
+                print(f"Failed to cache {cache_file}...")
+                print_exc()
 
         return ret
 
