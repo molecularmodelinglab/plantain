@@ -43,7 +43,7 @@ metrics:
 
 batch_size: 16
 optimizer: adamw
-learn_rate: 1e-3
+learn_rate: 1e-4
 max_epochs: 1000
 
 model:

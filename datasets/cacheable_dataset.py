@@ -51,7 +51,7 @@ class CacheableDataset(data.Dataset):
             ret = self.get_randomized_item_pre_cache(index, r)
         except NotImplementedError:
             ret = self.get_item_pre_cache(index)
-            
+           
         if self.cache:
             try:
                 with open(cache_file, "wb") as f:
@@ -59,7 +59,7 @@ class CacheableDataset(data.Dataset):
             except KeyboardInterrupt:
                 raise
             except:
-                print(f"Failed to cache {cache_file}...")
+                print(f"Failed to cache item at index {index} into {cache_file}...")
                 print_exc()
 
         return ret

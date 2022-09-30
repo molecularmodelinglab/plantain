@@ -25,6 +25,7 @@ from common.cfg_utils import get_config, get_run_config
 
 def test_dataloader(cfg):
     routine = AIRoutine(cfg)
+    print(cfg.data.sna_frac)
     for batch in tqdm(routine.train_dataloader):
         pass
 
