@@ -51,7 +51,8 @@ class OuterProdGNN(nn.Module):
             self.out_nns.append(nn.Sequential(
                 nn.Linear(prev, size),
                 nn.LayerNorm(size),
-                nn.LeakyReLU()
+                nn.LeakyReLU(),
+                nn.Dropout(cfg.model.dropout_rate),
             ))
         self.out = nn.Linear(cfg.model.out_mlp_sizes[-1], 1)
         

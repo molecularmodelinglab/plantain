@@ -34,7 +34,9 @@ class CacheableDataset(data.Dataset):
         except NotImplementedError:
             key = self.get_cache_key(index)
             
-        cache_file = f"{self.cache_dir}/{key}_cache_{self.cache_postfix}_{CACHE_VERSION}.pkl"
+        cache_file = f"{self.cache_dir}/{CACHE_VERSION}/{self.cache_postfix}/{key}_cache.pkl"
+        cache_folder = "/".join(cache_file.split("/")[:-1])
+        os.makedirs(cache_folder, exist_ok=True)
         
         if self.cache:
             try:

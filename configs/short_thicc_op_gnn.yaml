@@ -47,18 +47,18 @@ model:
   type: outer_prod_gnn
   
   rec_encoder:
-    node_embed_size: 32
-    edge_embed_size: 32
-    num_mpnn_layers: 8
-    edge_hidden_size: 8
-    out_size: 32
+    node_embed_size: 64
+    edge_embed_size: 64
+    num_mpnn_layers: 2
+    edge_hidden_size: 32
+    out_size: 128
 
   lig_encoder:
-    node_embed_size: 8
-    edge_embed_size: 32
-    num_mpnn_layers: 8
+    node_embed_size: 16
+    edge_embed_size: 64
+    num_mpnn_layers: 2
     edge_hidden_size: 32
-    out_size: 32
+    out_size: 128
 
-  out_mlp_sizes: [64]
+  out_mlp_sizes: [256, 128, 64]
   dropout_rate: 0.2
