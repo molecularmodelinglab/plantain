@@ -53,7 +53,7 @@ class CacheableDataset(data.Dataset):
             ret = self.get_randomized_item_pre_cache(index, r)
         except NotImplementedError:
             ret = self.get_item_pre_cache(index)
-           
+    
         if self.cache:
             try:
                 with open(cache_file, "wb") as f:

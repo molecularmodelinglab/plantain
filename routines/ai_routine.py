@@ -53,6 +53,10 @@ class AIRoutine(pl.LightningModule):
         on_step = prefix == "train"
         on_epoch = not on_step
         for key, val in metrics.items():
+            # debug: is AUROC causing the OOMs?
+            if prefix == "train" and key == "auroc":
+                # print("Skipping")
+                continue
             val(pred, batch)
             self.log(f"{prefix}_{key}", val, prog_bar=False, on_step=on_step, on_epoch=on_epoch, batch_size=len(batch))
         return loss
