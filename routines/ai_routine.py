@@ -7,8 +7,7 @@ from models.make_model import make_model
 from datasets.make_dataset import make_dataloader
 from common.losses import get_losses
 from common.metrics import get_metrics
-
-from torchmetrics import Accuracy, AUROC, MetricCollection
+from common.plot_metrics import plot_metrics
 
 class AIRoutine(pl.LightningModule):
     """ A "Routine" is basically just a lightning module -- something that's model
@@ -30,7 +29,6 @@ class AIRoutine(pl.LightningModule):
             "train_metric": get_metrics(cfg),
             "val_metric": get_metrics(cfg)
         })
-        self.acc = nn.ModuleDict({ "acc": Accuracy() })
 
         batch = next(iter(self.val_dataloader))
 
@@ -54,11 +52,12 @@ class AIRoutine(pl.LightningModule):
         on_epoch = not on_step
         for key, val in metrics.items():
             # debug: is AUROC causing the OOMs?
-            if prefix == "train" and key == "auroc":
-                # print("Skipping")
-                continue
+            # if prefix == "train" and key == "auroc":
+            #     # print("Skipping")
+            #     continue
             val(pred, batch)
-            self.log(f"{prefix}_{key}", val, prog_bar=False, on_step=on_step, on_epoch=on_epoch, batch_size=len(batch))
+            if isinstance(val, torch.Tensor):
+                self.log(f"{prefix}_{key}", val, prog_bar=False, on_step=on_step, on_epoch=on_epoch, batch_size=len(batch))
         return loss
 
     def training_step(self, batch, batch_idx):
@@ -72,6 +71,9 @@ class AIRoutine(pl.LightningModule):
 
     def configure_optimizers(self):
         return torch.optim.AdamW(self.parameters(), lr=self.learn_rate)
+
+    def validation_epoch_end(self, outputs):
+        plot_metrics(self.metrics["val_metric"], "val", True)
 
     def fit(self, logger, callbacks):
         gpus = int(torch.cuda.is_available())

@@ -78,7 +78,7 @@ class AtomNode(Node3d):
         coord_td = TensorTD((3,), dtype=torch.float32)
         return ClassTD(AtomNode, coord=coord_td, cat_feat=cat_td, scal_feat=scal_td)
 
-    def __init__(self, mol_cfg: DictConfig, atom: Chem.Atom, mol: Chem.Mol):
+    def __init__(self, mol_cfg: DictConfig, atom: Chem.Atom, mol: Chem.Mol, use_3d):
         cat_feats = []
         scal_feats = []
         for feat_name in mol_cfg.atom_feats:
@@ -87,8 +87,11 @@ class AtomNode(Node3d):
             feat = safe_index(possible, get_feat(atom, mol))
             cat_feats.append(feat)
         
-        point = mol.GetConformer().GetAtomPosition(atom.GetIdx())
-        coord = [ point.x, point.y, point.z ]
+        if use_3d:
+            point = mol.GetConformer().GetAtomPosition(atom.GetIdx())
+            coord = [ point.x, point.y, point.z ]
+        else:
+            coord = [0.0, 0.0, 0.0]
 
         coord = torch.tensor(coord, dtype=torch.float32)
         cat_feats = torch.tensor(cat_feats, dtype=torch.long)
@@ -139,9 +142,9 @@ class MolGraph(Graph3d):
         bond_td = BondEdge.get_type_data(mol_cfg)
         return GraphTD(MolGraph, atom_td, bond_td, ShapeVar("LN"), ShapeVar("LE"))
 
-    def __init__(self, cfg: DictConfig, mol: Chem.Mol):
+    def __init__(self, cfg: DictConfig, mol: Chem.Mol, use_3d=True):
         mol_cfg = cfg.data.lig_graph
-        nodes = [AtomNode(mol_cfg, atom, mol) for atom in mol.GetAtoms()]
+        nodes = [AtomNode(mol_cfg, atom, mol, use_3d) for atom in mol.GetAtoms()]
 
         edges = []
         edata = []
@@ -155,3 +158,7 @@ class MolGraph(Graph3d):
 
 def mol_graph_from_sdf(cfg, sdf_file):
     return MolGraph(cfg, next(Chem.SDMolSupplier(sdf_file, sanitize=True)))
+
+def get_node_and_edge_nums_from_sdf(cfg, sdf_file):
+    mol = next(Chem.SDMolSupplier(sdf_file, sanitize=True))
+    return mol.GetNumAtoms(), mol.GetNumBonds()

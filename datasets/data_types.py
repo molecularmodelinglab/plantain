@@ -42,6 +42,20 @@ class IsActiveData(StructData):
         act_td = TensorTD((1,), dtype=bool)
         return ClassTD(ActivityData, lig=lig_td, rec=rec_td, is_active=act_td)
 
+class IsActiveIndexData(StructData):
+    lig: MolGraph
+    rec: ProtGraph
+    is_active: torch.Tensor
+    index: int
+
+    @staticmethod
+    def get_type_data(cfg: DictConfig):
+        lig_td = MolGraph.get_type_data(cfg)
+        rec_td = ProtGraph.get_type_data(cfg)
+        act_td = TensorTD((1,), dtype=bool)
+        index_td = TensorTD((1,), dtype=int)
+        return ClassTD(ActivityData, lig=lig_td, rec=rec_td, is_active=act_td, index=index_td)
+
 class EnergyData(StructData):
     lig: MolGraph
     rec: ProtGraph

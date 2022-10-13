@@ -14,3 +14,4 @@ scipy
 dgllife
 sympy
 torchmetrics
+git-timewarp

@@ -37,10 +37,14 @@ losses:
   # act_mse_lambda: 1.0
   act_ce_lambda: 1.0
 
-batch_size: 16
 optimizer: adamw
 learn_rate: 1e-5
 max_epochs: 1000
+
+batch_size: 16
+sampler:
+  max_rec_edges: 10000
+  max_lig_edges: 1000
 
 model:
 

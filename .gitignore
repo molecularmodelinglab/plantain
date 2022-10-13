@@ -12,3 +12,6 @@ direct_bind
 *.sif
 artifacts
 lightning_logs
+time_warps
+artifacts
+outputs

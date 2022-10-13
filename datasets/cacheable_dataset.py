@@ -11,14 +11,17 @@ from datasets.utils import dict_to_id_str
 
 CACHE_VERSION = 0.5
 
+def get_dataset_hash(cfg):
+    cfg_dict = OmegaConf.to_container(cfg.data)
+    dict_str = dict_to_id_str(cfg_dict)
+    dict_id = uuid.uuid3(uuid.NAMESPACE_DNS, dict_str)
+    return dict_id.hex
+
 class CacheableDataset(data.Dataset):
 
     def __init__(self, cfg, dataset_name):
         super().__init__()
-        cfg_dict = OmegaConf.to_container(cfg.data)
-        dict_str = dict_to_id_str(cfg_dict)
-        dict_id = uuid.uuid3(uuid.NAMESPACE_DNS, dict_str)
-        self.cache_postfix = dict_id.hex
+        self.cache_postfix = get_dataset_hash(cfg)
         self.cache = cfg.data.cache
         self.cache_dir = cfg.platform.cache_dir + "/" + dataset_name
         os.makedirs(self.cache_dir, exist_ok=True)

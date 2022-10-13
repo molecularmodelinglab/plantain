@@ -118,6 +118,27 @@ class ProtResidueNode(Node3d):
         else:
             return RESIDUE_COLORS["misc"]
 
+def get_nodes_and_edges_from_model(cfg: DictConfig, prot: Model):
+    prot_cfg = cfg.data.rec_graph
+    nodes = []
+    for chain in prot:
+        for residue in chain:
+            if residue.get_resname() not in possible_residue_feats["residue_type"]: continue
+            if prot_cfg.node_type == "residue":
+                nodes.append(ProtResidueNode(prot_cfg, residue, prot))
+            elif prot_cfg.node_type == "atom":
+                for atom in residue:
+                    nodes.append(ProtAtomNode(prot_cfg, atom, prot))
+    
+    if prot_cfg.edge_method.type == "knn":
+        edges = make_knn_edgelist(nodes, 
+                                    prot_cfg.edge_method.knn_rad,
+                                    prot_cfg.edge_method.max_neighbors)
+    else:
+        raise AssertionError()
+
+    return nodes, edges
+
 class ProtGraph(Graph3d):
 
     @staticmethod
@@ -133,22 +154,7 @@ class ProtGraph(Graph3d):
     def __init__(self, cfg: DictConfig, prot: Model):
         prot_cfg = cfg.data.rec_graph
 
-        nodes = []
-        for chain in prot:
-            for residue in chain:
-                if residue.get_resname() not in possible_residue_feats["residue_type"]: continue
-                if prot_cfg.node_type == "residue":
-                    nodes.append(ProtResidueNode(prot_cfg, residue, prot))
-                elif prot_cfg.node_type == "atom":
-                    for atom in residue:
-                        nodes.append(ProtAtomNode(prot_cfg, atom, prot))
-        
-        if prot_cfg.edge_method.type == "knn":
-            edges = make_knn_edgelist(nodes, 
-                                      prot_cfg.edge_method.knn_rad,
-                                      prot_cfg.edge_method.max_neighbors)
-        else:
-            raise AssertionError()
+        nodes, edges = get_nodes_and_edges_from_model(cfg, prot)
 
         edata = []
         for (i, j) in edges:
@@ -165,3 +171,12 @@ def prot_graph_from_pdb(cfg, pdb_file):
         structure = parser.get_structure('random_id', pdb_file)
         rec = structure[0]
     return ProtGraph(cfg, rec)
+
+def get_node_and_edge_nums_from_pdb(cfg, pdb_file):
+    parser = PDBParser()
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=PDBConstructionWarning)
+        structure = parser.get_structure('random_id', pdb_file)
+        rec = structure[0]
+    nodes, edges = get_nodes_and_edges_from_model(cfg, rec)
+    return len(nodes), len(edges)
