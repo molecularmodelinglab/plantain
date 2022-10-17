@@ -4,7 +4,7 @@ import pandas as pd
 
 from common.cfg_utils import get_config
 
-def make_screen_fig(cfg, name2df, sort_key="e2ebind"):
+def make_screen_fig(cfg, name2df, split, sort_key="e2ebind"):
     sorted_df = name2df[sort_key]
     sorted_df = sorted_df.sort_values(by="EF1%", ascending=False)
 
@@ -20,7 +20,11 @@ def make_screen_fig(cfg, name2df, sort_key="e2ebind"):
 
     # Add some text for labels, title and custom x-axis tick labels, etc.
     ax.set_ylabel('EF1%')
-    ax.set_title("Performance on BigBind Screen")
+    split_name = {
+        "val": "Validation",
+        "test": "Test",
+    }[split]
+    ax.set_title(f"Performance on BigBind {split_name} Screen")
     ax.set_xticks(x)
     targets = [ t.split("_")[0] for t in sorted_df.index ]
     ax.set_xticklabels(targets, rotation='vertical')
@@ -29,11 +33,11 @@ def make_screen_fig(cfg, name2df, sort_key="e2ebind"):
 
     fig.set_size_inches(15, 5)
     fig.tight_layout()
-    out_filename = "./outputs/val_screen_results.png"
+    out_filename = f"./outputs/{split}_screen_results.png"
     print(f"Saving figure to {out_filename}")
     fig.savefig(out_filename, transparent=False)
 
-def make_screen_table(cfg, name2df):
+def make_screen_table(cfg, name2df, split):
     rows = []
     for name, df in name2df.items():
         rows.append({
@@ -46,7 +50,7 @@ def make_screen_table(cfg, name2df):
             "median AUC": df["auroc"].median(),
         })
     out_df = pd.DataFrame(rows)
-    out_filename = "./outputs/val_screen_results.csv"
+    out_filename = f"./outputs/{split}_screen_results.csv"
     print(out_df)
     print(f"Saving table to {out_filename}")
     out_df.to_csv(out_filename, index=False)
@@ -63,5 +67,5 @@ if __name__ == "__main__":
         df = pd.read_csv(csv).set_index("target")
         df = df.query("`total actives in set` >= @min_actives")
         name2df[name] = df
-    # make_screen_fig(cfg, name2df)
-    make_screen_table(cfg, name2df)
+    make_screen_fig(cfg, name2df, "val")
+    make_screen_table(cfg, name2df, "val")

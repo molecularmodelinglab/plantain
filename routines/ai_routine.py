@@ -52,9 +52,9 @@ class AIRoutine(pl.LightningModule):
         on_epoch = not on_step
         for key, val in metrics.items():
             # debug: is AUROC causing the OOMs?
-            # if prefix == "train" and key == "auroc":
-            #     # print("Skipping")
-            #     continue
+            if prefix == "train" and key in ("auroc", "roc"):
+                # print("Skipping")
+                continue
             val(pred, batch)
             if isinstance(val, torch.Tensor):
                 self.log(f"{prefix}_{key}", val, prog_bar=False, on_step=on_step, on_epoch=on_epoch, batch_size=len(batch))
@@ -73,7 +73,9 @@ class AIRoutine(pl.LightningModule):
         return torch.optim.AdamW(self.parameters(), lr=self.learn_rate)
 
     def validation_epoch_end(self, outputs):
-        plot_metrics(self.metrics["val_metric"], "val", True)
+        pass
+        # re-add later
+        # plot_metrics(self.metrics["val_metric"], "val", True)
 
     def fit(self, logger, callbacks):
         gpus = int(torch.cuda.is_available())
