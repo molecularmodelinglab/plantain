@@ -39,7 +39,7 @@ def train(cfg):
         logger.log_hyperparams(cfg)
         if "SLURM_JOB_ID" in os.environ:
             logger.log_hyperparams({ "slurm_job_id": os.environ["SLURM_JOB_ID"] })
-        checkpoint_callback = ModelCheckpoint(monitor="val_loss", mode="min")
+        checkpoint_callback = ModelCheckpoint(monitor="val_loss", mode="min", every_n_epochs=1)
         callbacks.append(checkpoint_callback)
         routine = AIRoutine(cfg)
     else:
