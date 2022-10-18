@@ -68,9 +68,12 @@ class BigBindActDataset(BigBindDataset):
 
     def get_variance(self):
         # todo: generalize variance dict
-        return {
-            "activity": self.activities.pchembl_value.var(),
-        }
+        if "pchembl_value" in self.activities:
+            return {
+                "activity": self.activities.pchembl_value.var(),
+            }
+        else:
+            return {}
 
     def get_type_data(self):
         return ActivityData.get_type_data(self.cfg)
