@@ -22,13 +22,15 @@ class ActivityData(StructData):
     lig: MolGraph
     rec: ProtGraph
     activity: torch.Tensor
+    is_active: torch.Tensor
 
     @staticmethod
     def get_type_data(cfg: DictConfig):
         lig_td = MolGraph.get_type_data(cfg)
         rec_td = ProtGraph.get_type_data(cfg)
         act_td = TensorTD((1,))
-        return ClassTD(ActivityData, lig=lig_td, rec=rec_td, activity=act_td)
+        is_act_td = TensorTD((1,), dtype=bool)
+        return ClassTD(ActivityData, lig=lig_td, rec=rec_td, activity=act_td, is_active=act_td)
 
 class IsActiveData(StructData):
     lig: MolGraph

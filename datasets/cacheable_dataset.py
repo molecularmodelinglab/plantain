@@ -9,7 +9,7 @@ from random import random
 
 from datasets.utils import dict_to_id_str
 
-CACHE_VERSION = 0.5
+CACHE_VERSION = 0.6
 
 def get_dataset_hash(cfg):
     cfg_dict = OmegaConf.to_container(cfg.data)

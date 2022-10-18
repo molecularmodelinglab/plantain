@@ -21,17 +21,21 @@ class BigBindActDataset(BigBindDataset):
         """ returns the first lig file if use_lig is false, to ensure
         that all ligs are the same """
         if not self.cfg.data.use_lig:
-            index = 0
+            return self.dir + "/" + "chembl_structures/mol_4.sdf"
         return self.dir + "/" + self.activities.lig_file[index]
 
     def get_rec_file(self, index):
         """ same as above """
-        if not self.cfg.data.use_rec:
-            index = 0
-        if self.cfg.data.rec_graph.only_pocket:
-            return self.dir + "/" + self.activities.ex_rec_pocket_file[index]
+        if self.cfg.data.use_rec:
+            poc_file = self.activities.ex_rec_pocket_file[index]
+            rec_file = self.activities.ex_rec_file[index]
         else:
-            return self.dir + "/" + self.activities.ex_rec_file[index]
+            poc_file = "ELNE_HUMAN_30_247_0/3q77_A_rec_pocket.pdb"
+            rec_file = "ELNE_HUMAN_30_247_0/3q77_A_rec.pdb"
+        if self.cfg.data.rec_graph.only_pocket:
+            return self.dir + "/" + poc_file
+        else:
+            return self.dir + "/" + rec_file
 
     def get_cache_key(self, index):
 
@@ -54,25 +58,19 @@ class BigBindActDataset(BigBindDataset):
             print(f"{rec_file=}")
             raise
 
-        if self.cfg.task == "regression":
+        if "pchembl_value" in self.activities:
             activity = torch.tensor(self.activities.pchembl_value[index], dtype=torch.float32)
-            return ActivityData(lig_graph, rec_graph, activity)
-
-        elif self.cfg.task == "classification":
-            is_active = torch.tensor(self.activities.active[index], dtype=bool)
-            return IsActiveData(lig_graph, rec_graph, is_active)
-
         else:
-            raise AssertionError()
+            activity = torch.tensor(0.0, dtype=torch.float32)
+        is_active = torch.tensor(self.activities.active[index], dtype=bool)
+
+        return ActivityData(lig_graph, rec_graph, activity, is_active)
 
     def get_variance(self):
         # todo: generalize variance dict
-        if self.cfg.task == "regression":
-            return {
-                "activity": self.activities.pchembl_value.var(),
-            }
-        else:
-            return {}
+        return {
+            "activity": self.activities.pchembl_value.var(),
+        }
 
     def get_type_data(self):
         return ActivityData.get_type_data(self.cfg)
