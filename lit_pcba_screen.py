@@ -151,10 +151,8 @@ def make_lit_pcba_fig(cfg, run, df):
     out_filename = f"outputs/lit_pca_results_{run_id}_{artifact.version}.png"
     fig.savefig(out_filename, transparent=False)
 
-def lit_pcba_screen(cfg, run_id, tag="latest"):
-    api = wandb.Api()
-    run = api.run(f"{cfg.project}/{run_id}")
-    cfg = get_run_config(run, cfg)
+@cache(old_model_key)
+def lit_pcba_screen(cfg, run, tag="latest"):
 
     rows = []
     all_targets = LitPcbaDataset.get_all_targets(cfg)
@@ -183,9 +181,13 @@ def lit_pcba_screen(cfg, run_id, tag="latest"):
     df.to_csv(out_filename, index=False)
     print(f"Making figure")
     make_lit_pcba_fig(cfg, run, df)
+    return df
 
 if __name__ == "__main__":
     cfg = get_config()
     # run_id = "1socj7qg"
     run_id = "1nhqz8vw"
-    lit_pcba_screen(cfg, run_id)
+    api = wandb.Api()
+    run = api.run(f"{cfg.project}/{run_id}")
+    cfg = get_run_config(run, cfg)
+    lit_pcba_screen(cfg, run)

@@ -121,6 +121,10 @@ def log_metrics(metrics, target):
             continue
         print(f"{target}_{name}: {val}")
 
+def screen_cache(cfg, val_model, split):
+    return (val_model.get_cache_key(), split)
+
+@cache(screen_cache)
 def screen(cfg, val_model, split="val"):
 
     rows = []
@@ -146,6 +150,7 @@ def screen(cfg, val_model, split="val"):
     out_filename = f"outputs/{split}_screen_{model.get_name()}.csv"
     print(f"Saving result to {out_filename}")
     df.to_csv(out_filename, index=False)
+    return df
 
 if __name__ == "__main__":
     cfg = get_config()

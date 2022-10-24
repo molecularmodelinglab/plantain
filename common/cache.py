@@ -7,7 +7,7 @@ import inspect
 def stringify_cache_key(key):
     return uuid.uuid3(uuid.NAMESPACE_DNS, str(key)).hex
 
-def cache(cache_key, version=0.0, disable=True):
+def cache(cache_key, version=0.0, disable=False):
     def inner_cache(f):
         f_sig = inspect.signature(f)
         @functools.wraps(f)

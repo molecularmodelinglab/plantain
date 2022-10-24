@@ -1,6 +1,6 @@
 import torch
 from torch import nn
-from torchmetrics import Metric, Accuracy, AUROC, ROC, Precision
+from torchmetrics import Metric, Accuracy, AUROC, ROC, Precision, R2Score
 # rom torchmetrics.classification import BinaryPrecision
 
 class MetricWrapper(Metric):
@@ -27,5 +27,8 @@ def get_metrics(cfg):
             "auroc": MetricWrapper(AUROC(), torch.sigmoid, lambda b: b.is_active),
             "precision": MetricWrapper(Precision(), torch.sigmoid, lambda b: b.is_active),
             "roc": MetricWrapper(ROC(), torch.sigmoid, lambda b: b.is_active)
+        }),
+        "regression": nn.ModuleDict({
+            "r2": MetricWrapper(R2Score(), lambda x: x, lambda b: b.activity)
         })
     }[cfg.task]
