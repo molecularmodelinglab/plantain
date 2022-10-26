@@ -5,9 +5,7 @@ numpy
 pandas
 tqdm
 pytorch_lightning==1.5.8
-GitPython
 PyYAML
-hydra-core
 biopython
 biopandas
 scipy
@@ -15,3 +13,4 @@ dgllife
 sympy
 torchmetrics
 git-timewarp
+seaborn

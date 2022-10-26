@@ -18,7 +18,7 @@ def pred_key(cfg, run, dataloader, tag, split):
     return (old_model_key(cfg, run, tag), split)
 
 @cache(pred_key, disable=False)
-def get_preds(cfg, run, dataloader, tag="latest", split="val"):
+def get_preds(cfg, run, dataloader, tag, split):
 
     cfg = get_run_config(run, cfg)
     device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
@@ -35,7 +35,7 @@ def metrics_key(cfg, run, tag, split):
     return (old_model_key(cfg, run, tag), split)
 
 @cache(metrics_key, disable=False)
-def get_metric_values(cfg, run, tag="latest", split="val"):
+def get_metric_values(cfg, run, tag, split):
 
     cfg = get_run_config(run, cfg)
 
@@ -68,7 +68,7 @@ def log_metrics(run, metrics, split):
         if not isinstance(val, torch.Tensor): continue
         print(f"{split}_{name}: {val}")
 
-def validate(cfg, run_id, tag="latest", split="val", to_wandb=False):
+def validate(cfg, run_id, tag, split, to_wandb=False):
 
     if to_wandb:
         run = wandb.init(project=cfg.project, id=run_id, resume=True)
@@ -101,28 +101,24 @@ def plot_many_rocs(rocs, title, out_filename):
     # plt.show()
 
 
-def make_roc_figs(cfg):
+def make_roc_figs(cfg, tag, split):
     run_ids = {
-        "Ligand and receptor": "1nhqz8vw",
-        "Ligand only": "1socj7qg",
+        "Ligand and receptor": "37jstv82",
+        "Ligand only": "exp293if",
     }
     rocs = {}
     for name, run_id in run_ids.items():
-        rocs[name] = validate(cfg, run_id)["roc"]
+        rocs[name] = validate(cfg, run_id, tag, split)["roc"]
     plot_many_rocs(rocs, "With SNA", "outputs/sna_roc.png")
     run_ids = {
-        "Ligand and receptor": "1l2sn8s5",
-        "Ligand only": "3pnuwz4k",
+        "Ligand and receptor": "1es4be17",
+        "Ligand only": "1qwd5qn6",
     }
     rocs = {}
     for name, run_id in run_ids.items():
-        rocs[name] = validate(cfg, run_id)["roc"]
+        rocs[name] = validate(cfg, run_id, tag, split)["roc"]
     plot_many_rocs(rocs, "Without SNA", "outputs/no_sna_roc.png")
 
 if __name__ == "__main__":
     cfg = get_config()
-    # cfg.platform.num_workers = 8
-    # run_id = "1socj7qg"
-    run_id = "1nhqz8vw"
-    # validate(cfg, run_id, to_wandb=False)
-    make_roc_figs(cfg)
+    make_roc_figs(cfg, "v4", "test")

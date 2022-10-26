@@ -157,8 +157,6 @@ def lit_pcba_screen(cfg, run, tag="latest"):
     rows = []
     all_targets = LitPcbaDataset.get_all_targets(cfg)
     for target in all_targets:
-        # IDH1 has some alignment issues...
-        if target == "IDH1": continue
         print(f"Screening on {target}")
         metrics = get_lit_pcba_metric_values(cfg, run, target, tag)
         log_metrics(run, metrics, target)

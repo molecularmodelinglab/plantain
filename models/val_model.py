@@ -1,4 +1,5 @@
 import os
+import random
 import torch
 from abc import ABC, abstractmethod
 from meeko import PDBQTMolecule
@@ -93,7 +94,7 @@ class GninaModel(ValModel):
                 ret.append(-100)
         return torch.tensor(ret, dtype=torch.float32, device=batch.index.device)
 
-def ComboModel(ValModel):
+class ComboModel(ValModel):
 
     def __init__(self, model1: ValModel, model2: ValModel, model1_frac: float):
         self.model1 = model1
@@ -111,3 +112,16 @@ def ComboModel(ValModel):
     def init_preds(self, model1_preds, model2_preds):
         self.model1_preds = model1_preds
         self.model2_preds = model2_preds
+
+    def __call__(self, x, dataset):
+        raise NotImplementedError()
+
+    def choose_topk(self, k):
+        """ returns the indexes of the top k items according to our choice
+        hueristic (top model1_frac from model1, top k from those) """
+        idx_p1_p2 = list(zip(range(len(self.model1_preds)), self.model1_preds, self.model2_preds))
+        random.shuffle(idx_p1_p2)
+        k1 = int(len(self.model1_preds)*self.model1_frac)
+        top_k1 = sorted(idx_p1_p2, key=lambda x: -x[1])[:k1]
+        top_k = sorted(top_k1, key=lambda x: -x[2])[:k]
+        return [ idx for idx, p1, p2 in top_k ]

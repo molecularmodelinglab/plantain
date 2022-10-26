@@ -12,7 +12,7 @@ import pandas as pd
 
 from terrace.batch import DataLoader
 
-from models.val_model import OldModel, VinaModel, GninaModel
+from models.val_model import OldModel, VinaModel, GninaModel, ComboModel
 from common.metrics import get_metrics
 from datasets.bigbind_screen import BigBindScreenDataset
 from datasets.lit_pcba import LitPcbaDataset
@@ -47,8 +47,11 @@ def get_screen_dataloader(cfg, dataset_name, target, split):
         "bigbind": get_bigbind_screen_dataloader,
     }[dataset_name](cfg, target, split)
 
-@cache(pred_key, disable=True)
+@cache(pred_key, disable=False)
 def get_screen_preds(cfg, model, dataset_name, target, split):
+
+    if isinstance(model, ComboModel):
+        return [ get_screen_preds(cfg, submodel, dataset_name, target, split) for submodel in (model.model1, model.model2) ]
 
     device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
     model = model.to(device)
@@ -62,13 +65,16 @@ def get_screen_preds(cfg, model, dataset_name, target, split):
 
     return preds
 
-def get_screen_metrics(scores, yt):
+def get_screen_metrics(scores, model, yt):
     one_percent = round(len(yt)*0.01)
     if one_percent == 0: return None
-    all_pred_and_act = list(zip(scores, yt))
-    random.shuffle(all_pred_and_act)
-    pred_and_act = sorted(all_pred_and_act, key=lambda x: -x[0])[:one_percent]
-    are_active = [ item[1] for item in pred_and_act ]
+    if isinstance(model, ComboModel):
+        are_active = [ yt[idx] for idx in model.choose_topk(one_percent)]
+    else:
+        all_pred_and_act = list(zip(scores, yt))
+        random.shuffle(all_pred_and_act)
+        pred_and_act = sorted(all_pred_and_act, key=lambda x: -x[0])[:one_percent]
+        are_active = [ item[1] for item in pred_and_act ]
     tot_actives = sum(yt)
     max_actives = min(tot_actives, one_percent)
     frac_act_chosen = sum(are_active)/len(are_active)
@@ -86,11 +92,13 @@ def get_screen_metrics(scores, yt):
         "total actives in set": tot_actives,
     }
     
-@cache(pred_key, disable=True)
+@cache(pred_key, disable=False)
 def get_screen_metric_values(cfg, model, dataset_name, target, split):
 
-    print(f"Getting predictions for {dataset_name} {target}")
+    print(f"Getting predictions for {model.get_name()} on {dataset_name} {target}")
     preds = get_screen_preds(cfg, model, dataset_name, target, split)
+    if isinstance(model, ComboModel):
+        model.init_preds(*preds)
 
     device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
 
@@ -118,15 +126,25 @@ def get_screen_metric_values(cfg, model, dataset_name, target, split):
     scores = torch.cat(preds).to('cpu')
     yt = loader.dataset.get_all_yt()
 
-    screen_mets = get_screen_metrics(scores, yt)
+    screen_mets = get_screen_metrics(scores, model, yt)
     mets.update(screen_mets)
 
     return mets
 
+def log_metrics(metrics, target):
+    for name, val in metrics.items():
+        if isinstance(val, torch.Tensor):
+            val = val.cpu().numpy()
+        elif isinstance(val, (int, float)):
+            pass
+        else:
+            continue
+        print(f"{target}_{name}: {val}")
+
 def screen_key(cfg, model, dataset_name, split):
     return (model.get_cache_key(), dataset_name, split)
 
-@cache(screen_key, disable=True)
+@cache(screen_key, disable=False)
 def screen(cfg, model, dataset_name, split):
 
     all_targets = {
@@ -158,8 +176,17 @@ def screen(cfg, model, dataset_name, split):
     df.to_csv(out_filename, index=False)
     return df
 
+def get_run_val_model(cfg, run_id, tag):
+    api = wandb.Api()
+    run = api.run(f"{cfg.project}/{run_id}")
+    cfg = get_run_config(run, cfg)
+    model = OldModel(cfg, run, tag)
+    return model, cfg
+
 if __name__ == "__main__":
     cfg = get_config()
-    model = GninaModel(cfg)
-    screen(cfg, model, "lit_pcba", "test")
+    gnina = GninaModel(cfg)
+    e2ebind, cfg = get_run_val_model(cfg, "37jstv82", "v4")
+    combo = ComboModel(e2ebind, gnina, 0.1)
+    screen(cfg, combo, "lit_pcba", "test")
 
