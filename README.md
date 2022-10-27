@@ -18,6 +18,6 @@ platform:
 
 ```
 
-Now that you have this, train a model py running `python train.py config_name overrides`. The config name used in the BigBind paper is `short_thicc_op_gnn`. This config is found in `cfg/short_thicc_op_gnn.yaml`. Feel free to make your own config. Anything in the config file can be overriden with command line arguments. For instance, train with a batch size of 2 with `python train.py short_thic_op_gnn batch_size=2`.
+Now that you have this, train a model py running `python train.py config_name overrides`. The config name used in the BigBind paper is `short_thicc_op_gnn`. This config is found in `cfg/short_thicc_op_gnn.yaml`. Feel free to make your own config. Anything in the config file can be overriden with command line arguments. For instance, train with a batch size of 2 with `python train.py short_thicc_op_gnn batch_size=2`.
 
 Enjoy!
