@@ -1,5 +1,11 @@
 # e2ebind (name in progress)
 
+## Dependencies
+
+In addition to pip installing the requirements, you'll need to install torch, dgl, and rdkit.
+
+## Running
+
 To use this first, first make sure you've downloaded the [BigBind dataset](https://drive.google.com/file/d/15D6kQZM0FQ2pgpMGJK-5P9T12ZRjBjXS/view?usp=sharing).
 
 Now create a file `configs/local.yaml`. This contains all the configuration that should differ per-computer. Add in this information:
