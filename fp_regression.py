@@ -1,5 +1,4 @@
 import sys
-sys.path.insert(0, './terrace')
 
 from tqdm import tqdm
 import torch

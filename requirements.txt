@@ -14,3 +14,4 @@ sympy
 torchmetrics
 git-timewarp
 seaborn
+terrace

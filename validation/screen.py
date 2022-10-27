@@ -91,39 +91,55 @@ def get_screen_metrics(scores, model, yt):
         "total actives chosen": sum(are_active),
         "total actives in set": tot_actives,
     }
+
+def recur_to(item, device):
+    try:
+        return item.to(device)
+    except AttributeError:
+        assert isinstance(item, list)
+        return [ recur_to(i, device) for i in item ]
     
 @cache(pred_key, disable=False)
 def get_screen_metric_values(cfg, model, dataset_name, target, split):
 
-    print(f"Getting predictions for {model.get_name()} on {dataset_name} {target}")
-    preds = get_screen_preds(cfg, model, dataset_name, target, split)
-    if isinstance(model, ComboModel):
-        model.init_preds(*preds)
-
     device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
 
-    metrics = get_metrics(cfg)
-    for name, met in metrics.items():
-        metrics[name] = met.to(device)
+    print(f"Getting predictions for {model.get_name()} on {dataset_name} {target}")
+    preds = get_screen_preds(cfg, model, dataset_name, target, split)
+    # preds = recur_to(preds, device)
+
+    if isinstance(model, ComboModel):
+        # can't do AUROC etc on combo model
+        model.init_preds(*[ torch.cat(p).to('cpu') for p in preds ])
+        metrics = {}
+
+    else:
+        metrics = get_metrics(cfg)
+        for name, met in metrics.items():
+            metrics[name] = met.to(device)
 
     loader = get_screen_dataloader(cfg, dataset_name, target, split)
     if len(loader) < 2:
         return None
 
     print("Getting metrics")
-    n_batches = None
-    for i, (batch, pred) in enumerate(zip(loader, tqdm(preds))):
-        pred = pred.to(device)
-        batch = batch.to(device)
-        for met in metrics.values():
-            met.update(pred, batch)
+    if len(metrics) > 0:
+        n_batches = None
+        for i, (batch, pred) in enumerate(zip(loader, tqdm(preds))):
+            pred = pred.to(device)
+            batch = batch.to(device)
+            for met in metrics.values():
+                met.update(pred, batch)
 
-        if n_batches is not None and i == n_batches:
-            break
+            if n_batches is not None and i == n_batches:
+                break
 
     mets = { name: met.compute() for name, met in metrics.items() }
 
-    scores = torch.cat(preds).to('cpu')
+    if isinstance(model, ComboModel):
+        scores = None
+    else:
+        scores = torch.cat(preds).to('cpu')
     yt = loader.dataset.get_all_yt()
 
     screen_mets = get_screen_metrics(scores, model, yt)
@@ -144,7 +160,7 @@ def log_metrics(metrics, target):
 def screen_key(cfg, model, dataset_name, split):
     return (model.get_cache_key(), dataset_name, split)
 
-@cache(screen_key, disable=False)
+@cache(screen_key, disable=True)
 def screen(cfg, model, dataset_name, split):
 
     all_targets = {
@@ -154,6 +170,8 @@ def screen(cfg, model, dataset_name, split):
 
     rows = []
     for target in all_targets:
+        # todo: only for now
+        if target == "IDH1": continue
         print(f"Screening on {target}")
         metrics = get_screen_metric_values(cfg, model, dataset_name, target, split)
         if metrics is None: continue
@@ -188,5 +206,5 @@ if __name__ == "__main__":
     gnina = GninaModel(cfg)
     e2ebind, cfg = get_run_val_model(cfg, "37jstv82", "v4")
     combo = ComboModel(e2ebind, gnina, 0.1)
-    screen(cfg, combo, "lit_pcba", "test")
-
+    # screen(cfg, e2ebind, "bigbind", "test")
+    screen(cfg, gnina, "lit_pcba", "test")
