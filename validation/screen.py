@@ -171,7 +171,7 @@ def screen(cfg, model, dataset_name, split):
     rows = []
     for target in all_targets:
         # todo: only for now
-        if target == "IDH1": continue
+        # if target == "IDH1": continue
         print(f"Screening on {target}")
         metrics = get_screen_metric_values(cfg, model, dataset_name, target, split)
         if metrics is None: continue

@@ -81,34 +81,32 @@ def validate(cfg, run_id, tag, split, to_wandb=False):
     # plot_metrics(metrics, split, to_wandb, run)
     return metrics
 
-def plot_many_rocs(rocs, title, out_filename):
-    import matplotlib.pyplot as plt
+def plot_many_rocs(ax, rocs, title):
     for name, roc in rocs.items():
         fpr, tpr, thresh = roc
-        plt.plot(fpr.cpu(), tpr.cpu(), label=name)
-    plt.plot([0, 1], [0, 1], color='black')
-    plt.xlabel('False positive rate')
-    plt.ylabel('True positive rate')
-    plt.axis('equal')
-    plt.xlim(0, 1)
-    plt.ylim(0, 1)
-    plt.gca().set_aspect('equal', adjustable='box')
-    plt.title(title)
-    plt.legend()
-    plt.savefig(out_filename)
-    plt.clf()
-    # plt.show()
-
+        ax.plot(fpr.cpu(), tpr.cpu(), label=name)
+    ax.plot([0, 1], [0, 1], color='black')
+    ax.set_xlabel('False positive rate')
+    ax.set_ylabel('True positive rate')
+    ax.axis('equal')
+    ax.set_xlim(0, 1)
+    ax.set_ylim(0, 1)
+    ax.set_aspect('equal', adjustable='box')
+    ax.set_title(title)
+    ax.legend()
 
 def make_roc_figs(cfg, tag, split):
+    fig, (ax1, ax2) = plt.subplots(1, 2)
+
     run_ids = {
         "Ligand and receptor": "37jstv82",
         "Ligand only": "exp293if",
     }
     rocs = {}
     for name, run_id in run_ids.items():
-        rocs[name] = validate(cfg, run_id, tag, split)["roc"]
-    plot_many_rocs(rocs, "With SNA", "outputs/sna_roc.png")
+       rocs[name] = validate(cfg, run_id, tag, split)["roc"]
+    plot_many_rocs(ax1, rocs, "With SNA")
+
     run_ids = {
         "Ligand and receptor": "1es4be17",
         "Ligand only": "1qwd5qn6",
@@ -116,7 +114,11 @@ def make_roc_figs(cfg, tag, split):
     rocs = {}
     for name, run_id in run_ids.items():
         rocs[name] = validate(cfg, run_id, tag, split)["roc"]
-    plot_many_rocs(rocs, "Without SNA", "outputs/no_sna_roc.png")
+    plot_many_rocs(ax2, rocs, "Without SNA")
+
+    fig.tight_layout()
+    fig.set_size_inches(6, 3.5)
+    fig.savefig("./outputs/roc.png", dpi=300)
 
 if __name__ == "__main__":
     cfg = get_config()
