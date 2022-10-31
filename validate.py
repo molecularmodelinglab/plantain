@@ -104,7 +104,8 @@ def make_roc_figs(cfg, tag, split):
     }
     rocs = {}
     for name, run_id in run_ids.items():
-       rocs[name] = validate(cfg, run_id, tag, split)["roc"]
+        print(f"Validating SNA {name}")
+        rocs[name] = validate(cfg, run_id, tag, split)["roc"]
     plot_many_rocs(ax1, rocs, "With SNA")
 
     run_ids = {
@@ -113,6 +114,7 @@ def make_roc_figs(cfg, tag, split):
     }
     rocs = {}
     for name, run_id in run_ids.items():
+        print(f"Validating Non-SNA {name}")
         rocs[name] = validate(cfg, run_id, tag, split)["roc"]
     plot_many_rocs(ax2, rocs, "Without SNA")
 

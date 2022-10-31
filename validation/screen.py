@@ -207,4 +207,4 @@ if __name__ == "__main__":
     e2ebind, cfg = get_run_val_model(cfg, "37jstv82", "v4")
     combo = ComboModel(e2ebind, gnina, 0.1)
     # screen(cfg, e2ebind, "bigbind", "test")
-    screen(cfg, gnina, "lit_pcba", "test")
+    screen(cfg, combo, "lit_pcba", "test")
