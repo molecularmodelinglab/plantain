@@ -16,3 +16,4 @@ time_warps
 artifacts
 outputs
 prior_work
+*.pt
