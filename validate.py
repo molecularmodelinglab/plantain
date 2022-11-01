@@ -16,12 +16,13 @@ from common.plot_metrics import plot_metrics
 def pred_key(cfg, run, dataloader, tag, split):
     return (old_model_key(cfg, run, tag), split)
 
-@cache(pred_key, disable=False)
+@cache(pred_key, disable=True)
 def get_preds(cfg, run, dataloader, tag, split):
 
     cfg = get_run_config(run, cfg)
     device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
     model = get_old_model(cfg, run, tag).to(device)
+    model.eval()
     
     preds = []
     with torch.no_grad():
@@ -33,7 +34,7 @@ def get_preds(cfg, run, dataloader, tag, split):
 def metrics_key(cfg, run, tag, split):
     return (old_model_key(cfg, run, tag), split)
 
-@cache(metrics_key, disable=False)
+@cache(metrics_key, disable=True)
 def get_metric_values(cfg, run, tag, split):
 
     cfg = get_run_config(run, cfg)
@@ -136,5 +137,5 @@ def validate_regression(cfg):
 
 if __name__ == "__main__":
     cfg = get_config()
-    # make_roc_figs(cfg, "v4", "test")
-    validate_regression(cfg)
+    make_roc_figs(cfg, "v4", "test")
+    # validate_regression(cfg)
