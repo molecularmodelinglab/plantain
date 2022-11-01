@@ -122,6 +122,13 @@ def make_roc_figs(cfg, tag, split):
     fig.set_size_inches(6, 3.5)
     fig.savefig("./outputs/roc.png", dpi=300)
 
+def validate_regression(cfg):
+    print("Validating Ligand and Receptor")
+    validate(cfg, "34ednh2q", "v4", "test")
+    print("Validating Ligand only")
+    validate(cfg, "21mnmh68", "v4", "test")
+
 if __name__ == "__main__":
     cfg = get_config()
-    make_roc_figs(cfg, "v4", "test")
+    # make_roc_figs(cfg, "v4", "test")
+    validate_regression(cfg)
