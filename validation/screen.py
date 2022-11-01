@@ -1,5 +1,4 @@
 import sys
-sys.path.insert(0, './terrace')
 
 import random
 import wandb
