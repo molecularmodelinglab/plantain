@@ -14,6 +14,10 @@ class AIRoutine(pl.LightningModule):
     agnostic, but defines how the training and eval is performed for a particular
     type of model (e.g. activitity prediction) """
 
+    # todo: this whole class is bad bacause when you save the checkpoints it saves the datasets
+    # as well, which are pretty big. I thought I was being clever with this whole Routine thing
+    # but will need to refactor later
+
     @classmethod
     def from_checkpoint(cls, cfg, checkpoint_file):
         return cls.load_from_checkpoint(checkpoint_file, cfg=cfg, checkpoint_file=checkpoint_file)

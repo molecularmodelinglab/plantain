@@ -9,6 +9,8 @@ from datasets.lit_pcba import LitPcbaDataset
 from common.old_routine import get_old_model, old_model_key, get_weight_artifact
 
 class ValModel(ABC):
+    """ The whole 'ValModel' thing is just a very hacky way to compare BANANA to gnina
+    and/or vina. Will change in future! """
 
     @abstractmethod
     def get_cache_key(self):

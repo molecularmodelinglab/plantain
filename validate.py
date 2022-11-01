@@ -123,10 +123,16 @@ def make_roc_figs(cfg, tag, split):
     fig.savefig("./outputs/roc.png", dpi=300)
 
 def validate_regression(cfg):
-    print("Validating Ligand and Receptor")
+    print("Validating Ligand and Receptor on test set")
     validate(cfg, "34ednh2q", "v4", "test")
-    print("Validating Ligand only")
+    print("Validating Ligand only on test set")
     validate(cfg, "21mnmh68", "v4", "test")
+
+
+    print("Validating Ligand and Receptor on train set")
+    validate(cfg, "34ednh2q", "v4", "train")
+    print("Validating Ligand only on train set")
+    validate(cfg, "21mnmh68", "v4", "train")
 
 if __name__ == "__main__":
     cfg = get_config()
