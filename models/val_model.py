@@ -2,7 +2,7 @@ import os
 import random
 import torch
 from abc import ABC, abstractmethod
-from meeko import PDBQTMolecule
+# from meeko import PDBQTMolecule
 
 from datasets.bigbind_screen import BigBindScreenDataset
 from datasets.lit_pcba import LitPcbaDataset
