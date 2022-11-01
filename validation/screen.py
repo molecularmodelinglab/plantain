@@ -198,6 +198,7 @@ def get_run_val_model(cfg, run_id, tag):
     run = api.run(f"{cfg.project}/{run_id}")
     cfg = get_run_config(run, cfg)
     model = OldModel(cfg, run, tag)
+    model.eval()
     return model, cfg
 
 if __name__ == "__main__":
