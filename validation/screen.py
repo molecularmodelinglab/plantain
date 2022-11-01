@@ -206,5 +206,6 @@ if __name__ == "__main__":
     gnina = GninaModel(cfg)
     e2ebind, cfg = get_run_val_model(cfg, "37jstv82", "v4")
     combo = ComboModel(e2ebind, gnina, 0.1)
-    # screen(cfg, e2ebind, "bigbind", "test")
+    screen(cfg, e2ebind, "bigbind", "test")
     screen(cfg, combo, "lit_pcba", "test")
+    screen(cfg, e2ebind, "lit_pcba", "test")
