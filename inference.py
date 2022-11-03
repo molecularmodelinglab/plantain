@@ -30,7 +30,7 @@ def inference():
     in_node = Input(make_batch_td(IsActiveData.get_type_data(cfg)))
     
     model = make_model(cfg, in_node)
-    model.load_state_dict(torch.load("banana_final.pt"))
+    model.load_state_dict(torch.load("data/banana_final.pt"))
     model = model.to(device)
     model.eval()
 

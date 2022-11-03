@@ -14,7 +14,7 @@ class PDBBindDataset(CacheableDataset):
         self.cfg = cfg
         self.dir = cfg.platform.pdbbind_dir
         self.pdb_ids = []
-        with open("pdb_2016_core_set_ids.txt") as f:
+        with open("data/pdb_2016_core_set_ids.txt") as f:
             for line in f.readlines():
                 pdb_id = line.split("/")[0].upper()
                 if not os.path.exists(self.dir + "/" + pdb_id):
