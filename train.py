@@ -1,13 +1,9 @@
+#!/usr/bin/env python
+
 import sys
 
-# needed because dgllife is stupid and can't find rdkit otherwise...
+# needed because dgllife can't find rdkit otherwise...
 from rdkit import Chem
-
-
-# this is needed because otherwise pytorch dataloaders will just fail
-# https://github.com/pytorch/pytorch/issues/973
-# import torch
-# torch.multiprocessing.set_sharing_strategy('file_system')
 
 import resource
 rlimit = resource.getrlimit(resource.RLIMIT_NOFILE)
