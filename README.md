@@ -32,4 +32,14 @@ platform:
 
 Now that you have this, train a model py running `python train.py config_name overrides`. The config name used in the BigBind paper is `short_thicc_op_gnn`. This config is found in `configs/classification.yaml`. Feel free to make your own config. Anything in the config file can be overriden with command line arguments. For instance, train with a batch size of 2 with `python train.py classification batch_size=2`.
 
-Enjoy!
+If you have a Weights and Biases project and specificy it in the local config file, train will log all the weights and metrics.
+
+## Validation
+
+The validation scripts are all designed to download models from Weights and Biases. Unfortunately, you'll need to modify them if you don't want to use wandb.
+
+To validate the model on any of the BigBind data splits, run `python -m validation.validate run_id=wandb_run_id tag=tag_of_weights_artifact data_split=train|val|test`.
+
+If you want to benchmark the model on the BigBind screening benchmarks, run `python -m validation.screen run_id=wandb_run_id tag=tag_of_weights_artifact benchmark=bigbind data_split=val|test`. To benchmark on LIT-PCBA, first you'll need to run `preprocess_lit_pcba.py` to produce pocket files for all the targets (note: this script requires PyMol). Once you've done this, run `python -m validation.screen run_id=wandb_run_id tag=tag_of_weights_artifact benchmark=lit_pcba`. Both these scripts will produce csv files in `outputs/`.
+
+
