@@ -16,10 +16,10 @@ def inference():
 
     parser = argparse.ArgumentParser(description="BANANA inference")
     parser.add_argument("smi_file", type=str, help="Input smiles (.smi) file of compounds to screen")
-    parser.add_argument("pdb_file", type=str, help="pocket pdb file")
+    parser.add_argument("pdb_file", type=str, help="Pocket pdb file")
     parser.add_argument("--num_workers", type=int, default=8, help="Number of workers in the dataloader")
     parser.add_argument("--batch_size", type=int, default=16, help="Batch size")
-    parser.add_argument("--no_gpu", dest='no_gpu', action='store_true', help="Whether to only use the CPU")
+    parser.add_argument("--no_gpu", dest='no_gpu', action='store_true', help="Disable GPU (only use CPU)")
     parser.add_argument("--out_file", type=str, default="out.txt", help="File to store the output scores")
     parser.set_defaults(no_gpu=False)
     args = parser.parse_args()

@@ -1,4 +1,4 @@
-# e2ebind (name in progress)
+# BANANA
 
 ## Dependencies
 

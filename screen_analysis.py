@@ -54,6 +54,11 @@ def make_results_csv(comb_df):
     mean_df = pd.DataFrame(mean_rows)
     mean_df.to_csv("./outputs/mean_results.csv")
 
+    for model in ["BANANA", "BANANA+GNINA", "GNINA"]:
+        for dataset in [ "BigBind", "LIT-PCBA" ]:
+            dataset_df = comb_df.query("dataset == @dataset and model == @model").rename(columns = { "EF1%": "ef", "NEF1%": "nef"})
+            dataset_df.to_csv(f"./outputs/{dataset}_{model}_results.csv", float_format='%.2f')
+
 if __name__ == "__main__":
     csv_dict = {
         ("LIT-PCBA", "GNINA"): "screen_lit_pcba_test_gnina.csv",
