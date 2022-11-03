@@ -42,4 +42,6 @@ To validate the model on any of the BigBind data splits, run `python -m validati
 
 If you want to benchmark the model on the BigBind screening benchmarks, run `python -m validation.screen run_id=wandb_run_id tag=tag_of_weights_artifact benchmark=bigbind data_split=val|test`. To benchmark on LIT-PCBA, first you'll need to run `preprocess_lit_pcba.py` to produce pocket files for all the targets (note: this script requires PyMol). Once you've done this, run `python -m validation.screen run_id=wandb_run_id tag=tag_of_weights_artifact benchmark=lit_pcba`. Both these scripts will produce csv files in `outputs/`.
 
+If you have any questions, email me at [mixarcid@unc.edu](mailto:mixarcid@unc.edu).
+
 
