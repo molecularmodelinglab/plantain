@@ -17,3 +17,4 @@ artifacts
 outputs
 prior_work
 *.pt
+notebooks

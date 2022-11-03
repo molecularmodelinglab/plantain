@@ -203,9 +203,13 @@ def get_run_val_model(cfg, run_id, tag):
 
 if __name__ == "__main__":
     cfg = get_config()
-    gnina = GninaModel(cfg)
-    e2ebind, cfg = get_run_val_model(cfg, "37jstv82", "v4")
-    combo = ComboModel(e2ebind, gnina, 0.1)
-    screen(cfg, e2ebind, "bigbind", "test")
-    screen(cfg, combo, "lit_pcba", "test")
-    screen(cfg, e2ebind, "lit_pcba", "test")
+    
+    # run_id, tag, benchmark, and data_split are all command line args
+    # todo: this is a pretty hacky way of getting command line args
+    run_id = cfg.run_id
+    tag = cfg.tag
+    benchmark = cfg.benchmark
+    data_split = "test" if cfg.benchmark == "lit_pcba" else cfg.data_split
+
+    model, cfg, = get_run_val_model(cfg, run_id, tag)
+    screen(cfg, model, benchmark, data_split)
