@@ -3,7 +3,7 @@
 *__pycache__/*
 *.pyc
 .ipynb_checkpoints
-!*.gitkeep
+!*/.gitkeep
 configs/local.yaml
 *.prof
 checkpoints
@@ -14,7 +14,7 @@ artifacts
 lightning_logs
 time_warps
 artifacts
-outputs
+outputs/*
 prior_work
 *.pt
 notebooks
