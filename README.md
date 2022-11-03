@@ -8,7 +8,7 @@ In addition to pip installing the requirements, you'll need to install torch, dg
 
 # Running with pretrained weights
 
-Once you've installed all the dependancies, you're ready to run the pretrained model. First create a PDB file for the pocket of the protein you want to target, then create a smi file will the SMILES strings of the compounds you want to screen. Now simply run `python inference.py compounds.smi pocket.pdb--out_file out_file.txt`. This will write all the scores of the compounds to `out_file.txt`. It will automatically download the pretrained weights to `data/` if they are not already there.
+Once you've installed all the dependancies, you're ready to run the pretrained model. First create a PDB file for the pocket of the protein you want to target, then create a smi file will the SMILES strings of the compounds you want to screen. Now simply run `python inference.py compounds.smi pocket.pdb --out_file out_file.txt`. This will write all the scores of the compounds to `out_file.txt`. It will automatically download the pretrained weights to `data/` if they are not already there.
 
 ## Training
 
