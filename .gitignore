@@ -18,3 +18,4 @@ outputs
 prior_work
 *.pt
 notebooks
+.vscode
