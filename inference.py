@@ -26,7 +26,7 @@ def inference():
 
     device = "cpu" if args.no_gpu else "cuda:0"
     
-    cfg = OmegaConf.load("configs/short_thicc_op_gnn.yaml")
+    cfg = OmegaConf.load("configs/classification.yaml")
     in_node = Input(make_batch_td(IsActiveData.get_type_data(cfg)))
     
     model = make_model(cfg, in_node)
