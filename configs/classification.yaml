@@ -11,7 +11,7 @@ data:
   use_rec: true
   use_lig: true
 
-  sna_frac: null
+  sna_frac: 1
   only_ki_kd: false
   
   lig_graph:
