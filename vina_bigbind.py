@@ -59,7 +59,7 @@ def get_lig_size(lig, padding=3):
     size = (bounds_max - center + padding)*2
     return tuple(center), tuple(size)
 
-def run_vina(cfg, out_folder, i, row, lig_file, rec_file, exhaust=32):
+def run_vina(cfg, out_folder, i, row, lig_file, rec_file, exhaust=16):
     
     name = rec_file.split("/")[-1] + "_" + lig_file.split("/")[-1]
     center = (row.pocket_center_x, row.pocket_center_y, row.pocket_center_z)
