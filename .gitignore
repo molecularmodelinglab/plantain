@@ -19,3 +19,5 @@ prior_work
 *.pt
 notebooks
 .vscode
+*.out
+*.err

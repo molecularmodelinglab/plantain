@@ -79,6 +79,8 @@ def run_vina(cfg, out_folder, i, row, lig_file, rec_file, exhaust=16):
         preparator.write_pdbqt_file(lig_pdbqt)
 
     out_file = out_folder + f"/{i}.pdbqt"
+    if os.path.exists(out_file):
+        return out_file
 
     cmd = [cfg.platform.vina_exec, "--receptor", rec_file, "--ligand", lig_pdbqt, "--exhaustiveness", str(exhaust), "--cpu", str(exhaust) ]
     for c, s, ax in zip(center, size, ["x", "y", "z"]):
@@ -108,7 +110,7 @@ def get_vina_score(cfg, out_folder, tup):
     except KeyboardInterrupt:
         raise
     except:
-        raise
+        # raise
         print_exc()
     
     return ret
