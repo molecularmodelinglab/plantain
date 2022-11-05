@@ -125,7 +125,7 @@ if __name__ == "__main__":
 
         screen_csv = cfg.platform.bigbind_dir + f"/activities_sna_1_{split}.csv"
         screen_df = pd.read_csv(screen_csv)
-        seed = os.environ["SLURM_JOB_ID"] # if "SLURM_JOB_ID" in os.environ else 42
+        seed = int(os.environ["SLURM_JOB_ID"]) # if "SLURM_JOB_ID" in os.environ else 42
         screen_df = screen_df.sample(frac=1, random_state=seed)
 
         with Pool(processes=cfg.platform.vina_processes) as p:
