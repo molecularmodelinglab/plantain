@@ -5,12 +5,14 @@ import torch
 from tqdm import tqdm
 from torchmetrics import ROC, AUROC
 import matplotlib.pyplot as plt
+from collections import defaultdict
 
 from common.metrics import get_metrics
 from datasets.make_dataset import make_dataloader
 from common.old_routine import get_old_model, old_model_key
 from common.cfg_utils import get_config, get_run_config
 from common.cache import cache
+from common.losses import get_losses
 from common.plot_metrics import plot_metrics
 
 def pred_key(cfg, run, dataloader, tag, split):
@@ -27,7 +29,8 @@ def get_preds(cfg, run, dataloader, tag, split):
     preds = []
     with torch.no_grad():
         for batch in tqdm(dataloader):
-            preds.append(model(batch.to(device)))
+            pred = model(batch.to(device))
+            preds.append(pred)
 
     return preds
 
@@ -50,6 +53,8 @@ def get_metric_values(cfg, run, tag, split):
     for name, met in metrics.items():
         metrics[name] = met.to(device)
 
+    loss_vals = defaultdict(list)
+
     print("Getting metrics")
     n_batches = None
     for i, (batch, pred) in enumerate(zip(loader, tqdm(preds))):
@@ -58,10 +63,18 @@ def get_metric_values(cfg, run, tag, split):
         for met in metrics.values():
             met.update(pred, batch)
 
+        loss, loss_dict = get_losses(cfg, batch, pred)
+        for name, loss in loss_dict.items():
+            loss_vals[name].append(loss)
+
         if n_batches is not None and i == n_batches:
             break
 
-    return { name: met.compute() for name, met in metrics.items() }
+    ret = { name: met.compute() for name, met in metrics.items() }
+    for name, loss in loss_vals.items():
+        ret[name] = torch.stack(loss).mean()
+
+    return ret
 
 def log_metrics(run, metrics, split):
     for name, val in metrics.items():
@@ -85,4 +98,8 @@ if __name__ == "__main__":
     # run_id, tag, and data_split are all command line args
     # todo: this is a pretty hacky way of getting command line args
     cfg = get_config()
-    validate(cfg, cfg.run_id, cfg.tag, cfg.data_split)
+    # validate(cfg, cfg.run_id, cfg.tag, cfg.data_split)
+    for name, run_id in (("Lig only", "2mztaef0"), ("Both", "3hkd0kex")):
+        for split in ("test", "train"):
+            print(name, split)
+            validate(cfg, run_id, "v4", split)
