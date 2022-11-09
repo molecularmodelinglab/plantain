@@ -72,18 +72,20 @@ class VinaModel(ValModel):
 
 class GninaModel(ValModel):
 
-    def __init__(self, cfg):
+    def __init__(self, cfg, dense):
         self.pcba_scores = {}
-        with open("./prior_work/newdefault_CNNaffinity-max.summary") as f:
+        self.dense = dense
+        score_file = "./prior_work/lit-pcba_dense-CNNaffinity-mean-then-max.summary" if dense else "./prior_work/newdefault_CNNaffinity-max.summary"
+        with open(score_file) as f:
             for line in f.readlines():
                 _, score, target, idx, _ = line.split()
                 self.pcba_scores[(target, int(idx))] = float(score)
 
     def get_cache_key(self):
-        return "gnina"
+        return "gnina_dense" if self.dense else "gnina"
 
     def get_name(self):
-        return "gnina"
+        return self.get_cache_key()
 
     def __call__(self, batch, dataset):
         assert isinstance(dataset, LitPcbaDataset)
