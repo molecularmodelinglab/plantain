@@ -18,7 +18,7 @@ from common.plot_metrics import plot_metrics
 def pred_key(cfg, run, dataloader, tag, split):
     return (old_model_key(cfg, run, tag), split)
 
-@cache(pred_key, disable=False)
+@cache(pred_key, disable=True)
 def get_preds(cfg, run, dataloader, tag, split):
 
     cfg = get_run_config(run, cfg)
@@ -37,7 +37,7 @@ def get_preds(cfg, run, dataloader, tag, split):
 def metrics_key(cfg, run, tag, split):
     return (old_model_key(cfg, run, tag), split)
 
-@cache(metrics_key, disable=False)
+@cache(metrics_key, disable=True)
 def get_metric_values(cfg, run, tag, split):
 
     cfg = get_run_config(run, cfg)
