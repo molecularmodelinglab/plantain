@@ -99,7 +99,7 @@ if __name__ == "__main__":
     # todo: this is a pretty hacky way of getting command line args
     cfg = get_config()
     # validate(cfg, cfg.run_id, cfg.tag, cfg.data_split)
-    for name, run_id in (("Lig only", "2mztaef0"), ("Both", "3hkd0kex")):
+    for name, run_id in (("Lig only", "21mnmh68"), ("Both", "34ednh2q")):
         for split in ("test", "train"):
             print(name, split)
             validate(cfg, run_id, "v4", split)
