@@ -42,7 +42,7 @@ def get_metric_values(cfg, run, tag, split):
 
     cfg = get_run_config(run, cfg)
 
-    loader = make_dataloader(cfg, split)
+    loader = make_dataloader(cfg, split, force_no_shuffle=True)
 
     print("Getting predictions")
     preds = get_preds(cfg, run, loader, tag, split)
