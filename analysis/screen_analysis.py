@@ -28,7 +28,7 @@ def make_figures(comb_df):
 
     g.set_xticklabels(rotation=90)
     g.fig.suptitle("LIT-PCBA performance")
-    out_file = "./outputs/lit_pcba.png"
+    out_file = "./outputs/lit_pcba.pdf"
     print(f"Writing figure to {out_file}")
     g.savefig(out_file)
     

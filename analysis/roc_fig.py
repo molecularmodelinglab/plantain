@@ -43,7 +43,7 @@ def make_roc_figs(cfg, tag, split):
 
     fig.tight_layout()
     fig.set_size_inches(6, 3.5)
-    fig.savefig("./outputs/roc.png", dpi=300)
+    fig.savefig("./outputs/roc.pdf", dpi=300)
 
 if __name__ == "__main__":
     cfg = get_config()
