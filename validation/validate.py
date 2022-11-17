@@ -24,7 +24,7 @@ def get_preds(cfg, run, dataloader, tag, split):
     cfg = get_run_config(run, cfg)
     device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
     model = get_old_model(cfg, run, tag).to(device)
-    model.eval()
+    # model.eval()
     
     preds = []
     with torch.no_grad():
@@ -99,7 +99,7 @@ if __name__ == "__main__":
     # todo: this is a pretty hacky way of getting command line args
     cfg = get_config()
     # validate(cfg, cfg.run_id, cfg.tag, cfg.data_split)
-    for name, run_id in (("Lig only", "21mnmh68"), ("Both", "34ednh2q")):
+    for name, run_id in (("Lig only", "21jc2n3m"),):# , ("Both", "34ednh2q")):
         for split in ("test", "train"):
             print(name, split)
-            validate(cfg, run_id, "v4", split)
+            validate(cfg, run_id, "latest", split)
