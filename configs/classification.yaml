@@ -2,7 +2,7 @@ project: null
 resume_id: null
 name: test_run
 
-val_check_interval: 5000
+val_check_interval: 1.0
 
 dataset: bigbind_act
 data:
