@@ -31,10 +31,13 @@ def make_dataset(cfg, split):
         # "vina_score": VinaScoreDataset,
     }[cfg.dataset](cfg, split)
 
-def make_dataloader(cfg, split):
+def make_dataloader(cfg, split, force_no_shuffle=False):
     dataset = make_dataset(cfg, split)
     n_workers = cfg.platform.num_workers
-    shuffle = (split == "train")
+    if force_no_shuffle:
+        shuffle = False
+    else:
+        shuffle = (split == "train")
     return DataLoader(dataset, batch_size=cfg.batch_size,
                       num_workers=n_workers, pin_memory=True,
                       shuffle=shuffle, worker_init_fn=seed_worker)

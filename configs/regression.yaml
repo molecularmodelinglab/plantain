@@ -2,7 +2,7 @@ project: null
 resume_id: null
 name: test_run
 
-val_check_interval: 5000
+val_check_interval: 1.0
 
 dataset: bigbind_act
 data:
@@ -38,7 +38,7 @@ losses:
 
 optimizer: adamw
 learn_rate: 1e-5
-max_epochs: 5
+max_epochs: 50
 
 batch_size: 16
 sampler:

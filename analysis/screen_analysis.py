@@ -21,21 +21,21 @@ def make_figures(comb_df):
     g = sns.catplot(x="target", y="EF1%", hue="model",# col="dataset",
                     data=comb_df,
                     order=pcba_order,
-                    hue_order = [ 'BANANA', 'GNINA', 'BANANA+GNINA' ],
+                    hue_order = [ 'BANANA', 'GNINA (default)', 'GNINA (dense)', "BANANA+GNINA (default)", "BANANA+GNINA (dense)" ],
                     # sharex = False,
                     aspect=2,
                     kind='bar')
 
     g.set_xticklabels(rotation=90)
     g.fig.suptitle("LIT-PCBA performance")
-    out_file = "./outputs/lit_pcba.png"
+    out_file = "./outputs/lit_pcba.pdf"
     print(f"Writing figure to {out_file}")
     g.savefig(out_file)
     
 def make_results_csv(comb_df):
     med_rows = []
     mean_rows = []
-    for model in ["BANANA", "GNINA", "BANANA+GNINA"]:
+    for model in ["BANANA", "GNINA (default)", "GNINA (dense)", "BANANA+GNINA (default)", "BANANA+GNINA (dense)"]:
         med_row = { "model": model }
         mean_row = { "model": model }
         for dataset in [ "BigBind", "LIT-PCBA" ]:
@@ -54,19 +54,21 @@ def make_results_csv(comb_df):
     mean_df = pd.DataFrame(mean_rows)
     mean_df.to_csv("./outputs/mean_results.csv")
 
-    for model in ["BANANA", "BANANA+GNINA", "GNINA"]:
+    for model in ["BANANA", "BANANA+GNINA (default)", "BANANA+GNINA (dense)", "GNINA (default)", "GNINA (dense)"]:
         for dataset in [ "BigBind", "LIT-PCBA" ]:
             dataset_df = comb_df.query("dataset == @dataset and model == @model").rename(columns = { "EF1%": "ef", "NEF1%": "nef"})
             dataset_df.to_csv(f"./outputs/{dataset}_{model}_results.csv", float_format='%.2f')
 
 if __name__ == "__main__":
     csv_dict = {
-        ("LIT-PCBA", "GNINA"): "screen_lit_pcba_test_gnina.csv",
+        ("LIT-PCBA", "GNINA (default)"): "screen_lit_pcba_test_gnina.csv",
+        ("LIT-PCBA", "GNINA (dense)"): "screen_lit_pcba_test_gnina_dense.csv", # "../prior_work/dense.csv",
         ("LIT-PCBA", "BANANA"): "screen_lit_pcba_test_37jstv82_v4.csv",
-        ("LIT-PCBA", "BANANA+GNINA"): "screen_lit_pcba_test_combo_37jstv82_v4_gnina_0.1.csv",
+        ("LIT-PCBA", "BANANA+GNINA (default)"): "screen_lit_pcba_test_combo_37jstv82_v4_gnina_0.1.csv",
+        ("LIT-PCBA", "BANANA+GNINA (dense)"): "screen_lit_pcba_test_combo_37jstv82_v4_gnina_dense_0.1.csv",
         ("BigBind", "BANANA"): "screen_bigbind_test_37jstv82_v4.csv"
     }
     comb_df = create_combined_df(csv_dict)
-    # make_figures(comb_df)
+    make_figures(comb_df)
     make_results_csv(comb_df)
 
