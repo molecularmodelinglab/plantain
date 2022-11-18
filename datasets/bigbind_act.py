@@ -1,13 +1,9 @@
-from rdkit import Chem
 import torch
-from traceback import print_exc
-from Bio.PDB import PDBParser
-from Bio.PDB.PDBExceptions import PDBConstructionWarning
 
 from datasets.bigbind import BigBindDataset
-from datasets.graphs.mol_graph import MolGraph, mol_graph_from_sdf
-from datasets.graphs.prot_graph import ProtGraph, prot_graph_from_pdb
-from datasets.data_types import ActivityData, IsActiveData
+from datasets.graphs.mol_graph import mol_graph_from_sdf
+from datasets.graphs.prot_graph import prot_graph_from_pdb
+from datasets.data_types import ActivityData
 
 class BigBindActDataset(BigBindDataset):
 

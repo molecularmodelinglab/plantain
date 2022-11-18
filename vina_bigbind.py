@@ -115,10 +115,8 @@ def get_vina_score(cfg, out_folder, tup):
     
     return ret
 
-if __name__ == "__main__":
-
-    cfg = get_config()
-
+def dock_all(cfg):
+    """ to be run in parallel on slurm """
     for split in [ "train", "val", "test" ]:
         out_folder = cfg.platform.bigbind_vina_dir + "/" + split
         os.makedirs(out_folder, exist_ok=True)
@@ -132,3 +130,31 @@ if __name__ == "__main__":
             score_fn = partial(get_vina_score, cfg, out_folder)
             for ret_file in p.imap_unordered(score_fn, screen_df.iterrows()):
                 print(ret_file)
+
+
+def finalize_bigbind_vina(cfg):
+    for split in [ "val", "test", "train" ]:
+        screen_csv = cfg.platform.bigbind_dir + f"/activities_sna_1_{split}.csv"
+        screen_df = pd.read_csv(screen_csv)
+
+        docked_lig_files = []
+        for i, row in tqdm(screen_df.iterrows(), total=len(screen_df)):
+            docked_file = f"{split}/{i}.pdbqt"
+            full_docked_file = cfg.platform.bigbind_vina_dir + "/" + docked_file
+            if os.path.exists(full_docked_file):
+                docked_lig_files.append(docked_file)
+            else:
+                docked_lig_files.append(None)
+
+        screen_df["docked_lig_file"] = docked_lig_files
+        screen_df = screen_df.dropna().reset_index(drop=True)
+        
+        out_file = cfg.platform.bigbind_vina_dir + f"/activities_sna_1_{split}.csv"
+        print(f"Saving docked df to {out_file}")
+        screen_df.to_csv(out_file, index=False)
+
+if __name__ == "__main__":
+
+    cfg = get_config()
+    # dock_all(cfg)
+    finalize_bigbind_vina(cfg)

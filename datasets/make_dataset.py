@@ -9,6 +9,8 @@ from datasets.bigbind_test import BigBindTestDataset
 # from datasets.vina_score import VinaScoreDataset
 from terrace.batch import DataLoader
 
+from datasets.bigbind_vina import BigBindVinaDataset
+
 SEED = 49
 torch.manual_seed(SEED)
 random.seed(SEED)
@@ -25,6 +27,7 @@ def make_dataset(cfg, split):
         "bigbind_struct": BigBindStructDataset,
         "bigbind_fp": BigBindFpDataset,
         "bigbind_test": BigBindTestDataset,
+        "bigbind_vina": BigBindVinaDataset,
         # "vina_score": VinaScoreDataset,
     }[cfg.dataset](cfg, split)
 

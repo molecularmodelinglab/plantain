@@ -1,4 +1,9 @@
+import warnings
 import numpy as np
+from meeko import RDKitMolCreate, PDBQTMolecule
+from rdkit import Chem
+from Bio.PDB.PDBExceptions import PDBConstructionWarning
+from Bio.PDB import PDBParser
 
 def get_activity(batch):
     """ For ease, we also want to support data coming in X, Y tuples """
@@ -49,3 +54,24 @@ def rand_rotation_matrix(deflection=1.0, randnums=None):
     M = np.eye(4)
     M[:-1,:-1] = (np.outer(V, V) - np.eye(3)).dot(R)
     return M
+
+def get_prot_from_file(fname):
+    """ Loads pdb files, return first biopython chain"""
+    assert fname.endswith(".pdb")
+    parser = PDBParser()
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=PDBConstructionWarning)
+        structure = parser.get_structure('random_id', fname)
+        rec = structure[0]
+        
+    return rec
+
+def get_mol_from_file(fname):
+    """ Loads sdf and pdbqt files, returns rdkit mol"""
+    if fname.endswith(".pdbqt"):
+        mol = RDKitMolCreate.from_pdbqt_mol(PDBQTMolecule.from_file(fname))[0]
+    elif fname.endswith(".sdf"):
+        mol = next(Chem.SDMolSupplier(fname, sanitize=True))
+    else:
+        raise ValueError(f"invalid file extension for {fname}")
+    return mol
