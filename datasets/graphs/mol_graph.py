@@ -1,3 +1,4 @@
+from typing import Optional
 from omegaconf import DictConfig
 from rdkit import Chem
 import torch
@@ -78,7 +79,7 @@ class AtomNode(Node3d):
         coord_td = TensorTD((3,), dtype=torch.float32)
         return ClassTD(AtomNode, coord=coord_td, cat_feat=cat_td, scal_feat=scal_td)
 
-    def __init__(self, mol_cfg: DictConfig, atom: Chem.Atom, mol: Chem.Mol, use_3d):
+    def __init__(self, mol_cfg: DictConfig, atom: Chem.Atom, mol: Chem.Mol, conformer: Optional[int]):
         cat_feats = []
         scal_feats = []
         for feat_name in mol_cfg.atom_feats:
@@ -87,8 +88,8 @@ class AtomNode(Node3d):
             feat = safe_index(possible, get_feat(atom, mol))
             cat_feats.append(feat)
         
-        if use_3d:
-            point = mol.GetConformer().GetAtomPosition(atom.GetIdx())
+        if conformer is not None:
+            point = mol.GetConformer(conformer).GetAtomPosition(atom.GetIdx())
             coord = [ point.x, point.y, point.z ]
         else:
             coord = [0.0, 0.0, 0.0]
@@ -142,9 +143,9 @@ class MolGraph(Graph3d):
         bond_td = BondEdge.get_type_data(mol_cfg)
         return GraphTD(MolGraph, atom_td, bond_td, ShapeVar("LN"), ShapeVar("LE"))
 
-    def __init__(self, cfg: DictConfig, mol: Chem.Mol, use_3d=True):
+    def __init__(self, cfg: DictConfig, mol: Chem.Mol, conformer: Optional[int] = 0):
         mol_cfg = cfg.data.lig_graph
-        nodes = [AtomNode(mol_cfg, atom, mol, use_3d) for atom in mol.GetAtoms()]
+        nodes = [AtomNode(mol_cfg, atom, mol, conformer) for atom in mol.GetAtoms()]
 
         edges = []
         edata = []

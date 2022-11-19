@@ -17,6 +17,7 @@ import yaml
 from tqdm import tqdm
 
 from common.cfg_utils import get_config
+from common.utils import get_mol_from_file
 
 def prepare_rec(cfg, rec_file):
     """ Use ADFR to produce a pdbqt file from the receptor pdb file """
@@ -142,7 +143,13 @@ def finalize_bigbind_vina(cfg):
             docked_file = f"{split}/{i}.pdbqt"
             full_docked_file = cfg.platform.bigbind_vina_dir + "/" + docked_file
             if os.path.exists(full_docked_file):
-                docked_lig_files.append(docked_file)
+                try:
+                    get_mol_from_file(full_docked_file)
+                    docked_lig_files.append(docked_file)
+                except:
+                    print(f"Error processing {docked_file}")
+                    print_exc()
+                    continue
             else:
                 docked_lig_files.append(None)
 
