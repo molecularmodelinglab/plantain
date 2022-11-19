@@ -155,6 +155,6 @@ def finalize_bigbind_vina(cfg):
 
 if __name__ == "__main__":
 
-    cfg = get_config()
+    cfg = get_config("vina")
     # dock_all(cfg)
     finalize_bigbind_vina(cfg)
