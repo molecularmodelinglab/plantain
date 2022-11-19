@@ -31,10 +31,13 @@ class CacheableDataset(data.Dataset):
         if index >= len(self):
             raise StopIteration
 
+        random_works = True
         r = random()
         try:
             key = self.get_randomized_cache_key(index, r)
         except NotImplementedError:
+            random_works = False
+        if not random_works:
             key = self.get_cache_key(index)
             
         cache_file = f"{self.cache_dir}/{CACHE_VERSION}/{self.cache_postfix}/{key}_cache.pkl"
@@ -52,9 +55,12 @@ class CacheableDataset(data.Dataset):
                 # raise
                 pass
 
+        random_works = True
         try:
             ret = self.get_randomized_item_pre_cache(index, r)
         except NotImplementedError:
+            random_works = False
+        if not random_works:
             ret = self.get_item_pre_cache(index)
     
         if self.cache:

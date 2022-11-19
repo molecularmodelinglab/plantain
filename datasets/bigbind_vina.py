@@ -1,8 +1,11 @@
 import pandas as pd
 import torch
+from rdkit import Chem
 from common.utils import get_mol_from_file, get_prot_from_file
 
 from datasets.cacheable_dataset import CacheableDataset
+from datasets.data_types import InteractionActivityData
+from datasets.graphs.interaction_graph import InteractionGraph
 
 class BigBindVinaDataset(CacheableDataset):
 
@@ -51,8 +54,18 @@ class BigBindVinaDataset(CacheableDataset):
         rec_file = self.get_rec_file(index)
 
         lig = get_mol_from_file(lig_file)
+        lig = Chem.RemoveHs(lig)
         rec = get_prot_from_file(rec_file)
 
         is_active = torch.tensor(self.activities.active[index], dtype=bool)
 
-        return lig, rec, is_active
+        inter_graph = InteractionGraph(self.cfg, lig, rec)
+        ret = InteractionActivityData(inter_graph, is_active)
+
+        return ret
+
+    def get_variance(self):
+        return {}
+
+    def get_type_data(self):
+        return InteractionActivityData.get_type_data(self.cfg)

@@ -5,9 +5,7 @@ import torch.nn.functional as F
 from dgllife.model.gnn import MPNNGNN
 from dgllife.model import WeightedSumAndMax
 
-from terrace.batch import Batch
 from models.cat_scal_embedding import CatScalEmbedding
-from datasets.data_types import PredData
 
 class OuterProdGNN(nn.Module):
     def __init__(self, cfg, in_node):

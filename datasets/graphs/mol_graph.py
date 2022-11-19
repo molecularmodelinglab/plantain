@@ -52,18 +52,18 @@ def get_numH(atom, mol):
     return atom.GetTotalNumHs()
 
 possible_atom_feats = {
-    "element": [ "H", "C", "N", "O", "F", "S", "P", "Cl", "Br", "I", "misc" ],
-    "formal_charge": [-5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 'misc'],
-    "hybridization": [ 'SP', 'SP2', 'SP3', 'SP3D', 'SP3D2', 'misc'],
-    "is_aromatic": [ True, False, 'misc' ],
-    "numH": [0, 1, 2, 3, 4, 5, 6, 7, 8, 'misc']
+    "element": [ None, "H", "C", "N", "O", "F", "S", "P", "Cl", "Br", "I", "misc" ],
+    "formal_charge": [ None, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 'misc'],
+    "hybridization": [ None, 'SP', 'SP2', 'SP3', 'SP3D', 'SP3D2', 'misc'],
+    "is_aromatic": [ None, True, False, 'misc' ],
+    "numH": [ None, 0, 1, 2, 3, 4, 5, 6, 7, 8, 'misc']
 }
 
 def get_bond_order(bond, mol):
     return bond.GetBondType()
 
 possible_bond_feats = {
-    "bond_order": [ Chem.BondType.SINGLE, Chem.BondType.DOUBLE, Chem.BondType.TRIPLE, Chem.BondType.AROMATIC ],
+    "bond_order": [ None, Chem.BondType.SINGLE, Chem.BondType.DOUBLE, Chem.BondType.TRIPLE, Chem.BondType.AROMATIC ],
 }
 
 class AtomNode(Node3d):
