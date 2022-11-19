@@ -132,6 +132,21 @@ def dock_all(cfg):
             for ret_file in p.imap_unordered(score_fn, screen_df.iterrows()):
                 print(ret_file)
 
+def can_load_docked_file(split, item):
+    i, row = item
+    docked_file = f"{split}/{i}.pdbqt"
+    full_docked_file = cfg.platform.bigbind_vina_dir + "/" + docked_file
+    if os.path.exists(full_docked_file):
+        try:
+            get_mol_from_file(full_docked_file)
+            return docked_file
+        except KeyboardInterrupt:
+            raise
+        except:
+            print(f"Error processing {docked_file}")
+            print_exc()
+    return None
+
 
 def finalize_bigbind_vina(cfg):
     for split in [ "val", "test", "train" ]:
@@ -139,19 +154,10 @@ def finalize_bigbind_vina(cfg):
         screen_df = pd.read_csv(screen_csv)
 
         docked_lig_files = []
-        for i, row in tqdm(screen_df.iterrows(), total=len(screen_df)):
-            docked_file = f"{split}/{i}.pdbqt"
-            full_docked_file = cfg.platform.bigbind_vina_dir + "/" + docked_file
-            if os.path.exists(full_docked_file):
-                try:
-                    get_mol_from_file(full_docked_file)
-                    docked_lig_files.append(docked_file)
-                except:
-                    print(f"Error processing {docked_file}")
-                    print_exc()
-                    continue
-            else:
-                docked_lig_files.append(None)
+        with Pool(processes=16) as p:
+            f = partial(can_load_docked_file, split)
+            for res in tqdm(p.imap(f, screen_df.iterrows()), total=len(screen_df)):
+                docked_lig_files.append(res)
 
         screen_df["docked_lig_file"] = docked_lig_files
         screen_df = screen_df.dropna().reset_index(drop=True)
