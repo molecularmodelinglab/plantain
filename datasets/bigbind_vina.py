@@ -53,14 +53,20 @@ class BigBindVinaDataset(CacheableDataset):
         lig_file = self.get_lig_file(index)
         rec_file = self.get_rec_file(index)
 
-        lig = get_mol_from_file(lig_file)
-        lig = Chem.RemoveHs(lig)
-        rec = get_prot_from_file(rec_file)
+        try:
+            lig = get_mol_from_file(lig_file)
+            lig = Chem.RemoveHs(lig)
+            rec = get_prot_from_file(rec_file)
 
-        is_active = torch.tensor(self.activities.active[index], dtype=bool)
+            is_active = torch.tensor(self.activities.active[index], dtype=bool)
 
-        inter_graph = InteractionGraph(self.cfg, lig, rec)
-        ret = InteractionActivityData(inter_graph, is_active)
+            inter_graph = InteractionGraph(self.cfg, lig, rec)
+            ret = InteractionActivityData(inter_graph, is_active)
+        except:
+            print(f"Error proccessing item at {index=}")
+            print(f"{lig_file=}")
+            print(f"{rec_file=}")
+            raise
 
         return ret
 
