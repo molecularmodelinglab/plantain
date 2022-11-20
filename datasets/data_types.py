@@ -1,5 +1,6 @@
 # This file defines the types of data that could be returned by a dataset
 
+from typing import Tuple
 import torch
 from omegaconf import DictConfig
 
@@ -35,14 +36,15 @@ class ActivityData(StructData):
 
 class InteractionActivityData(StructData):
 
-    graph: InteractionGraph
+    graphs: Tuple[InteractionGraph, ...]
     is_active: torch.Tensor
 
     @staticmethod
     def get_type_data(cfg: DictConfig):
         inter_td = InteractionGraph.get_type_data(cfg)
+        graphs = (inter_td,)*cfg.data.num_conformers
         is_act_td = TensorTD((1,), dtype=bool)
-        return ClassTD(InteractionActivityData, graph=inter_td, is_active=is_act_td)
+        return ClassTD(InteractionActivityData, graphs=graphs, is_active=is_act_td)
 
 class IsActiveData(StructData):
     lig: MolGraph

@@ -13,9 +13,9 @@ class InteractionGNN(nn.Module):
         super().__init__()
 
         self.node_embed = CatScalEmbedding(cfg.model.node_embed_size,
-                                           in_node.out_type_data.graph.ndata)
+                                           in_node.out_type_data.graphs[0].ndata)
         self.edge_embed = CatScalEmbedding(cfg.model.edge_embed_size,
-                                           in_node.out_type_data.graph.edata)
+                                           in_node.out_type_data.graphs[0].edata)
 
         self.gnn = MPNNGNN(self.node_embed.total_dim,
                            self.edge_embed.total_dim,
@@ -27,6 +27,7 @@ class InteractionGNN(nn.Module):
 
         combined_hid_sz = 2*cfg.model.out_size
 
+        self.weight_nn = nn.Linear(combined_hid_sz, 1)
         self.out_nns = nn.ModuleList()            
         for prev, size in zip([combined_hid_sz] + list(cfg.model.out_mlp_sizes), cfg.model.out_mlp_sizes):
             self.out_nns.append(nn.Sequential(
@@ -38,12 +39,21 @@ class InteractionGNN(nn.Module):
         self.out = nn.Linear(cfg.model.out_mlp_sizes[-1], 1)
 
     def forward(self, batch):
-        graph = batch.graph.dgl_batch
-        node_feat = self.node_embed(batch.graph.ndata)
-        edge_feat = self.edge_embed(batch.graph.edata)
+        xs = []
+        for graph in batch.graphs:
+            node_feat = self.node_embed(graph.ndata)
+            edge_feat = self.edge_embed(graph.edata)
 
-        gnn_out = self.gnn(graph, node_feat, edge_feat)
-        x = self.readout(graph, gnn_out)
+            gnn_out = self.gnn(graph.dgl_batch, node_feat, edge_feat)
+            x = self.readout(graph.dgl_batch, gnn_out)
+            xs.append(x)
+
+        x = torch.stack(xs, 1) #(B, C, F)
+        # attention-like mechanism along conformer dim
+        beta_unnorm = self.weight_nn(x)
+        beta = torch.softmax(beta_unnorm, 1)
+        x = torch.sum(x*beta, 1)
+
         for nn in self.out_nns:
             x = nn(x)
         return self.out(x).squeeze(-1)

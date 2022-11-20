@@ -6,6 +6,8 @@ from common.utils import get_mol_from_file, get_prot_from_file
 from datasets.cacheable_dataset import CacheableDataset
 from datasets.data_types import InteractionActivityData
 from datasets.graphs.interaction_graph import InteractionGraph
+from datasets.graphs.mol_graph import MolGraph
+from datasets.graphs.prot_graph import ProtGraph
 
 class BigBindVinaDataset(CacheableDataset):
 
@@ -58,10 +60,22 @@ class BigBindVinaDataset(CacheableDataset):
             lig = Chem.RemoveHs(lig)
             rec = get_prot_from_file(rec_file)
 
+            rec_graph = ProtGraph(self.cfg, rec)
+
+            inter_graphs = []
+            for conformer in range(self.cfg.data.num_conformers):
+                if conformer >= lig.GetNumConformers():
+                    conformer = 0
+
+                lig_graph = MolGraph(self.cfg, lig, conformer)
+                inter_graph = InteractionGraph(self.cfg, lig_graph, rec_graph)
+                inter_graphs.append(inter_graph)
+
             is_active = torch.tensor(self.activities.active[index], dtype=bool)
 
-            inter_graph = InteractionGraph(self.cfg, lig, rec)
-            ret = InteractionActivityData(inter_graph, is_active)
+            ret = InteractionActivityData(tuple(inter_graphs), is_active)
+        except KeyboardInterrupt:
+            raise
         except:
             print(f"Error proccessing item at {index=}")
             print(f"{lig_file=}")

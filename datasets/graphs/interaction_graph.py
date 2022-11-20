@@ -1,6 +1,6 @@
 
 import torch
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 from omegaconf import DictConfig
 from rdkit import Chem
 from Bio.PDB.Model import Model
@@ -63,6 +63,7 @@ def merge_graphs(inter_cfg, g1: MolGraph, g2: ProtGraph) -> Tuple[List[Interacti
     for idx1, idx2 in g2.edges:
         edges.append((num_g1_nodes + idx1, num_g1_nodes + idx2))
 
+    ex_extra_edata = DistEdge(inter_cfg, g1.ndata[0], g1.ndata[1])
     extra_edges = []
     extra_edata = []
     for (i,j) in make_knn_edgelist(nodes, inter_cfg.dist_cutoff, inter_cfg.max_neighbors):
@@ -79,8 +80,8 @@ def merge_graphs(inter_cfg, g1: MolGraph, g2: ProtGraph) -> Tuple[List[Interacti
     for edge in g1.edata:
         more_cat_feat = torch.zeros_like(g2.edata.cat_feat[0])
         more_scal_feat = torch.zeros_like(g2.edata.scal_feat[0])
-        extra_cat_feat = torch.zeros_like(extra_edata[0].cat_feat)
-        extra_scal_feat = torch.zeros_like(extra_edata[0].scal_feat)
+        extra_cat_feat = torch.zeros_like(ex_extra_edata.cat_feat)
+        extra_scal_feat = torch.zeros_like(ex_extra_edata.scal_feat)
         edata.append(InteractionEdge(
             torch.cat((edge.cat_feat, more_cat_feat, extra_cat_feat), 0),
             torch.cat((edge.scal_feat, more_scal_feat, extra_scal_feat), 0)
@@ -89,8 +90,8 @@ def merge_graphs(inter_cfg, g1: MolGraph, g2: ProtGraph) -> Tuple[List[Interacti
     for edge in g2.edata:
         more_cat_feat = torch.zeros_like(g1.edata.cat_feat[0])
         more_scal_feat = torch.zeros_like(g1.edata.scal_feat[0])
-        extra_cat_feat = torch.zeros_like(extra_edata[0].cat_feat)
-        extra_scal_feat = torch.zeros_like(extra_edata[0].scal_feat)
+        extra_cat_feat = torch.zeros_like(ex_extra_edata.cat_feat)
+        extra_scal_feat = torch.zeros_like(ex_extra_edata.scal_feat)
         edata.append(InteractionEdge(
             torch.cat((more_cat_feat, edge.cat_feat, extra_cat_feat), 0),
             torch.cat((more_scal_feat, edge.scal_feat, extra_scal_feat), 0)
@@ -118,8 +119,6 @@ class InteractionGraph(Graph3d):
         edge_td = InteractionEdge.get_type_data(cfg)
         return GraphTD(InteractionGraph, node_td, edge_td, ShapeVar("LN"), ShapeVar("LE"))
 
-    def __init__(self, cfg: DictConfig, lig: Chem.Mol, rec: Model):
-        lig_graph = MolGraph(cfg, lig)
-        rec_graph = ProtGraph(cfg, rec)
+    def __init__(self, cfg: DictConfig, lig_graph: MolGraph, rec_graph: ProtGraph):
         nodes, edges, edata = merge_graphs(cfg.data.interaction_graph, lig_graph, rec_graph)
         super().__init__(nodes, edges, edata)
