@@ -21,3 +21,5 @@ notebooks
 .vscode
 *.out
 *.err
+.idea
+.vscode
