@@ -5,6 +5,7 @@ import numpy as np
 from meeko import MoleculePreparation, PDBQTMolecule
 import rdkit
 from rdkit import Chem
+from rdkit.Chem import AllChem
 from rdkit.Chem import rdMolTransforms
 from rdkit.Chem.rdShapeHelpers import ComputeConfBox, ComputeUnionBox
 from traceback import print_exc
@@ -68,8 +69,14 @@ def run_vina(cfg, out_folder, i, row, lig_file, rec_file, exhaust=16):
 
     cache_folder = cfg.platform.cache_dir + "/run_vina/"
     lig_pdbqt = cache_folder + name + "_lig.pdbqt"
-    if not os.path.exists(lig_pdbqt):
+    if not os.path.exists(lig_pdbqt) or True:
         lig = next(Chem.SDMolSupplier(lig_file, sanitize=True))
+
+        # this is needed to dock stuff from structures_*.csv
+        lig = Chem.AddHs(lig)
+        AllChem.EmbedMolecule(lig)
+        AllChem.UFFOptimizeMolecule(lig, 500)
+
         move_lig_to_center(lig, center)
         _, lig_size = get_lig_size(lig)
         size = max(lig_size, size)
@@ -116,15 +123,15 @@ def get_vina_score(cfg, out_folder, tup):
     
     return ret
 
-def dock_all(cfg):
+def dock_all(cfg, file_prefix):
     """ to be run in parallel on slurm """
     for split in [ "train", "val", "test" ]:
-        out_folder = cfg.platform.bigbind_vina_dir + "/" + split
+        out_folder = cfg.platform.bigbind_vina_dir + "/" + file_prefix + "_" + split
         os.makedirs(out_folder, exist_ok=True)
 
-        screen_csv = cfg.platform.bigbind_dir + f"/activities_sna_1_{split}.csv"
+        screen_csv = cfg.platform.bigbind_dir + f"/{file_prefix}_{split}.csv"
         screen_df = pd.read_csv(screen_csv)
-        seed = int(os.environ["SLURM_JOB_ID"]) # if "SLURM_JOB_ID" in os.environ else 42
+        seed = int(os.environ["SLURM_JOB_ID"])  if "SLURM_JOB_ID" in os.environ else 42
         screen_df = screen_df.sample(frac=1, random_state=seed)
 
         with Pool(processes=cfg.platform.vina_processes) as p:
@@ -169,5 +176,6 @@ def finalize_bigbind_vina(cfg):
 if __name__ == "__main__":
 
     cfg = get_config("vina")
-    # dock_all(cfg)
-    finalize_bigbind_vina(cfg)
+    # dock_all(cfg, "activities_sna_1")
+    dock_all(cfg, "structures")
+    # finalize_bigbind_vina(cfg)

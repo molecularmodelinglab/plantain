@@ -17,7 +17,7 @@ def make_knn_edgelist(nodes: List[Node3d],
     for i in range(num_nodes):
         dst = list(np.where(distance[i, :] < radius)[0])
         dst.remove(i)
-        if max_neighbors != None and len(dst) > max_neighbors:
+        if max_neighbors is not None and len(dst) > max_neighbors:
             dst = list(np.argsort(distance[i, :]))[1: max_neighbors + 1]  # closest would be self loop
         if len(dst) == 0:
             dst = list(np.argsort(distance[i, :]))[1:2]  # closest would be the index i itself > self loop
