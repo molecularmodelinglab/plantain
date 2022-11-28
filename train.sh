@@ -1,4 +1,3 @@
-
 #!/bin/bash
 #SBATCH -J train
 #SBATCH -t 10-00:00:00
