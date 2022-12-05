@@ -38,6 +38,24 @@ class InteractionGNN(nn.Module):
             ))
         self.out = nn.Linear(cfg.model.out_mlp_sizes[-1], 1)
 
+    def get_conformer_scores(self, batch):
+        """ Return the unnormalized beta values (i.e. the scores 
+        of each conformers) """
+        xs = []
+        for graph in batch.graphs:
+            node_feat = self.node_embed(graph.ndata)
+            edge_feat = self.edge_embed(graph.edata)
+
+            gnn_out = self.gnn(graph.dgl_batch, node_feat, edge_feat)
+            x = self.readout(graph.dgl_batch, gnn_out)
+            xs.append(x)
+
+        x = torch.stack(xs, 1) #(B, C, F)
+        # attention-like mechanism along conformer dim
+        beta_unnorm = self.weight_nn(x)
+
+        return beta_unnorm
+
     def forward(self, batch):
         xs = []
         for graph in batch.graphs:

@@ -139,9 +139,9 @@ def dock_all(cfg, file_prefix):
             for ret_file in p.imap_unordered(score_fn, screen_df.iterrows()):
                 print(ret_file)
 
-def can_load_docked_file(split, item):
+def can_load_docked_file(file_prefix, split, item):
     i, row = item
-    docked_file = f"{split}/{i}.pdbqt"
+    docked_file = f"{file_prefix}_{split}/{i}.pdbqt"
     full_docked_file = cfg.platform.bigbind_vina_dir + "/" + docked_file
     if os.path.exists(full_docked_file):
         try:
@@ -155,21 +155,21 @@ def can_load_docked_file(split, item):
     return None
 
 
-def finalize_bigbind_vina(cfg):
+def finalize_bigbind_vina(cfg, file_prefix):
     for split in [ "val", "test", "train" ]:
-        screen_csv = cfg.platform.bigbind_dir + f"/activities_sna_1_{split}.csv"
+        screen_csv = cfg.platform.bigbind_dir + f"/{file_prefix}_{split}.csv"
         screen_df = pd.read_csv(screen_csv)
 
         docked_lig_files = []
         with Pool(processes=16) as p:
-            f = partial(can_load_docked_file, split)
+            f = partial(can_load_docked_file, file_prefix, split)
             for res in tqdm(p.imap(f, screen_df.iterrows()), total=len(screen_df)):
                 docked_lig_files.append(res)
 
         screen_df["docked_lig_file"] = docked_lig_files
         screen_df = screen_df.dropna().reset_index(drop=True)
         
-        out_file = cfg.platform.bigbind_vina_dir + f"/activities_sna_1_{split}.csv"
+        out_file = cfg.platform.bigbind_vina_dir + f"/{file_prefix}_{split}.csv"
         print(f"Saving docked df to {out_file}")
         screen_df.to_csv(out_file, index=False)
 
@@ -177,5 +177,5 @@ if __name__ == "__main__":
 
     cfg = get_config("vina")
     # dock_all(cfg, "activities_sna_1")
-    dock_all(cfg, "structures")
-    # finalize_bigbind_vina(cfg)
+    # dock_all(cfg, "structures")
+    finalize_bigbind_vina(cfg, "structures")

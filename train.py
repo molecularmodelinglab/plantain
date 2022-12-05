@@ -51,6 +51,6 @@ if __name__ == "__main__":
     if len(sys.argv) > 1 and '=' not in sys.argv[1]:
         cfg_name = sys.argv[1]
     else:
-        cfg_name = "default"
+        raise AssertionError("First argument must be name of config profile!")
     cfg = get_config(cfg_name=cfg_name)
     train(cfg)
