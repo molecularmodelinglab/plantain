@@ -90,7 +90,7 @@ def get_prot_from_file(fname, cache=True):
             except KeyboardInterrupt:
                 raise
             except:
-                print(f"Error parsing cached {cache_fname}, contining loading file")
+                print(f"Error parsing cached {cache_fname}, continuing loading file")
                 traceback.print_exc()
 
         structure = PDBParser().get_structure("random_id", fname)
@@ -124,7 +124,7 @@ def get_mol_from_file(fname, cache=True):
         except KeyboardInterrupt:
             raise
         except:
-            print(f"Error parsing cached {cache_fname}, contining loading file")
+            print(f"Error parsing cached {cache_fname}, continuing loading file")
             traceback.print_exc()
 
     ret = get_mol_from_file_no_cache(fname)

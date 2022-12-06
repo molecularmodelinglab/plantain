@@ -39,12 +39,12 @@ class CacheableDataset(data.Dataset):
             random_works = False
         if not random_works:
             key = self.get_cache_key(index)
-            
-        cache_file = f"{self.cache_dir}/{CACHE_VERSION}/{self.cache_postfix}/{key}_cache.pkl"
-        cache_folder = "/".join(cache_file.split("/")[:-1])
-        os.makedirs(cache_folder, exist_ok=True)
         
         if self.cache:
+            cache_file = f"{self.cache_dir}/{CACHE_VERSION}/{self.cache_postfix}/{key}_cache.pkl"
+            cache_folder = "/".join(cache_file.split("/")[:-1])
+            os.makedirs(cache_folder, exist_ok=True)
+
             try:
                 with open(cache_file, "rb") as f:
                     batch = pickle.load(f)
