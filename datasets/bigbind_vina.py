@@ -95,6 +95,9 @@ class BigBindVinaDataset(CacheableDataset):
         rec_file = self.get_rec_file(index)
 
         try:
+
+            is_active = torch.tensor(self.activities.active[index], dtype=bool)
+
             if self.cfg.data.use_tar:
                 lig = self.get_lig(lig_file, tar)
                 rec = self.get_rec(rec_file, tar)
@@ -113,7 +116,6 @@ class BigBindVinaDataset(CacheableDataset):
                 inter_graph = InteractionGraph(self.cfg, lig_graph, rec_graph)
                 inter_graphs.append(inter_graph)
 
-            is_active = torch.tensor(self.activities.active[index], dtype=bool)
 
             ret = InteractionActivityData(tuple(inter_graphs), is_active)
         except KeyboardInterrupt:
