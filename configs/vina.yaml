@@ -48,7 +48,8 @@ optimizer: adamw
 learn_rate: 1e-5
 max_epochs: 10
 
-batch_size: 4
+batch_size: 8
+gpus: [0,1]
 
 sampler:
   max_rec_edges: 10000
