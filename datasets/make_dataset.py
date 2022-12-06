@@ -39,15 +39,15 @@ def make_dataloader(cfg, split, force_no_shuffle=False):
         shuffle = False
     else:
         shuffle = (split == "train")
-    if split == "train":
-        sampler = DistributedSampler(dataset, shuffle=shuffle)
-    else:
-        sampler = None
+    # if split == "train":
+    #     sampler = DistributedSampler(dataset, shuffle=shuffle)
+    # else:
+    #     sampler = None
     return DataLoader(dataset,
                       batch_size=cfg.batch_size,
                       num_workers=n_workers,
                       pin_memory=True,
-                      sampler=sampler,
+                      # sampler=sampler,
                       shuffle=shuffle,
                       worker_init_fn=seed_worker)
 
