@@ -44,7 +44,8 @@ def merge_batches(batches, type):
     edata and ndata"""
     ret = {}
     for attr in [ "cat_feat", "scal_feat" ]:
-        data = [ getattr(batch, attr) if isinstance(batch, Batch) else torch.zeros((0,1)) for batch in batches]
+        default = torch.zeros((0,1))  if attr == "scal_feat" else torch.zeros((0,0))
+        data = [ getattr(batch, attr) if isinstance(batch, Batch) else default for batch in batches]
         for d in data:
             assert len(d.shape) == 2
         n_items = sum([ d.shape[0] for d in data ])
@@ -88,7 +89,7 @@ def merge_graphs(inter_cfg, g1: MolGraph, g2: ProtGraph) -> Tuple[List[Interacti
     edata = merge_batches([g1.edata, g2.edata, extra_edata], Edge3d)
 
     assert edata.scal_feat.shape[-1] == 2
-    assert edata.cat_feat.shape[-1] == 2
+    assert edata.cat_feat.shape[-1] == 1
 
     return nodes, edges, edata
 
