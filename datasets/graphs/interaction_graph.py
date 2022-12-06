@@ -87,6 +87,8 @@ def merge_graphs(inter_cfg, g1: MolGraph, g2: ProtGraph) -> Tuple[List[Interacti
     edges += extra_edges
     edata = merge_batches([g1.edata, g2.edata, extra_edata], Edge3d)
 
+    assert edata.scal_feat.shape[-1] == 2
+
     return nodes, edges, edata
 
 class InteractionGraph(Graph3d):
