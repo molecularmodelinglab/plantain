@@ -200,7 +200,7 @@ def tar_structures(cfg, prefix, split):
 
     # for file in tqdm(df.ex_rec_pocket_file):
     #     add_rec_file(tar, file)
-    with Pool(processes=1) as p:
+    with Pool(processes=8) as p:
 
         rec_files = df.ex_rec_pocket_file.unique()
         lig_files = df.docked_lig_file.unique()

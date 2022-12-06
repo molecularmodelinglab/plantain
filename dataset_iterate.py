@@ -6,7 +6,9 @@ from datasets.make_dataset import make_dataloader
 
 def dataset_iterate(cfg):
     train_dataloader = make_dataloader(cfg, "val")
-    for data in tqdm(train_dataloader):
+    for i, data in enumerate(tqdm(train_dataloader)):
+        if i > 100:
+            break
         pass
 
 if __name__ == "__main__":

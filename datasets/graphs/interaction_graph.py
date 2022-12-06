@@ -5,6 +5,7 @@ from omegaconf import DictConfig
 from rdkit import Chem
 from Bio.PDB.Model import Model
 
+from terrace.batch import Batch, make_batch
 from terrace.graph import GraphTD
 from terrace.type_data import ClassTD, TensorTD, ShapeVar
 
@@ -38,32 +39,39 @@ class InteractionEdge(Edge3d):
         scal_td = TensorTD((bond_td.scal_feat.shape[0] + prot_td.scal_feat.shape[0] + inter_td.scal_feat.shape[0],), dtype=torch.float32)
         return ClassTD(InteractionEdge, cat_feat=cat_td, scal_feat=scal_td)
 
-def merge_graphs(inter_cfg, g1: MolGraph, g2: ProtGraph) -> Tuple[List[InteractionNode], Tuple[int, int], List[InteractionEdge]]:
-    nodes = []
-    for node in g1.ndata:
-        more_cat_feat = torch.zeros_like(g2.ndata.cat_feat[0])
-        more_scal_feat = torch.zeros_like(g2.ndata.scal_feat[0])
-        nodes.append(InteractionNode(
-            node.coord,
-            torch.cat((node.cat_feat, more_cat_feat), 0),
-            torch.cat((node.scal_feat, more_scal_feat), 0)
-        ))
+def merge_batches(batches, type):
+    """ Helper function for merging graphs. Merges both items in
+    edata and ndata"""
+    ret = {}
+    for attr in [ "cat_feat", "scal_feat" ]:
+        data = [ getattr(batch, attr) if isinstance(batch, Batch) else torch.zeros((0,0)) for batch in batches]
+        for d in data:
+            assert len(d.shape) == 2
+        n_items = sum([ d.shape[0] for d in data ])
+        n_feat = sum([ d.shape[1] for d in data ])
+        feat = torch.zeros((n_items, n_feat), device=data[0].device, dtype=data[0].dtype)
+        
+        ax1_idx = 0
+        ax2_idx = 0
+        for d in data:
+            feat[ax1_idx:ax1_idx+d.shape[0], ax2_idx:ax2_idx+d.shape[1]] = d
+            ax1_idx += d.shape[0]
+            ax2_idx += d.shape[1]
 
-    for node in g2.ndata:
-        more_cat_feat = torch.zeros_like(g1.ndata.cat_feat[0])
-        more_scal_feat = torch.zeros_like(g1.ndata.scal_feat[0])
-        nodes.append(InteractionNode(
-            node.coord,
-            torch.cat((more_cat_feat, node.cat_feat), 0),
-            torch.cat((more_scal_feat, node.scal_feat), 0)
-        ))
+        ret[attr] = feat
+    if hasattr(batches[0], "coord"):
+        ret["coord"] = torch.cat([ b.coord for b in batches], 0)
+    return Batch(type, **ret)
+
+def merge_graphs(inter_cfg, g1: MolGraph, g2: ProtGraph) -> Tuple[List[InteractionNode], Tuple[int, int], List[InteractionEdge]]:
+
+    nodes = merge_batches([g1.ndata, g2.ndata], Node3d)
 
     edges = g1.edges
     num_g1_nodes = len(g1.ndata)
     for idx1, idx2 in g2.edges:
         edges.append((num_g1_nodes + idx1, num_g1_nodes + idx2))
 
-    ex_extra_edata = DistEdge(inter_cfg, g1.ndata[0], g1.ndata[1])
     extra_edges = []
     extra_edata = []
     for (i,j) in make_knn_edgelist(nodes, inter_cfg.dist_cutoff, inter_cfg.max_neighbors):
@@ -74,40 +82,10 @@ def merge_graphs(inter_cfg, g1: MolGraph, g2: ProtGraph) -> Tuple[List[Interacti
             node2 = nodes[j]
             extra_edata.append(DistEdge(inter_cfg, node1, node2))
 
+    if len(extra_edata) > 0:
+        extra_edata = make_batch(extra_edata)
     edges += extra_edges
-
-    edata = []
-    for edge in g1.edata:
-        more_cat_feat = torch.zeros_like(g2.edata.cat_feat[0])
-        more_scal_feat = torch.zeros_like(g2.edata.scal_feat[0])
-        extra_cat_feat = torch.zeros_like(ex_extra_edata.cat_feat)
-        extra_scal_feat = torch.zeros_like(ex_extra_edata.scal_feat)
-        edata.append(InteractionEdge(
-            torch.cat((edge.cat_feat, more_cat_feat, extra_cat_feat), 0),
-            torch.cat((edge.scal_feat, more_scal_feat, extra_scal_feat), 0)
-        ))
-
-    for edge in g2.edata:
-        more_cat_feat = torch.zeros_like(g1.edata.cat_feat[0])
-        more_scal_feat = torch.zeros_like(g1.edata.scal_feat[0])
-        extra_cat_feat = torch.zeros_like(ex_extra_edata.cat_feat)
-        extra_scal_feat = torch.zeros_like(ex_extra_edata.scal_feat)
-        edata.append(InteractionEdge(
-            torch.cat((more_cat_feat, edge.cat_feat, extra_cat_feat), 0),
-            torch.cat((more_scal_feat, edge.scal_feat, extra_scal_feat), 0)
-        ))
-
-    for edge in extra_edata:
-        more_cat_feat = torch.zeros_like(g1.edata.cat_feat[0])
-        more_scal_feat = torch.zeros_like(g1.edata.scal_feat[0])
-        extra_cat_feat = torch.zeros_like(g2.edata.cat_feat[0])
-        extra_scal_feat = torch.zeros_like(g2.edata.scal_feat[0])
-        edata.append(InteractionEdge(
-            torch.cat((more_cat_feat, extra_cat_feat, edge.cat_feat), 0),
-            torch.cat((more_scal_feat, extra_scal_feat, edge.scal_feat), 0)
-        ))
-
-    # print(len(extra_edata), len(g1.edata), len(g2.edata))
+    edata = merge_batches([g1.edata, g2.edata, extra_edata], Edge3d)
 
     return nodes, edges, edata
 
