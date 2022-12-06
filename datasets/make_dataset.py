@@ -38,9 +38,17 @@ def make_dataloader(cfg, split, force_no_shuffle=False):
         shuffle = False
     else:
         shuffle = (split == "train")
-    return DataLoader(dataset, batch_size=cfg.batch_size,
-                      num_workers=n_workers, pin_memory=True,
-                      shuffle=shuffle, worker_init_fn=seed_worker)
+    if split == "train":
+        sampler = torch.data.DistributedSampler(dataset, shuffle=shuffle)
+    else:
+        sampler = None
+    return DataLoader(dataset,
+                      batch_size=cfg.batch_size,
+                      num_workers=n_workers,
+                      pin_memory=True,
+                      sampler=sampler,
+                      shuffle=shuffle,
+                      worker_init_fn=seed_worker)
 
 if __name__ == "__main__":
     from common.cfg_utils import get_config
