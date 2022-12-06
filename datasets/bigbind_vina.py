@@ -86,7 +86,7 @@ class BigBindVinaDataset(CacheableDataset):
 
     def get_item_pre_cache(self, index):
 
-        if self.use_tar:
+        if self.cfg.data.use_tar:
             proc = multiprocessing.current_process()
             if proc not in self.tars:
                 self.tars[proc] = tarfile.open(self.cfg.platform.bigbind_vina_dir + f"/{self.split}_files.tar", "r:")
