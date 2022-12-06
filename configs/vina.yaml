@@ -63,7 +63,7 @@ model:
   edge_embed_size: 32
   num_mpnn_layers: 2
   edge_hidden_size: 64
-  out_size: 256
+  out_size: 64
 
   out_mlp_sizes: [512, 256, 128, 64]
   dropout_rate: 0.2
