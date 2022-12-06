@@ -44,7 +44,7 @@ def merge_batches(batches, type):
     edata and ndata"""
     ret = {}
     for attr in [ "cat_feat", "scal_feat" ]:
-        data = [ getattr(batch, attr) if isinstance(batch, Batch) else torch.zeros((0,0)) for batch in batches]
+        data = [ getattr(batch, attr) if isinstance(batch, Batch) else torch.zeros((0,1)) for batch in batches]
         for d in data:
             assert len(d.shape) == 2
         n_items = sum([ d.shape[0] for d in data ])
