@@ -18,17 +18,27 @@ class MetricWrapper(Metric):
     def compute(self):
         return self.metric.compute()
 
+# needed because the pickle can't handle lambdas
+def get_is_active(b):
+    return b.is_active
+
+def get_activity(b):
+    return b.activity
+
+def identity(b):
+    return b
+
 def get_metrics(cfg):
     return {
         "classification": nn.ModuleDict({
-            "acc": MetricWrapper(Accuracy(), torch.sigmoid, lambda b: b.is_active),
-            "bal_acc": MetricWrapper(Accuracy(average="macro", num_classes=2, multiclass=True), torch.sigmoid, lambda b: b.is_active),
-            "auroc": MetricWrapper(AUROC(), torch.sigmoid, lambda b: b.is_active),
-            "precision": MetricWrapper(Precision(), torch.sigmoid, lambda b: b.is_active),
-            "roc": MetricWrapper(ROC(), torch.sigmoid, lambda b: b.is_active)
+            "acc": MetricWrapper(Accuracy(), torch.sigmoid, get_is_active),
+            "bal_acc": MetricWrapper(Accuracy(average="macro", num_classes=2, multiclass=True), torch.sigmoid, get_is_active),
+            "auroc": MetricWrapper(AUROC(), torch.sigmoid, get_is_active),
+            "precision": MetricWrapper(Precision(), torch.sigmoid, get_is_active),
+            "roc": MetricWrapper(ROC(), torch.sigmoid, get_is_active)
         }),
         "regression": nn.ModuleDict({
-            "r2": MetricWrapper(R2Score(), lambda x: x, lambda b: b.activity),
-            "mse": MetricWrapper(MeanSquaredError(), lambda x: x, lambda b: b.activity)
+            "r2": MetricWrapper(R2Score(), identity, get_activity),
+            "mse": MetricWrapper(MeanSquaredError(), identity, get_activity)
         })
     }[cfg.task]
