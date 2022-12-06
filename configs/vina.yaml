@@ -46,7 +46,7 @@ losses:
 
 optimizer: adamw
 learn_rate: 1e-5
-max_epochs: 5
+max_epochs: 10
 
 batch_size: 8
 
@@ -58,11 +58,11 @@ model:
 
   type: interaction_gnn
   
-  node_embed_size: 16
-  edge_embed_size: 8
+  node_embed_size: 64
+  edge_embed_size: 32
   num_mpnn_layers: 2
-  edge_hidden_size: 16
-  out_size: 32 # 256
+  edge_hidden_size: 64
+  out_size: 256
 
-  out_mlp_sizes: [256, 128, 64]
+  out_mlp_sizes: [512, 256, 128, 64]
   dropout_rate: 0.2
