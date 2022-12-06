@@ -177,15 +177,15 @@ def finalize_bigbind_vina(cfg, file_prefix):
 def add_rec_file(file):
     rec_file = cfg.platform.bigbind_dir + "/" + file
     out_file = rec_file.split(".")[0] + ".mmtf"
-    if not os.path.exists(out_file):
-        get_prot_from_file(rec_file)
+    # if not os.path.exists(out_file):
+    get_prot_from_file(rec_file)
 
 
 def add_lig_file(file):
     docked_file = cfg.platform.bigbind_vina_dir + "/" + file
     out_file = docked_file.split(".")[0] + ".pkl"
-    if not os.path.exists(out_file):
-        get_mol_from_file(docked_file)
+    # if not os.path.exists(out_file):
+    get_mol_from_file(docked_file)
 
 def get_file_size(f):
     f.seek(0, os.SEEK_END)
@@ -200,7 +200,7 @@ def tar_structures(cfg, prefix, split):
 
     # for file in tqdm(df.ex_rec_pocket_file):
     #     add_rec_file(tar, file)
-    with Pool(processes=16) as p:
+    with Pool(processes=1) as p:
 
         rec_files = df.ex_rec_pocket_file.unique()
         lig_files = df.docked_lig_file.unique()

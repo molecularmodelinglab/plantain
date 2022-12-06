@@ -1,9 +1,12 @@
+import os
 import pickle
+import multiprocessing
 import tarfile
 import warnings
 import pandas as pd
 import torch
 import tempfile
+from tqdm import tqdm
 from rdkit import Chem
 from common.utils import get_mol_from_file, get_prot_from_file
 
@@ -25,10 +28,12 @@ class BigBindVinaDataset(CacheableDataset):
         self.dir = cfg.platform.bigbind_dir
         self.vina_dir = cfg.platform.bigbind_vina_dir
         self.cfg = cfg
-        self.tar_files = tarfile.open(cfg.platform.bigbind_vina_dir + f"/{split}_files.tar", "r:")
-
-    def __del__(self):
-        self.tar_files.close()
+        self.split = split
+        self.tars = {}
+        # self.tar_files = {}
+        # if self.cfg.data.use_tar:
+        #     for item in tqdm(self.tar):
+        #         self.tar_files[item.name] = self.tar.extractfile(item.name)
 
     def __len__(self):
         return len(self.activities)
@@ -61,16 +66,19 @@ class BigBindVinaDataset(CacheableDataset):
 
         return lig_file + "_" + rec_file
 
-    def get_lig(self, lig_file):
+    def get_lig(self, lig_file, tar):
         lig_file = "/".join(lig_file.split("/")[-2:])
-        f = self.tar_files.extractfile(lig_file)
+        f = tar.extractfile(lig_file)
+        # f = self.tar_files[lig_file]
         return pickle.load(f)
 
-    def get_rec(self, rec_file):
+    def get_rec(self, rec_file, tar):
         rec_file = "/".join(rec_file.split("/")[-2:])
-        f = self.tar_files.extractfile(rec_file)
+        f = tar.extractfile(rec_file)
+        # f = self.tar_files[rec_file]
         with tempfile.NamedTemporaryFile() as tmp:
             tmp.write(f.read())
+            tmp.seek(0, os.SEEK_SET)
             with warnings.catch_warnings():
                 warnings.filterwarnings("ignore", category=PDBConstructionWarning)
                 structure = MMTFParser().get_structure(tmp.name)
@@ -78,14 +86,21 @@ class BigBindVinaDataset(CacheableDataset):
 
     def get_item_pre_cache(self, index):
 
+        proc = multiprocessing.current_process()
+        if proc not in self.tars:
+            self.tars[proc] = tarfile.open(self.cfg.platform.bigbind_vina_dir + f"/{self.split}_files.tar", "r:")
+        tar = self.tars[proc]
+
         lig_file = self.get_lig_file(index)
         rec_file = self.get_rec_file(index)
 
         try:
-            # lig = get_mol_from_file(lig_file)
-            # rec = get_prot_from_file(rec_file)
-            lig = self.get_lig(lig_file)
-            rec = self.get_rec(rec_file)
+            if self.cfg.data.use_tar:
+                lig = self.get_lig(lig_file, tar)
+                rec = self.get_rec(rec_file, tar)
+            else:
+                lig = get_mol_from_file(lig_file)
+                rec = get_prot_from_file(rec_file)
 
             rec_graph = ProtGraph(self.cfg, rec)
 
