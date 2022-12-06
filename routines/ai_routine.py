@@ -88,6 +88,7 @@ class AIRoutine(pl.LightningModule):
                              val_check_interval=self.cfg.val_check_interval,
                              logger=logger,
                              callbacks=callbacks,
+                             replace_sampler_ddp=False,
                              resume_from_checkpoint=self.checkpoint_file)
         trainer.fit(self, self.train_dataloader, self.val_dataloader)
         trainer.validate(self, self.val_dataloader)
