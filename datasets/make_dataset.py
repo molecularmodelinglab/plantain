@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+from torch.utils.data import DistributedSampler
 import random
 
 from datasets.bigbind_act import BigBindActDataset
@@ -39,7 +40,7 @@ def make_dataloader(cfg, split, force_no_shuffle=False):
     else:
         shuffle = (split == "train")
     if split == "train":
-        sampler = torch.data.DistributedSampler(dataset, shuffle=shuffle)
+        sampler = DistributedSampler(dataset, shuffle=shuffle)
     else:
         sampler = None
     return DataLoader(dataset,
