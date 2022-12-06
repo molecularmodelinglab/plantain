@@ -1,7 +1,14 @@
+import pickle
+import tarfile
+import warnings
 import pandas as pd
 import torch
+import tempfile
 from rdkit import Chem
 from common.utils import get_mol_from_file, get_prot_from_file
+
+from Bio.PDB.mmtf import MMTFParser
+from Bio.PDB.PDBExceptions import PDBConstructionWarning
 
 from datasets.cacheable_dataset import CacheableDataset
 from datasets.data_types import InteractionActivityData
@@ -18,6 +25,10 @@ class BigBindVinaDataset(CacheableDataset):
         self.dir = cfg.platform.bigbind_dir
         self.vina_dir = cfg.platform.bigbind_vina_dir
         self.cfg = cfg
+        self.tar_files = tarfile.open(cfg.platform.bigbind_vina_dir + f"/{split}_files.tar", "r:")
+
+    def __del__(self):
+        self.tar_files.close()
 
     def __len__(self):
         return len(self.activities)
@@ -50,14 +61,31 @@ class BigBindVinaDataset(CacheableDataset):
 
         return lig_file + "_" + rec_file
 
+    def get_lig(self, lig_file):
+        lig_file = "/".join(lig_file.split("/")[-2:])
+        f = self.tar_files.extractfile(lig_file)
+        return pickle.load(f)
+
+    def get_rec(self, rec_file):
+        rec_file = "/".join(rec_file.split("/")[-2:])
+        f = self.tar_files.extractfile(rec_file)
+        with tempfile.NamedTemporaryFile() as tmp:
+            tmp.write(f.read())
+            with warnings.catch_warnings():
+                warnings.filterwarnings("ignore", category=PDBConstructionWarning)
+                structure = MMTFParser().get_structure(tmp.name)
+        return structure[0]
+
     def get_item_pre_cache(self, index):
 
         lig_file = self.get_lig_file(index)
         rec_file = self.get_rec_file(index)
 
         try:
-            lig = get_mol_from_file(lig_file)
-            rec = get_prot_from_file(rec_file)
+            # lig = get_mol_from_file(lig_file)
+            # rec = get_prot_from_file(rec_file)
+            lig = self.get_lig(lig_file)
+            rec = self.get_rec(rec_file)
 
             rec_graph = ProtGraph(self.cfg, rec)
 

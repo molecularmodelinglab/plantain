@@ -15,10 +15,11 @@ from multiprocessing import Pool
 from glob import glob
 import pandas as pd
 import yaml
+import tarfile
 from tqdm import tqdm
 
 from common.cfg_utils import get_config
-from common.utils import get_mol_from_file
+from common.utils import get_mol_from_file, get_prot_from_file
 
 def prepare_rec(cfg, rec_file):
     """ Use ADFR to produce a pdbqt file from the receptor pdb file """
@@ -173,9 +174,69 @@ def finalize_bigbind_vina(cfg, file_prefix):
         print(f"Saving docked df to {out_file}")
         screen_df.to_csv(out_file, index=False)
 
+def add_rec_file(file):
+    rec_file = cfg.platform.bigbind_dir + "/" + file
+    out_file = rec_file.split(".")[0] + ".mmtf"
+    if not os.path.exists(out_file):
+        get_prot_from_file(rec_file)
+
+
+def add_lig_file(file):
+    docked_file = cfg.platform.bigbind_vina_dir + "/" + file
+    out_file = docked_file.split(".")[0] + ".pkl"
+    if not os.path.exists(out_file):
+        get_mol_from_file(docked_file)
+
+def get_file_size(f):
+    f.seek(0, os.SEEK_END)
+    ret = f.tell()
+    f.seek(0, os.SEEK_SET)
+    return ret
+
+def tar_structures(cfg, prefix, split):
+
+    df = pd.read_csv(cfg.platform.bigbind_vina_dir + f"/{prefix}_{split}.csv")
+    tar = tarfile.open(cfg.platform.bigbind_vina_dir + f"/{split}_files.tar", "w:")
+
+    # for file in tqdm(df.ex_rec_pocket_file):
+    #     add_rec_file(tar, file)
+    with Pool(processes=16) as p:
+
+        rec_files = df.ex_rec_pocket_file.unique()
+        lig_files = df.docked_lig_file.unique()
+
+        for _ in tqdm(p.imap(add_rec_file, rec_files), total=len(rec_files)):
+            pass
+        for _ in tqdm(p.imap(add_lig_file, lig_files), total=len(lig_files)):
+            pass
+
+        for file in rec_files:
+            rec_file = cfg.platform.bigbind_dir + "/" + file
+            out_file = rec_file.split(".")[0] + ".mmtf"
+            with open(out_file, 'rb') as f:
+                info = tarfile.TarInfo(file)
+                info.size = get_file_size(f)
+                tar.addfile(info, f)
+
+        for file in lig_files:
+            docked_file = cfg.platform.bigbind_vina_dir + "/" + file
+            out_file = docked_file.split(".")[0] + ".pkl"
+            with open(out_file, 'rb') as f:
+                info = tarfile.TarInfo(file)
+                info.size = get_file_size(f)
+                tar.addfile(info, f)
+
+    tar.close()
+
+def tar_all_structures(cfg, prefix):
+    for split in ("val", "test", "train"):
+        print(f"Tarring {split}")
+        tar_structures(cfg, prefix, split)
+
 if __name__ == "__main__":
 
     cfg = get_config("vina")
     # dock_all(cfg, "activities_sna_1")
     # dock_all(cfg, "structures")
-    finalize_bigbind_vina(cfg, "structures")
+    # finalize_bigbind_vina(cfg, "structures")
+    tar_all_structures(cfg, "activities_sna_1")
