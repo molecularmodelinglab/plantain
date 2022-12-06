@@ -5,7 +5,7 @@ from datasets.make_dataset import make_dataloader
 
 
 def dataset_iterate(cfg):
-    train_dataloader = make_dataloader(cfg, "val")
+    train_dataloader = make_dataloader(cfg, "train")
     for data in tqdm(train_dataloader):
         pass
 
