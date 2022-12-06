@@ -57,7 +57,6 @@ class BigBindVinaDataset(CacheableDataset):
 
         try:
             lig = get_mol_from_file(lig_file)
-            lig = Chem.RemoveHs(lig)
             rec = get_prot_from_file(rec_file)
 
             rec_graph = ProtGraph(self.cfg, rec)

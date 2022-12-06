@@ -17,3 +17,4 @@ seaborn
 terrace
 argparse
 meeko
+mmtf-python
