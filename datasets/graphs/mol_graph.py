@@ -79,10 +79,10 @@ class AtomNode(Node3d):
         coord_td = TensorTD((3,), dtype=torch.float32)
         return ClassTD(AtomNode, coord=coord_td, cat_feat=cat_td, scal_feat=scal_td)
 
-    def __init__(self, mol_cfg: DictConfig, atom: Chem.Atom, mol: Chem.Mol, conformer: Optional[int]):
+    def __init__(self, atom_feats, atom: Chem.Atom, mol: Chem.Mol, conformer: Optional[int]):
         cat_feats = []
         scal_feats = []
-        for feat_name in mol_cfg.atom_feats:
+        for feat_name in atom_feats:
             get_feat = globals()["get_" + feat_name]
             possible = possible_atom_feats[feat_name]
             feat = safe_index(possible, get_feat(atom, mol))
@@ -121,10 +121,10 @@ class BondEdge(Edge3d):
         scal_td = TensorTD((0,), dtype=torch.float32)
         return ClassTD(BondEdge, cat_feat=cat_td, scal_feat=scal_td)
     
-    def __init__(self, mol_cfg: DictConfig, bond: Chem.Bond, mol: Chem.Mol):
+    def __init__(self, bond_feats, bond: Chem.Bond, mol: Chem.Mol):
         cat_feats = []
         scal_feats = []
-        for feat_name in mol_cfg.bond_feats:
+        for feat_name in bond_feats:
             get_feat = globals()["get_" + feat_name]
             possible = possible_bond_feats[feat_name]
             feat = safe_index(possible, get_feat(bond, mol))
@@ -145,7 +145,9 @@ class MolGraph(Graph3d):
 
     def __init__(self, cfg: DictConfig, mol: Chem.Mol, conformer: Optional[int] = 0):
         mol_cfg = cfg.data.lig_graph
-        nodes = [AtomNode(mol_cfg, atom, mol, conformer) for atom in mol.GetAtoms()]
+        atom_feats = list(mol_cfg.atom_feats)
+        bond_feats = list(mol_cfg.bond_feats)
+        nodes = [AtomNode(atom_feats, atom, mol, conformer) for atom in mol.GetAtoms()]
 
         edges = []
         edata = []
@@ -153,7 +155,7 @@ class MolGraph(Graph3d):
             idx1 = bond.GetBeginAtomIdx()
             idx2 = bond.GetEndAtomIdx()
             edges.append((idx1, idx2))
-            edata.append(BondEdge(mol_cfg, bond, mol))
+            edata.append(BondEdge(bond_feats, bond, mol))
 
         super(MolGraph, self).__init__(nodes, edges, edata)
 

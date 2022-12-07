@@ -82,7 +82,7 @@ class AIRoutine(pl.LightningModule):
         # plot_metrics(self.metrics["val_metric"], "val", True)
 
     def fit(self, logger, callbacks):
-        gpus = int(torch.cuda.is_available())# self.cfg.gpus
+        gpus = int(torch.cuda.is_available()) # self.cfg.gpus
         trainer = pl.Trainer(gpus=gpus,
                              max_epochs=self.cfg.max_epochs,
                              val_check_interval=self.cfg.val_check_interval,
