@@ -21,22 +21,27 @@ def train(cfg):
 
     callbacks = []
     if cfg.project is not None:
+
+        # hacky -- remove
+        project = cfg.project = "_pose"
+
         if cfg.resume_id:
-            run = wandb.init(project=cfg.project, id=cfg.resume_id, resume=True)
+            run = wandb.init(project=project, id=cfg.resume_id, resume=True)
             cfg = get_run_config(run, cfg)
-            artifact = run.use_artifact(f"{cfg.project}/model-{run.id}:latest", type='model')
+            artifact = run.use_artifact(f"{project}/model-{run.id}:latest", type='model')
             artifact_dir = artifact.download()
             checkpoint_file = artifact_dir + "/model.ckpt"
             routine = AIRoutine.from_checkpoint(cfg, checkpoint_file)
         
-        logger = WandbLogger(project=cfg.project, name=cfg.name, log_model="all")
+        logger = WandbLogger(project=project, name=cfg.name, log_model="all")
         logger.log_hyperparams(cfg)
         if "SLURM_JOB_ID" in os.environ:
             logger.log_hyperparams({ "slurm_job_id": os.environ["SLURM_JOB_ID"] })
 
         val_metric = {
             "classification": "val_auroc",
-            "regression": "val_r2"
+            "regression": "val_r2",
+            "pose": "val_acc_2",
         }[cfg.task]
         checkpoint_callback = ModelCheckpoint(monitor=val_metric, mode="max", save_last=True, every_n_epochs=1)
         callbacks.append(checkpoint_callback)
