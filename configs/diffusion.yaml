@@ -1,0 +1,75 @@
+project: null
+resume_id: null
+name: test_run
+
+val_check_interval: 1.0
+
+dataset: bigbind_struct
+data:
+  cache: false
+  use_tar: true
+  
+  use_rec: true
+  use_lig: true
+
+  sna_frac: 1
+  only_ki_kd: false
+
+  num_conformers: 1
+  
+  lig_graph:
+    atom_feats: [ "element", "formal_charge", "hybridization", "is_aromatic", "numH"]
+    bond_feats:
+      bond_order: true
+
+  rec_graph:
+    only_pocket: true
+    node_type: "residue"
+    atom_feats: [ "atom_type" ]
+    residue_feats: [ "residue_type" ]
+    edge_method:
+      type: "knn"
+      knn_rad: 10
+      max_neighbors: null
+    edge_feats: [ "dist"]
+    include_h: False
+
+task: "pose"
+
+losses:
+  pose_mse_lambda: 1.0
+
+optimizer: adamw
+learn_rate: 1e-5
+max_epochs: 10
+
+batch_size: 8
+
+sampler:
+  max_rec_edges: 10000
+  max_lig_edges: 1000
+
+model:
+
+  type: diffusion
+  
+  rec_encoder:
+    node_embed_size: 64
+    edge_embed_size: 64
+    num_mpnn_layers: 2
+    edge_hidden_size: 32
+
+  lig_encoder:
+    node_embed_size: 16
+    edge_embed_size: 64
+    num_mpnn_layers: 2
+    edge_hidden_size: 32
+
+  out_size: 64
+
+  diffusion:
+    timesteps: 10
+    max_rot_sigma: 2
+    max_trans_sigma: 5
+
+  grad_coef: 1.0

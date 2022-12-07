@@ -1,13 +1,13 @@
 from models.gnn_bind import GNNBind
 from models.fp_nn import FpNN
-from models.learnable_ff import LearnableFF
+from models.diffusion import Diffusion
 from models.outer_prod_gnn import OuterProdGNN
 from models.interaction_gnn import InteractionGNN
 
 name2model_cls = {
    "gnn_bind": GNNBind,
    "fp_nn": FpNN,
-   "learnable_ff": LearnableFF,
+   "diffusion": Diffusion,
    "outer_prod_gnn": OuterProdGNN,
    "interaction_gnn": InteractionGNN,
 }

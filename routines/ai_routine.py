@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 
 from terrace.comp_node import Input
+from common.task_metrics import get_task_metrics
 from models.make_model import make_model
 from datasets.make_dataset import make_dataloader
 from common.losses import get_losses
@@ -62,6 +63,11 @@ class AIRoutine(pl.LightningModule):
             val(pred, batch)
             if isinstance(val.compute(), torch.Tensor):
                 self.log(f"{prefix}_{key}", val, prog_bar=False, on_step=on_step, on_epoch=on_epoch, batch_size=len(batch))
+        
+        task_mets = get_task_metrics(self.cfg.task, prefix, batch_idx, self.model, batch)
+        for key, val in task_mets.items():
+            self.log(f"{prefix}_{key}", val, prog_bar=True, on_step=on_step, on_epoch=on_epoch, batch_size=len(batch))
+        
         return loss
 
     def training_step(self, batch, batch_idx):

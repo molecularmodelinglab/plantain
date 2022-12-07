@@ -40,5 +40,6 @@ def get_metrics(cfg):
         "regression": nn.ModuleDict({
             "r2": MetricWrapper(R2Score(), identity, get_activity),
             "mse": MetricWrapper(MeanSquaredError(), identity, get_activity)
-        })
+        }),
+        "pose": nn.ModuleDict({})
     }[cfg.task]

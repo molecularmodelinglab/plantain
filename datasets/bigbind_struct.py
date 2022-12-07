@@ -21,17 +21,21 @@ class BigBindStructDataset(BigBindDataset):
         """ returns the first lig file if use_lig is false, to ensure
         that all ligs are the same """
         if not self.cfg.data.use_lig:
-            index = 0
+            return self.dir + "ELNE_HUMAN_30_247_0/3q77_2hy_lig.sdf"
         return self.dir + "/" + self.structures.lig_file[index]
 
     def get_rec_file(self, index):
         """ same as above """
-        if not self.cfg.data.use_rec:
-            index = 0
-        if self.cfg.data.rec_graph.only_pocket:
-            return self.dir + "/" + self.structures.ex_rec_pocket_file[index]
+        if self.cfg.data.use_rec:
+            poc_file = self.activities.ex_rec_pocket_file[index]
+            rec_file = self.activities.ex_rec_file[index]
         else:
-            return self.dir + "/" + self.structures.ex_rec_file[index]
+            poc_file = "ELNE_HUMAN_30_247_0/3q77_A_rec_pocket.pdb"
+            rec_file = "ELNE_HUMAN_30_247_0/3q77_A_rec.pdb"
+        if self.cfg.data.rec_graph.only_pocket:
+            return self.dir + "/" + poc_file
+        else:
+            return self.dir + "/" + rec_file
 
     def get_cache_key(self, index):
 
