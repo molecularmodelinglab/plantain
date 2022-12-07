@@ -43,7 +43,7 @@ optimizer: adamw
 learn_rate: 1e-5
 max_epochs: 10
 
-batch_size: 8
+batch_size: 16
 
 sampler:
   max_rec_edges: 10000
@@ -65,10 +65,10 @@ model:
     num_mpnn_layers: 2
     edge_hidden_size: 32
 
-  out_size: 64
+  out_size: 128
 
   diffusion:
-    timesteps: 10
+    timesteps: 32
     max_rot_sigma: 2
     max_trans_sigma: 5
 
