@@ -31,7 +31,7 @@ class Diffusion(nn.Module):
         dist_exponents = list(range(self.cfg.model.min_dist_exp, self.cfg.model.max_dist_exp+1))
         dist_exponents.remove(0)
         self.dist_exponents = torch.tensor(dist_exponents, dtype=float)
-        self.register_buffer('dist_exponents', self.dist_exponents)
+        self.register_buffer('dist_exp_const', self.dist_exponents)
 
         self.lig_gnn = MPNNGNN(self.lig_node_embed.total_dim,
                                self.lig_edge_embed.total_dim,
