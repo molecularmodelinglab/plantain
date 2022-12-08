@@ -168,9 +168,12 @@ class Diffusion(nn.Module):
         rot_sigma_sq = (rot_sigma**2).view((1,-1,1,1))
         trans_sigma_sq = (trans_sigma**2).view((1,-1,1))
 
+        # todo: change!
+        rot_grad_n = rot_grad
+        trans_grad_n = F.normalize(trans_grad, dim=-1) if self.cfg.model.norm_grad else trans_grad
 
-        final_rot, _ = torch.linalg.qr(pre_rot - self.cfg.model.grad_coef*rot_grad*rot_sigma_sq)
-        final_trans = trans - self.cfg.model.grad_coef*trans_grad*trans_sigma_sq
+        final_rot, _ = torch.linalg.qr(pre_rot - self.cfg.model.grad_coef*rot_grad_n*rot_sigma_sq)
+        final_trans = trans - self.cfg.model.grad_coef*trans_grad_n*trans_sigma_sq
 
         return (final_rot, final_trans), (rot_grad, trans_grad)
             
