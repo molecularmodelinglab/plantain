@@ -21,7 +21,7 @@ class BigBindStructDataset(BigBindDataset):
         """ returns the first lig file if use_lig is false, to ensure
         that all ligs are the same """
         if not self.cfg.data.use_lig:
-            return self.dir + "ELNE_HUMAN_30_247_0/3q77_2hy_lig.sdf"
+            return self.dir + "/ELNE_HUMAN_30_247_0/3q77_2hy_lig.sdf"
         return self.dir + "/" + self.structures.lig_file[index]
 
     def get_rec_file(self, index):
