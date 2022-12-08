@@ -38,7 +38,7 @@ task: "pose"
 
 losses:
   pose_mse_lambda: 1.0
-  trans_norm_lambda: 2.0
+  trans_norm_lambda: 1.0
   rot_norm_lambda: 0.5
 
 optimizer: adamw
@@ -67,11 +67,14 @@ model:
     num_mpnn_layers: 2
     edge_hidden_size: 32
 
-  out_size: 128
+  out_size: 32
 
   diffusion:
-    timesteps: 64
-    max_rot_sigma: 1
+    timesteps: 32
+    max_rot_sigma: 0
     max_trans_sigma: 5
+
+  min_dist_exp: -2
+  max_dist_exp: 2
 
   grad_coef: 1.0

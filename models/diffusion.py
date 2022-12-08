@@ -28,15 +28,19 @@ class Diffusion(nn.Module):
         self.lig_edge_embed = CatScalEmbedding(cfg.model.lig_encoder.edge_embed_size,
                                                in_node.out_type_data.lig.edata)
 
+        dist_exponents = list(range(self.cfg.model.min_dist_exp, self.cfg.model.max_dist_exp+1))
+        dist_exponents.remove(0)
+        self.dist_exponents = torch.tensor(dist_exponents, dtype=float)
+
         self.lig_gnn = MPNNGNN(self.lig_node_embed.total_dim,
                                self.lig_edge_embed.total_dim,
-                               self.cfg.model.out_size,
+                               self.cfg.model.out_size*self.dist_exponents.size(0),
                                lig_cfg.edge_hidden_size,
                                lig_cfg.num_mpnn_layers)
 
         self.rec_gnn = MPNNGNN(self.rec_node_embed.total_dim,
                                self.rec_edge_embed.total_dim,
-                               self.cfg.model.out_size,
+                               self.cfg.model.out_size*self.dist_exponents.size(0),
                                rec_cfg.edge_hidden_size,
                                rec_cfg.num_mpnn_layers)
 
@@ -48,8 +52,8 @@ class Diffusion(nn.Module):
         rec_edge_feat = self.rec_edge_embed(batch.rec.edata)
         lig_edge_feat = self.lig_edge_embed(batch.lig.edata)
 
-        batch_rec_feat = self.rec_gnn(rec_graph, rec_hid, rec_edge_feat)
-        batch_lig_feat = self.lig_gnn(lig_graph, lig_hid, lig_edge_feat)
+        batch_rec_feat = self.rec_gnn(rec_graph, rec_hid, rec_edge_feat).view(-1, self.dist_exponents.size(0), self.cfg.model.out_size)
+        batch_lig_feat = self.lig_gnn(lig_graph, lig_hid, lig_edge_feat).view(-1, self.dist_exponents.size(0), self.cfg.model.out_size)
 
         return batch_rec_feat, batch_lig_feat
         
@@ -84,7 +88,7 @@ class Diffusion(nn.Module):
             # move ligand
             new_lig_coord = torch.einsum('nij,bj->nbi', rot, lig_coord)  + trans.unsqueeze(1)
 
-            atn_coefs = torch.einsum('lf,rf->lr', lig_feat, rec_feat)
+            atn_coefs = torch.einsum('lef,ref->lre', lig_feat, rec_feat)
 
             # cdist is the simplest way to compute dist matrix
             # dists = torch.cdist(new_lig_coord, rec_coord)
@@ -95,8 +99,11 @@ class Diffusion(nn.Module):
                 lc_ex = new_lig_coord[i].unsqueeze(1).expand(-1,rec_coord.size(0),-1)
                 rc_ex = rec_coord.unsqueeze(0).expand(new_lig_coord[i].size(0),-1,-1)
                 dists = torch.sqrt(((lc_ex - rc_ex)**2).sum(-1))
+                dist_rep = dists.unsqueeze(-1).repeat(1,1,self.dist_exponents.size(0))
+                exp = self.dist_exponents.view(1,1,-1)
+                dist_exp = dist_rep**exp
 
-                U = (atn_coefs/(dists)).sum()
+                U = (atn_coefs*dist_exp).sum()
                 Us.append(U)
 
             all_Us.append(torch.stack(Us))
