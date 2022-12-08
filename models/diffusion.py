@@ -69,8 +69,8 @@ class Diffusion(nn.Module):
         tot_lig = 0
         for i, (r, l) in enumerate(zip(rec_graph.batch_num_nodes(), lig_graph.batch_num_nodes())):
             
-            rot = batch_rot # [i]
-            trans = batch_trans #[i]
+            rot = batch_rot[i]
+            trans = batch_trans[i]
             
             lig_feat = batch_lig_feat[tot_lig:tot_lig+l]
             rec_feat = batch_rec_feat[tot_rec:tot_rec+r]
@@ -80,10 +80,6 @@ class Diffusion(nn.Module):
 
             tot_rec += r
             tot_lig += l
-
-            # ensure the centroids of both lig and rec are at origin
-            lig_coord = lig_coord - lig_coord.mean(0)
-            rec_coord = rec_coord - rec_coord.mean(0)
 
             # move ligand
             new_lig_coord = torch.einsum('nij,bj->nbi', rot, lig_coord)  + trans.unsqueeze(1)
@@ -139,11 +135,11 @@ class Diffusion(nn.Module):
         trans_sigma = torch.linspace(0.0, diff_cfg.max_trans_sigma, timesteps, device=device)
         
         # a bunch of identity matrices
-        pre_rot = torch.eye(3, device=device).unsqueeze(0).repeat(diff_cfg.timesteps,1,1)
+        pre_rot = torch.eye(3, device=device).view((1,1,3,3)).repeat(self.cfg.batch_size,diff_cfg.timesteps,1,1)
         # add noise
         pre_rot += torch.randn((timesteps,3,3), device=device)*rot_sigma.view((-1,1,1))
         
-        trans = torch.randn((timesteps,3), device=device)*trans_sigma.view((-1,1))
+        trans = torch.randn((self.cfg.batch_size,timesteps,3), device=device)*trans_sigma.view((-1,1))
 
         return pre_rot, trans
 
@@ -166,6 +162,16 @@ class Diffusion(nn.Module):
         return final_rot, final_trans
             
 
+    def get_diffused_coords(self, batch):
+        
+        batch_rec_feat, batch_lig_feat = self.get_hidden_feat(batch)
+        device = batch_rec_feat.device
+
+        pre_rot, trans = self.get_diffused_transforms(device)
+        rot, _ = torch.linalg.qr(pre_rot)
+
+        return self.apply_transformation(batch, rot, trans)
+
     def diffuse(self, batch):
 
         batch_rec_feat, batch_lig_feat = self.get_hidden_feat(batch)
@@ -179,7 +185,7 @@ class Diffusion(nn.Module):
                               pre_rot,
                               trans)
 
-    def apply_transformation(self, batch, rot, trans):
+    def apply_transformation(self, batch, batch_rot, batch_trans):
 
         rec_graph = batch.rec.dgl_batch
         lig_graph = batch.lig.dgl_batch
@@ -190,15 +196,13 @@ class Diffusion(nn.Module):
         tot_lig = 0
         for i, (r, l) in enumerate(zip(rec_graph.batch_num_nodes(), lig_graph.batch_num_nodes())):
 
+            rot = batch_rot[i]
+            trans = batch_trans[i]
+
             lig_coord =  batch.lig.ndata.coord[tot_lig:tot_lig+l]
-            rec_coord =  batch.rec.ndata.coord[tot_rec:tot_rec+r]
 
             tot_rec += r
             tot_lig += l
-
-            # ensure the centroids of both lig and rec are at origin
-            lig_coord = lig_coord - lig_coord.mean(0)
-            rec_coord = rec_coord - rec_coord.mean(0)
 
             # move ligand
             new_lig_coord = torch.einsum('nij,bj->nbi', rot, lig_coord)  + trans.unsqueeze(1)
@@ -206,23 +210,33 @@ class Diffusion(nn.Module):
 
         return ret
 
-    def infer(self, batch):
+    def infer(self, batch, ret_all_coords=False):
         """ Final inference -- predict lig_coords directly after randomizing """
 
         batch_rec_feat, batch_lig_feat = self.get_hidden_feat(batch)
         device = batch_rec_feat.device
 
         pre_rot, trans = self.get_diffused_transforms(device)
-        pre_rot = pre_rot[-2:-1]
-        trans = trans[-2:-1]
+        pre_rot = pre_rot[:,-2:-1]
+        trans = trans[:,-2:-1]
 
+        all_coords = []
         for t in range(self.cfg.model.diffusion.timesteps):
             pre_rot, trans = self.pred_pose(batch, 
                                             batch_rec_feat,
                                             batch_lig_feat,
                                             pre_rot,
                                             trans)
+            if ret_all_coords:
+                all_coords.append(self.apply_transformation(batch, pre_rot, trans))
 
+        if ret_all_coords:
+            ret = [ [] for i in range(len(batch)) ]
+            for coords in all_coords:
+                for i, c in enumerate(coords):
+                    ret[i].append(c[0])
+            return ret
+        
         ret = self.apply_transformation(batch, pre_rot, trans)
         return [ coords[0] for coords in ret ]
 

@@ -58,6 +58,12 @@ class BigBindStructDataset(BigBindDataset):
             print(f"{rec_file=}")
             raise
 
+        # center everything around lig centroid
+
+        lig_centroid = lig_graph.ndata.coord.mean(0)
+        lig_graph.ndata.coord -= lig_centroid
+        rec_graph.ndata.coord -= lig_centroid
+
         return StructData(lig_graph, rec_graph)
 
     def get_variance(self):

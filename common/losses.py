@@ -22,8 +22,8 @@ def coord_mse_loss(batch, y_pred):
 
 def pose_mse_loss(batch, y_pred):
     rot, trans = y_pred
-    rot_true = torch.eye(3, device=rot.device).unsqueeze(0).repeat((rot.size(0),1,1))
-    trans_true = torch.zeros(trans.size(0),3, device=trans.device)
+    rot_true = torch.eye(3, device=rot.device).view(1,1,3,3).repeat((rot.size(0),rot.size(1),1,1))
+    trans_true = torch.zeros(trans.size(0),trans.size(1),3, device=trans.device)
     return F.mse_loss(rot_true, rot) + F.mse_loss(trans_true, trans)
 
 def combine_losses(loss_cfg, loss_fns, *args):

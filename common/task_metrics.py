@@ -5,7 +5,7 @@ def get_rmsds(batch, pred_coords):
     # not symmetric corrected - change!
     rmsds = []
     for b, pred in zip(batch, pred_coords):  
-        true_coord = b.lig.ndata.coord - b.lig.ndata.coord.mean(0)
+        true_coord = b.lig.ndata.coord 
         rmsds.append(torch.sqrt(F.mse_loss(true_coord, pred)))
     return torch.stack(rmsds)
 
