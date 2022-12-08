@@ -31,7 +31,6 @@ class Diffusion(nn.Module):
         dist_exponents = list(range(self.cfg.model.min_dist_exp, self.cfg.model.max_dist_exp+1))
         dist_exponents.remove(0)
         self.dist_exponents = torch.tensor(dist_exponents, dtype=float)
-        self.register_buffer('dist_exp_const', self.dist_exponents)
 
         self.lig_gnn = MPNNGNN(self.lig_node_embed.total_dim,
                                self.lig_edge_embed.total_dim,
@@ -101,7 +100,7 @@ class Diffusion(nn.Module):
                 rc_ex = rec_coord.unsqueeze(0).expand(new_lig_coord[i].size(0),-1,-1)
                 dists = torch.sqrt(((lc_ex - rc_ex)**2).sum(-1))
                 dist_rep = dists.unsqueeze(-1).repeat(1,1,self.dist_exponents.size(0))
-                exp = self.dist_exponents.view(1,1,-1)
+                exp = self.dist_exponents.view(1,1,-1).to(rec_coord.device)
                 dist_exp = dist_rep**exp
 
                 U = (atn_coefs*dist_exp).sum()
