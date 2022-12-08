@@ -103,7 +103,7 @@ class Diffusion(nn.Module):
                 exp = self.dist_exponents.view(1,1,-1).to(rec_coord.device)
                 dist_exp = dist_rep**exp
 
-                U = (atn_coefs*dist_exp).sum()
+                U = (atn_coefs*dist_exp).mean()
                 Us.append(U)
 
             all_Us.append(torch.stack(Us))
@@ -129,6 +129,8 @@ class Diffusion(nn.Module):
                                 trans)
 
             U_mean = U.mean()
+
+            print(U)
 
             pre_rot_grad, trans_grad = torch.autograd.grad(U_mean, [pre_rot, trans], create_graph=True)
         return pre_rot_grad, trans_grad
