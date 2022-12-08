@@ -70,7 +70,7 @@ model:
   out_size: 128
 
   diffusion:
-    timesteps: 32
+    timesteps: 64
     max_rot_sigma: 1
     max_trans_sigma: 5
 

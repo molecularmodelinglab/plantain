@@ -126,7 +126,7 @@ class Diffusion(nn.Module):
             pre_rot_grad, trans_grad = torch.autograd.grad(U_mean, [pre_rot, trans], create_graph=True)
         return pre_rot_grad, trans_grad
 
-    def get_diffused_transforms(self, device, timesteps=None):
+    def get_diffused_transforms(self, batch_size, device, timesteps=None):
         diff_cfg = self.cfg.model.diffusion
         if timesteps is None:
             timesteps = diff_cfg.timesteps
@@ -135,20 +135,22 @@ class Diffusion(nn.Module):
         trans_sigma = torch.linspace(0.0, diff_cfg.max_trans_sigma, timesteps, device=device)
         
         # a bunch of identity matrices
-        pre_rot = torch.eye(3, device=device).view((1,1,3,3)).repeat(self.cfg.batch_size,diff_cfg.timesteps,1,1)
+        pre_rot = torch.eye(3, device=device).view((1,1,3,3)).repeat(batch_size,diff_cfg.timesteps,1,1)
         # add noise
         pre_rot += torch.randn((timesteps,3,3), device=device)*rot_sigma.view((-1,1,1))
         
-        trans = torch.randn((self.cfg.batch_size,timesteps,3), device=device)*trans_sigma.view((-1,1))
+        trans = torch.randn((batch_size,timesteps,3), device=device)*trans_sigma.view((-1,1))
 
-        return pre_rot, trans
+        return (pre_rot, trans), (rot_sigma, trans_sigma)
 
     def pred_pose(self,
                   batch,
                   batch_rec_feat,
                   batch_lig_feat,
                   pre_rot,
-                  trans):
+                  trans,
+                  rot_sigma,
+                  trans_sigma):
 
         rot_grad, trans_grad = self.energy_grad(batch,
                                                 batch_rec_feat,
@@ -156,8 +158,12 @@ class Diffusion(nn.Module):
                                                 pre_rot,
                                                 trans)
 
-        final_rot, _ = torch.linalg.qr(pre_rot - self.cfg.model.grad_coef*rot_grad)
-        final_trans = trans - self.cfg.model.grad_coef*trans_grad
+        rot_sigma_sq = (rot_sigma**2).view((1,-1,1,1))
+        trans_sigma_sq = (trans_sigma**2).view((1,-1,1))
+
+
+        final_rot, _ = torch.linalg.qr(pre_rot - self.cfg.model.grad_coef*rot_grad*rot_sigma_sq)
+        final_trans = trans - self.cfg.model.grad_coef*trans_grad*trans_sigma_sq
 
         return (final_rot, final_trans), (rot_grad, trans_grad)
             
@@ -167,7 +173,7 @@ class Diffusion(nn.Module):
         batch_rec_feat, batch_lig_feat = self.get_hidden_feat(batch)
         device = batch_rec_feat.device
 
-        pre_rot, trans = self.get_diffused_transforms(device)
+        (pre_rot, trans), _ = self.get_diffused_transforms(len(batch), device)
         rot, _ = torch.linalg.qr(pre_rot)
 
         return self.apply_transformation(batch, rot, trans)
@@ -177,13 +183,15 @@ class Diffusion(nn.Module):
         batch_rec_feat, batch_lig_feat = self.get_hidden_feat(batch)
         device = batch_rec_feat.device
 
-        pre_rot, trans = self.get_diffused_transforms(device)
+        (pre_rot, trans), (rot_sigma, trans_sigma) = self.get_diffused_transforms(len(batch), device)
 
         return self.pred_pose(batch, 
                               batch_rec_feat,
                               batch_lig_feat,
                               pre_rot,
-                              trans)
+                              trans,
+                              rot_sigma,
+                              trans_sigma)
 
     def apply_transformation(self, batch, batch_rot, batch_trans):
 
@@ -216,7 +224,7 @@ class Diffusion(nn.Module):
         batch_rec_feat, batch_lig_feat = self.get_hidden_feat(batch)
         device = batch_rec_feat.device
 
-        pre_rot, trans = self.get_diffused_transforms(device)
+        (pre_rot, trans), (rot_sigma, trans_sigma) = self.get_diffused_transforms(len(batch), device)
         pre_rot = pre_rot[:,-2:-1]
         trans = trans[:,-2:-1]
 
@@ -226,7 +234,9 @@ class Diffusion(nn.Module):
                                                  batch_rec_feat,
                                                  batch_lig_feat,
                                                  pre_rot,
-                                                 trans)
+                                                 trans,
+                                                 rot_sigma[t:t+1],
+                                                 trans_sigma[t:t+1])
             if ret_all_coords:
                 all_coords.append(self.apply_transformation(batch, pre_rot, trans))
 
