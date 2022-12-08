@@ -159,7 +159,7 @@ class Diffusion(nn.Module):
         final_rot, _ = torch.linalg.qr(pre_rot - self.cfg.model.grad_coef*rot_grad)
         final_trans = trans - self.cfg.model.grad_coef*trans_grad
 
-        return final_rot, final_trans
+        return (final_rot, final_trans), (rot_grad, trans_grad)
             
 
     def get_diffused_coords(self, batch):
@@ -222,11 +222,11 @@ class Diffusion(nn.Module):
 
         all_coords = []
         for t in range(self.cfg.model.diffusion.timesteps):
-            pre_rot, trans = self.pred_pose(batch, 
-                                            batch_rec_feat,
-                                            batch_lig_feat,
-                                            pre_rot,
-                                            trans)
+            (pre_rot, trans), _ = self.pred_pose(batch, 
+                                                 batch_rec_feat,
+                                                 batch_lig_feat,
+                                                 pre_rot,
+                                                 trans)
             if ret_all_coords:
                 all_coords.append(self.apply_transformation(batch, pre_rot, trans))
 
