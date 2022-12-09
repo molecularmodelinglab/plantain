@@ -9,7 +9,7 @@ from models.cat_scal_embedding import CatScalEmbedding
 from datasets.data_types import PredData, EnergyPredData
 
 def rbf_encode(dists, start, end, steps):
-    mu = torch.linspace(start, end, steps)
+    mu = torch.linspace(start, end, steps, device=dists.device)
     sigma = (start - end)/steps
     dists_expanded = dists.unsqueeze(-1).repeat(1,1,mu.size(0))
     mu_expanded = mu.view(1,1,-1)
