@@ -48,8 +48,6 @@ class BigBindStructDataset(BigBindDataset):
         
         lig_file = self.get_lig_file(index)
         rec_file = self.get_rec_file(index)
-
-        print(lig_file, rec_file)
         
         try:
             lig_graph = mol_graph_from_sdf(self.cfg, lig_file)
