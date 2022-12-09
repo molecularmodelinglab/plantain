@@ -71,7 +71,7 @@ model:
 
   diffusion:
     timesteps: 32
-    max_rot_sigma: 0
+    max_rot_sigma: 1
     max_trans_sigma: 5
 
   rbf_start: 0
