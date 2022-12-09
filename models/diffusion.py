@@ -105,7 +105,7 @@ class Diffusion(nn.Module):
                 dists = torch.sqrt(((lc_ex - rc_ex)**2).sum(-1))
                 rbfs = rbf_encode(dists, self.cfg.model.rbf_start,self.cfg.model.rbf_end,self.cfg.model.rbf_steps,)
 
-                U = (atn_coefs*rbfs).mean()
+                U = (atn_coefs*rbfs).sum()
                 Us.append(U)
 
             all_Us.append(torch.stack(Us))
