@@ -4,6 +4,7 @@ import torch.nn.functional as F
 
 from dgllife.model.gnn import MPNNGNN
 
+from common.mol_transform import MolTransform
 from terrace.batch import Batch
 from models.cat_scal_embedding import CatScalEmbedding
 from datasets.data_types import PredData, EnergyPredData
@@ -65,8 +66,7 @@ class Diffusion(nn.Module):
                    batch,
                    batch_rec_feat,
                    batch_lig_feat,
-                   batch_rot,
-                   batch_trans):
+                   batch_transform):
         
         all_Us = []
 
@@ -77,8 +77,7 @@ class Diffusion(nn.Module):
         tot_lig = 0
         for i, (r, l) in enumerate(zip(rec_graph.batch_num_nodes(), lig_graph.batch_num_nodes())):
             
-            rot = batch_rot[i]
-            trans = batch_trans[i]
+            transform = batch_transform[i]
             
             lig_feat = batch_lig_feat[tot_lig:tot_lig+l]
             rec_feat = batch_rec_feat[tot_rec:tot_rec+r]
@@ -90,7 +89,7 @@ class Diffusion(nn.Module):
             tot_lig += l
 
             # move ligand
-            new_lig_coord = torch.einsum('nij,bj->nbi', rot, lig_coord)  + trans.unsqueeze(1)
+            new_lig_coord = transform.apply(lig_coord)
 
             atn_coefs = torch.einsum('lef,ref->lre', lig_feat, rec_feat)
 
@@ -99,13 +98,13 @@ class Diffusion(nn.Module):
             
             # non-cdist vectorized way
             Us = []
-            for i in range(trans.size(0)):
+            for i in range(transform.trans.size(0)):
                 lc_ex = new_lig_coord[i].unsqueeze(1).expand(-1,rec_coord.size(0),-1)
                 rc_ex = rec_coord.unsqueeze(0).expand(new_lig_coord[i].size(0),-1,-1)
                 dists = torch.sqrt(((lc_ex - rc_ex)**2).sum(-1))
                 rbfs = rbf_encode(dists, self.cfg.model.rbf_start,self.cfg.model.rbf_end,self.cfg.model.rbf_steps,)
 
-                U = (atn_coefs*rbfs).sum()
+                U = (atn_coefs*rbfs*self.cfg.model.energy_scale).sum()
                 Us.append(U)
 
             all_Us.append(torch.stack(Us))
@@ -116,69 +115,37 @@ class Diffusion(nn.Module):
                     batch,
                     batch_rec_feat,
                     batch_lig_feat,
-                    pre_rot,
-                    trans):
+                    transform):
 
         with torch.set_grad_enabled(True):
-            pre_rot.requires_grad_()
-            trans.requires_grad_()
-
-            rot, _ = torch.linalg.qr(pre_rot)
+            transform.requires_grad()
             U = self.get_energy(batch,
                                 batch_rec_feat,
                                 batch_lig_feat,
-                                rot,
-                                trans)
-            U_mean = U.sum()/(16*32)
+                                transform)
+            U_sum = U.sum()
 
-            pre_rot_grad, trans_grad = torch.autograd.grad(U_mean, [pre_rot, trans], create_graph=True)
-        return pre_rot_grad, trans_grad
+            return transform.grad(U_sum) 
 
     def get_diffused_transforms(self, batch_size, device, timesteps=None):
         diff_cfg = self.cfg.model.diffusion
         if timesteps is None:
             timesteps = diff_cfg.timesteps
 
-        rot_sigma = torch.linspace(0.0, diff_cfg.max_rot_sigma, timesteps, device=device)
-        trans_sigma = torch.linspace(0.0, diff_cfg.max_trans_sigma, timesteps, device=device)
-        
-        # a bunch of identity matrices
-        pre_rot = torch.eye(3, device=device).view((1,1,3,3)).repeat(batch_size,diff_cfg.timesteps,1,1)
-        # add noise
-        pre_rot += torch.randn((timesteps,3,3), device=device)*rot_sigma.view((-1,1,1))
-        
-        trans = torch.randn((batch_size,timesteps,3), device=device)*trans_sigma.view((-1,1))
-
-        return (pre_rot, trans), (rot_sigma, trans_sigma)
+        return MolTransform.make_diffused(timesteps, diff_cfg, batch_size, device)
 
     def pred_pose(self,
                   batch,
                   batch_rec_feat,
                   batch_lig_feat,
-                  pre_rot,
-                  trans,
-                  rot_sigma,
-                  trans_sigma):
+                  transform):
 
-        rot_grad, trans_grad = self.energy_grad(batch,
-                                                batch_rec_feat,
-                                                batch_lig_feat,
-                                                pre_rot,
-                                                trans)
-
-        rot_sigma_sq = (rot_sigma**2).view((1,-1,1,1))
-        trans_sigma_sq = (trans_sigma**2).view((1,-1,1))
-
-        # todo: change!
-        rot_grad_n = rot_grad
-        trans_grad_n = F.normalize(trans_grad, dim=-1) if self.cfg.model.norm_grad else trans_grad
-
-        final_rot, _ = torch.linalg.qr(pre_rot - self.cfg.model.grad_coef*rot_grad_n*rot_sigma_sq)
-        final_trans = trans - self.cfg.model.grad_coef*trans_grad_n*trans_sigma_sq
-
-        # print(trans[0][1], trans_grad[0][2], final_trans[0][2])
-
-        return (final_rot, final_trans), (rot_grad, trans_grad)
+        grad = self.energy_grad(batch,
+                                batch_rec_feat,
+                                batch_lig_feat,
+                                transform)
+        return transform.update_from_grad(grad)
+        
             
 
     def get_diffused_coords(self, batch):
@@ -186,27 +153,23 @@ class Diffusion(nn.Module):
         batch_rec_feat, batch_lig_feat = self.get_hidden_feat(batch)
         device = batch_rec_feat.device
 
-        (pre_rot, trans), _ = self.get_diffused_transforms(len(batch), device)
-        rot, _ = torch.linalg.qr(pre_rot)
+        transform = self.get_diffused_transforms(len(batch), device)
 
-        return self.apply_transformation(batch, rot, trans)
+        return self.apply_transformation(batch, transform)
 
     def diffuse(self, batch):
 
         batch_rec_feat, batch_lig_feat = self.get_hidden_feat(batch)
         device = batch_rec_feat.device
 
-        (pre_rot, trans), (rot_sigma, trans_sigma) = self.get_diffused_transforms(len(batch), device)
+        transform = self.get_diffused_transforms(len(batch), device)
 
         return self.pred_pose(batch, 
                               batch_rec_feat,
                               batch_lig_feat,
-                              pre_rot,
-                              trans,
-                              rot_sigma,
-                              trans_sigma)
+                              transform)
 
-    def apply_transformation(self, batch, batch_rot, batch_trans):
+    def apply_transformation(self, batch, batch_transform):
 
         rec_graph = batch.rec.dgl_batch
         lig_graph = batch.lig.dgl_batch
@@ -217,8 +180,7 @@ class Diffusion(nn.Module):
         tot_lig = 0
         for i, (r, l) in enumerate(zip(rec_graph.batch_num_nodes(), lig_graph.batch_num_nodes())):
 
-            rot = batch_rot[i]
-            trans = batch_trans[i]
+            transform = batch_transform[i]
 
             lig_coord =  batch.lig.ndata.coord[tot_lig:tot_lig+l]
 
@@ -226,7 +188,7 @@ class Diffusion(nn.Module):
             tot_lig += l
 
             # move ligand
-            new_lig_coord = torch.einsum('nij,bj->nbi', rot, lig_coord)  + trans.unsqueeze(1)
+            new_lig_coord = transform.apply(lig_coord)
             ret.append(new_lig_coord)
 
         return ret
@@ -237,21 +199,16 @@ class Diffusion(nn.Module):
         batch_rec_feat, batch_lig_feat = self.get_hidden_feat(batch)
         device = batch_rec_feat.device
 
-        (pre_rot, trans), (rot_sigma, trans_sigma) = self.get_diffused_transforms(len(batch), device)
-        pre_rot = pre_rot[:,-2:-1]
-        trans = trans[:,-2:-1]
+        transform = self.get_diffused_transforms(len(batch), device)[:,-2:-1]
 
         all_coords = []
         for t in range(self.cfg.model.diffusion.timesteps):
-            (pre_rot, trans), _ = self.pred_pose(batch, 
-                                                 batch_rec_feat,
-                                                 batch_lig_feat,
-                                                 pre_rot,
-                                                 trans,
-                                                 rot_sigma[-t-1].unsqueeze(0),
-                                                 trans_sigma[-t-1].unsqueeze(0))
+            transform = self.pred_pose(batch, 
+                                       batch_rec_feat,
+                                       batch_lig_feat,
+                                       transform)
             if ret_all_coords:
-                all_coords.append(self.apply_transformation(batch, pre_rot, trans))
+                all_coords.append(self.apply_transformation(batch, transform))
 
         if ret_all_coords:
             ret = [ [] for i in range(len(batch)) ]
@@ -260,7 +217,7 @@ class Diffusion(nn.Module):
                     ret[i].append(c[0])
             return ret
         
-        ret = self.apply_transformation(batch, pre_rot, trans)
+        ret = self.apply_transformation(batch, transform)
         return [ coords[0] for coords in ret ]
 
     def forward(self, batch):

@@ -37,12 +37,11 @@ data:
 task: "pose"
 
 losses:
-  pose_mse_lambda: 1.0
-  trans_norm_lambda: 0.0 # 1.0
-  rot_norm_lambda: 0.0 # 0.5
+  rot_mse_lambda: 0.8
+  trans_mse_lambda: 0.2
 
 optimizer: adamw
-learn_rate: 1e-5
+learn_rate: 1e-4
 max_epochs: 500
 
 batch_size: 16
@@ -71,12 +70,12 @@ model:
 
   diffusion:
     timesteps: 32
-    max_rot_sigma: 1
     max_trans_sigma: 5
+    max_rot_frac: 1.0
 
   rbf_start: 0
   rbf_end: 16
   rbf_steps: 16
 
-  grad_coef: 1.0
   norm_grad: false
+  energy_scale: 1e-3

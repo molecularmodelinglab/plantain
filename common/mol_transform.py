@@ -1,0 +1,50 @@
+from dataclasses import dataclass
+from typing import Optional
+import roma
+import torch
+
+from terrace.batch import Batchable
+
+# todo: this class encompasses both batch of moltransform and moltransform
+# make this into batchable somehow while preserving methods
+@dataclass
+class MolTransform:
+
+    # todo: torsional angles!
+    rot: torch.Tensor
+    trans: torch.Tensor
+    rot_frac: Optional[torch.Tensor] = None
+    trans_sigma: Optional[torch.Tensor] = None
+
+    @staticmethod
+    def make_diffused(timesteps, diff_cfg, batch_size, device):
+        trans_sigma = torch.linspace(0.0, diff_cfg.max_trans_sigma, timesteps, device=device)
+        trans = torch.randn((batch_size,timesteps,3), device=device)*trans_sigma.view((-1,1))
+        
+        rand_rot = torch.stack([torch.stack([roma.random_rotvec(device=device) for t in range(timesteps)]) for b in range(batch_size)])
+        rot_frac = torch.linspace(0.0, diff_cfg.max_rot_frac, timesteps, device=device)
+        rot = rand_rot*rot_frac.view(1,-1,1)
+        return MolTransform(rot, trans, rot_frac, trans_sigma)
+
+    def __getitem__(self, i):
+        return MolTransform(self.rot[i], self.trans[i], self.rot_frac, self.trans_sigma)
+
+    def apply(self, coord):
+        rot_mat = roma.rotvec_to_rotmat(self.rot)
+        return torch.einsum('nij,bj->nbi', rot_mat, coord)  + self.trans.unsqueeze(1)
+
+    def grad(self, U):
+        rot_grad, trans_grad = torch.autograd.grad(U, [self.rot, self.trans], create_graph=True)
+        return MolTransform(rot_grad, trans_grad)
+
+    def requires_grad(self):
+        self.rot.requires_grad_()
+        self.trans.requires_grad_()
+
+    def update_from_grad(self, grad):
+        # todo: should we square the rot frac? I don't know math
+        rot_frac_sq = (self.rot_frac**2).view((1,-1,1))
+        trans_sigma_sq = (self.trans_sigma**2).view((1,-1,1))
+        rot = self.rot - grad.rot*rot_frac_sq
+        trans = self.trans - grad.trans*trans_sigma_sq
+        return MolTransform(rot, trans, self.rot_frac, self.trans_sigma)
