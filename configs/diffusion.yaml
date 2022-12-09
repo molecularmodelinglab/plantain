@@ -79,4 +79,4 @@ model:
   rbf_steps: 16
 
   grad_coef: 1.0
-  norm_grad: true
+  norm_grad: false

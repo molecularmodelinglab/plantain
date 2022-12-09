@@ -132,7 +132,7 @@ class Diffusion(nn.Module):
 
             U_mean = U.mean()
 
-            print(U)
+            print(U[0])
 
             pre_rot_grad, trans_grad = torch.autograd.grad(U_mean, [pre_rot, trans], create_graph=True)
         return pre_rot_grad, trans_grad
