@@ -61,6 +61,7 @@ class BigBindStructDataset(BigBindDataset):
         # center everything around lig centroid
 
         lig_centroid = lig_graph.ndata.coord.mean(0)
+        print(lig_centroid, rec_graph.ndata.coord.mean(0))
         lig_graph.ndata.coord -= lig_centroid
         rec_graph.ndata.coord -= lig_centroid
 

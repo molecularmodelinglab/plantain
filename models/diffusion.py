@@ -8,6 +8,14 @@ from terrace.batch import Batch
 from models.cat_scal_embedding import CatScalEmbedding
 from datasets.data_types import PredData, EnergyPredData
 
+def rbf_encode(dists, start, end, steps):
+    mu = torch.linspace(start, end, steps)
+    sigma = (start - end)/steps
+    dists_expanded = dists.unsqueeze(-1).repeat(1,1,mu.size(0))
+    mu_expanded = mu.view(1,1,-1)
+    diff = ((dists_expanded - mu_expanded)/sigma)**2
+    return torch.exp(-diff)
+
 class Diffusion(nn.Module):
     def __init__(self, cfg, in_node):
         super().__init__()
@@ -28,19 +36,15 @@ class Diffusion(nn.Module):
         self.lig_edge_embed = CatScalEmbedding(cfg.model.lig_encoder.edge_embed_size,
                                                in_node.out_type_data.lig.edata)
 
-        dist_exponents = list(range(self.cfg.model.min_dist_exp, self.cfg.model.max_dist_exp+1))
-        dist_exponents.remove(0)
-        self.dist_exponents = torch.tensor(dist_exponents, dtype=float)
-
         self.lig_gnn = MPNNGNN(self.lig_node_embed.total_dim,
                                self.lig_edge_embed.total_dim,
-                               self.cfg.model.out_size*self.dist_exponents.size(0),
+                               self.cfg.model.out_size*self.cfg.model.rbf_steps,
                                lig_cfg.edge_hidden_size,
                                lig_cfg.num_mpnn_layers)
 
         self.rec_gnn = MPNNGNN(self.rec_node_embed.total_dim,
                                self.rec_edge_embed.total_dim,
-                               self.cfg.model.out_size*self.dist_exponents.size(0),
+                               self.cfg.model.out_size*self.cfg.model.rbf_steps,
                                rec_cfg.edge_hidden_size,
                                rec_cfg.num_mpnn_layers)
 
@@ -52,8 +56,8 @@ class Diffusion(nn.Module):
         rec_edge_feat = self.rec_edge_embed(batch.rec.edata)
         lig_edge_feat = self.lig_edge_embed(batch.lig.edata)
 
-        batch_rec_feat = self.rec_gnn(rec_graph, rec_hid, rec_edge_feat).view(-1, self.dist_exponents.size(0), self.cfg.model.out_size)
-        batch_lig_feat = self.lig_gnn(lig_graph, lig_hid, lig_edge_feat).view(-1, self.dist_exponents.size(0), self.cfg.model.out_size)
+        batch_rec_feat = self.rec_gnn(rec_graph, rec_hid, rec_edge_feat).view(-1, self.cfg.model.rbf_steps, self.cfg.model.out_size)
+        batch_lig_feat = self.lig_gnn(lig_graph, lig_hid, lig_edge_feat).view(-1, self.cfg.model.rbf_steps, self.cfg.model.out_size)
 
         return batch_rec_feat, batch_lig_feat
         
@@ -99,11 +103,9 @@ class Diffusion(nn.Module):
                 lc_ex = new_lig_coord[i].unsqueeze(1).expand(-1,rec_coord.size(0),-1)
                 rc_ex = rec_coord.unsqueeze(0).expand(new_lig_coord[i].size(0),-1,-1)
                 dists = torch.sqrt(((lc_ex - rc_ex)**2).sum(-1))
-                dist_rep = dists.unsqueeze(-1).repeat(1,1,self.dist_exponents.size(0))
-                exp = self.dist_exponents.view(1,1,-1).to(rec_coord.device)
-                dist_exp = dist_rep**exp
+                rbfs = rbf_encode(dists, self.cfg.model.rbf_start,self.cfg.model.rbf_end,self.cfg.model.rbf_steps,)
 
-                U = (atn_coefs*dist_exp).mean()
+                U = (atn_coefs*rbfs).mean()
                 Us.append(U)
 
             all_Us.append(torch.stack(Us))
