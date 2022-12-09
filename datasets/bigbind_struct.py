@@ -27,8 +27,8 @@ class BigBindStructDataset(BigBindDataset):
     def get_rec_file(self, index):
         """ same as above """
         if self.cfg.data.use_rec:
-            poc_file = self.activities.ex_rec_pocket_file[index]
-            rec_file = self.activities.ex_rec_file[index]
+            poc_file = self.structures.ex_rec_pocket_file[index]
+            rec_file = self.structures.ex_rec_file[index]
         else:
             poc_file = "ELNE_HUMAN_30_247_0/3q77_A_rec_pocket.pdb"
             rec_file = "ELNE_HUMAN_30_247_0/3q77_A_rec.pdb"
@@ -48,6 +48,8 @@ class BigBindStructDataset(BigBindDataset):
         
         lig_file = self.get_lig_file(index)
         rec_file = self.get_rec_file(index)
+
+        print(lig_file, rec_file)
         
         try:
             lig_graph = mol_graph_from_sdf(self.cfg, lig_file)
