@@ -129,10 +129,7 @@ class Diffusion(nn.Module):
                                 batch_lig_feat,
                                 rot,
                                 trans)
-
-            U_mean = U.mean()
-
-            print(U[0])
+            U_mean = U.sum()/(16*32)
 
             pre_rot_grad, trans_grad = torch.autograd.grad(U_mean, [pre_rot, trans], create_graph=True)
         return pre_rot_grad, trans_grad
@@ -178,6 +175,8 @@ class Diffusion(nn.Module):
 
         final_rot, _ = torch.linalg.qr(pre_rot - self.cfg.model.grad_coef*rot_grad_n*rot_sigma_sq)
         final_trans = trans - self.cfg.model.grad_coef*trans_grad_n*trans_sigma_sq
+
+        # print(trans[0][1], trans_grad[0][2], final_trans[0][2])
 
         return (final_rot, final_trans), (rot_grad, trans_grad)
             
@@ -249,8 +248,8 @@ class Diffusion(nn.Module):
                                                  batch_lig_feat,
                                                  pre_rot,
                                                  trans,
-                                                 rot_sigma[t:t+1],
-                                                 trans_sigma[t:t+1])
+                                                 rot_sigma[-t-1].unsqueeze(0),
+                                                 trans_sigma[-t-1].unsqueeze(0))
             if ret_all_coords:
                 all_coords.append(self.apply_transformation(batch, pre_rot, trans))
 
