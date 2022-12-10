@@ -51,7 +51,7 @@ sampler:
   max_rec_edges: 10000
   max_lig_edges: 1000
 
-test_inference: false
+test_inference: true
 
 model:
 

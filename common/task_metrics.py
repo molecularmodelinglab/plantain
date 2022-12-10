@@ -13,7 +13,11 @@ def get_pose_acc(rmsds, cutoff):
     return sum(rmsds < cutoff)/len(rmsds)
 
 def get_pose_metrics(prefix, batch_idx, model, batch):
-    if not model.cfg.test_inference: return {}
+    if not model.cfg.test_inference: return {
+        "rmsd": 0,
+        "acc_2": 0,
+        "acc_5": 0
+    }
 
     # inference is expensive so don't do it all the time
     if prefix == "train" and batch_idx % 10 != 0:
