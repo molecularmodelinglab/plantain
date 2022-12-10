@@ -33,6 +33,21 @@ class MolTransform:
         rot_mat = roma.rotvec_to_rotmat(self.rot)
         return torch.einsum('nij,bj->nbi', rot_mat, coord)  + self.trans.unsqueeze(1)
 
+    def apply_to_graph_batch(self, batch):
+        ret = []
+        tot_lig = 0
+        for i, l in enumerate(batch.dgl_batch.batch_num_nodes()):
+
+            transform = self[i]
+            coord = batch.ndata.coord[tot_lig:tot_lig+l]
+
+            tot_lig += l
+
+            # move ligand
+            new_coord = transform.apply(coord)
+            ret.append(new_coord)
+        return ret
+
     def grad(self, U):
         rot_grad, trans_grad = torch.autograd.grad(U, [self.rot, self.trans], create_graph=True)
         return MolTransform(rot_grad, trans_grad)

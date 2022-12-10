@@ -14,12 +14,19 @@ def act_mse_loss(batch, y_pred):
 def energy_mse_loss(batch, y_pred):
     return F.mse_loss(batch.energy, y_pred.energy)
 
-def coord_mse_loss(batch, y_pred):
+def coord_mse_loss(batch, transform):
+    # ret = []
+    # for lig, cp in zip(batch.lig, y_pred.lig_coord):
+    #     ct = lig.ndata.coord
+    #     ret.append(F.mse_loss(ct, cp))
+    # return torch.stack(ret).mean()
+    pred_coords = transform.apply_to_graph_batch(batch.lig)
     ret = []
-    for lig, cp in zip(batch.lig, y_pred.lig_coord):
-        ct = lig.ndata.coord
-        ret.append(F.mse_loss(ct, cp))
+    for lig, pred in zip(batch.lig, pred_coords):
+        coord_rep = lig.ndata.coord.repeat(pred.size(0), 1, 1)
+        ret.append(F.mse_loss(coord_rep, pred))
     return torch.stack(ret).mean()
+
 
 # def pose_mse_loss(batch, y_pred):
 #     (rot, trans), _ = y_pred

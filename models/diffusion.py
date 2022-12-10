@@ -170,28 +170,7 @@ class Diffusion(nn.Module):
                               transform)
 
     def apply_transformation(self, batch, batch_transform):
-
-        rec_graph = batch.rec.dgl_batch
-        lig_graph = batch.lig.dgl_batch
-
-        ret = []
-
-        tot_rec = 0
-        tot_lig = 0
-        for i, (r, l) in enumerate(zip(rec_graph.batch_num_nodes(), lig_graph.batch_num_nodes())):
-
-            transform = batch_transform[i]
-
-            lig_coord =  batch.lig.ndata.coord[tot_lig:tot_lig+l]
-
-            tot_rec += r
-            tot_lig += l
-
-            # move ligand
-            new_lig_coord = transform.apply(lig_coord)
-            ret.append(new_lig_coord)
-
-        return ret
+        return batch_transform.apply_to_graph_batch(batch.lig)
 
     def infer(self, batch, ret_all_coords=False):
         """ Final inference -- predict lig_coords directly after randomizing """
