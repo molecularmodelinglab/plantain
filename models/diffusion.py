@@ -124,6 +124,7 @@ class Diffusion(nn.Module):
                                 batch_lig_feat,
                                 transform)
             U_sum = U.sum()
+            # print(U_sum)
 
             return transform.grad(U_sum) 
 

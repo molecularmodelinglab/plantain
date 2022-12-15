@@ -60,6 +60,6 @@ class MolTransform:
         # todo: should we square the rot frac? I don't know math
         # rot_frac_sq = (self.rot_frac**2).view((1,-1,1))
         trans_sigma_sq = (self.trans_sigma**2).view((1,-1,1))
-        rot = self.rot - grad.rot*trans_sigma_sq
+        rot = self.rot - grad.rot#*trans_sigma_sq
         trans = self.trans - grad.trans*trans_sigma_sq
         return MolTransform(rot, trans, self.rot_frac, self.trans_sigma)
