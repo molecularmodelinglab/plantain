@@ -2,7 +2,7 @@ import torch
 import torch.nn.functional as F
 
 def get_rmsds(batch, pred_coords):
-    # not symmetric corrected - change!
+    # not symmetry corrected - change!
     rmsds = []
     for b, pred in zip(batch, pred_coords):  
         true_coord = b.lig.ndata.coord 
