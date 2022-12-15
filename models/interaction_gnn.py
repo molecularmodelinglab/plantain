@@ -19,9 +19,11 @@ class InteractionGNN(nn.Module):
 
         self.gnn = MPNNGNN(self.node_embed.total_dim,
                            self.edge_embed.total_dim,
-                           cfg.model.out_size,
+                           cfg.model.node_hidden_size,
                            cfg.model.edge_hidden_size,
                            cfg.model.num_mpnn_layers)
+
+        self.node_out = nn.Linear(cfg.model.node_hidden_size, cfg.model.out_size)
 
         self.readout = WeightedSumAndMax(cfg.model.out_size)
 
@@ -63,7 +65,8 @@ class InteractionGNN(nn.Module):
             edge_feat = self.edge_embed(graph.edata)
 
             gnn_out = self.gnn(graph.dgl_batch, node_feat, edge_feat)
-            x = self.readout(graph.dgl_batch, gnn_out)
+            node_out = self.node_out(gnn_out)
+            x = self.readout(graph.dgl_batch, node_out)
             xs.append(x)
 
         x = torch.stack(xs, 1) #(B, C, F)
