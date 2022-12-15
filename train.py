@@ -23,7 +23,10 @@ def train(cfg):
     if cfg.project is not None:
 
         # hacky -- remove
-        project = cfg.project + "_pose"
+        if cfg.task == "pose":
+            project = cfg.project + "_pose"
+        else:
+            project = cfg.project
 
         if cfg.resume_id:
             run = wandb.init(project=project, id=cfg.resume_id, resume=True)
