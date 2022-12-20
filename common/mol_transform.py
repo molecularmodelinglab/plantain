@@ -18,16 +18,17 @@ class MolTransform:
 
     @staticmethod
     def make_diffused(timesteps, diff_cfg, batch_size, device):
-        trans_sigma = torch.linspace(0.0, diff_cfg.max_trans_sigma, timesteps, device=device)
-        trans = torch.randn((batch_size,timesteps,3), device=device)*trans_sigma.view((-1,1))
+        trans_sigma = torch.linspace(0.0, diff_cfg.max_trans_sigma, timesteps, device=device).view((1,-1,1))
+        trans = torch.randn((batch_size,timesteps,3), device=device)*trans_sigma
         
         rand_rot = torch.stack([torch.stack([roma.random_rotvec(device=device) for t in range(timesteps)]) for b in range(batch_size)])
-        rot_frac = torch.linspace(0.0, diff_cfg.max_rot_frac, timesteps, device=device)
-        rot = rand_rot*rot_frac.view(1,-1,1)
+        rot_frac = torch.linspace(0.0, diff_cfg.max_rot_frac, timesteps, device=device).view(1,-1,1)
+        rot = rand_rot*rot_frac
         return MolTransform(rot, trans, rot_frac, trans_sigma)
 
     def __getitem__(self, i):
-        return MolTransform(self.rot[i], self.trans[i], self.rot_frac, self.trans_sigma)
+        print(self.rot_frac)
+        return MolTransform(self.rot[i], self.trans[i], self.rot_frac[i], self.trans_sigma[i])
 
     def apply(self, coord):
         rot_mat = roma.rotvec_to_rotmat(self.rot)
@@ -59,7 +60,8 @@ class MolTransform:
     def update_from_grad(self, grad):
         # todo: should we square the rot frac? I don't know math
         # rot_frac_sq = (self.rot_frac**2).view((1,-1,1))
-        trans_sigma_sq = (self.trans_sigma**2).view((1,-1,1))
-        rot = self.rot - grad.rot#*trans_sigma_sq
+        trans_sigma_sq = (self.trans_sigma**2)
+        # print(trans_sigma_sq)
+        rot = self.rot - grad.rot*0.1#(self.rot_frac)#*trans_sigma_sq
         trans = self.trans - grad.trans*trans_sigma_sq
         return MolTransform(rot, trans, self.rot_frac, self.trans_sigma)

@@ -74,14 +74,18 @@ def merge_graphs(inter_cfg, g1: MolGraph, g2: ProtGraph) -> Tuple[List[Interacti
         edges.append((num_g1_nodes + idx1, num_g1_nodes + idx2))
 
     extra_edges = []
-    extra_edata = []
-    for (i,j) in make_knn_edgelist(nodes, inter_cfg.dist_cutoff, inter_cfg.max_neighbors):
+    extra_dists = []
+    all_edges, all_dists = make_knn_edgelist(nodes, inter_cfg.dist_cutoff, inter_cfg.max_neighbors)
+    for (i,j), dist in zip(all_edges, all_dists):
         # only make edges between the og graphs
         if (i < num_g1_nodes) != (j < num_g1_nodes):
             extra_edges.append((i,j))
-            node1 = nodes[i]
-            node2 = nodes[j]
-            extra_edata.append(DistEdge(inter_cfg, node1, node2))
+            extra_dists.append(dist)
+            # extra_edges.append((i,j))
+            # node1 = nodes[i]
+            # node2 = nodes[j]
+            # extra_edata.append(DistEdge(inter_cfg, node1, node2))
+    extra_edata = DistEdge.make_from_dists(extra_dists)
 
     if len(extra_edata) > 0:
         extra_edata = make_batch(extra_edata)
@@ -103,4 +107,4 @@ class InteractionGraph(Graph3d):
 
     def __init__(self, cfg: DictConfig, lig_graph: MolGraph, rec_graph: ProtGraph):
         nodes, edges, edata = merge_graphs(cfg.data.interaction_graph, lig_graph, rec_graph)
-        super().__init__(nodes, edges, edata)
+        super().__init__(nodes, edges, edata, directed=True)

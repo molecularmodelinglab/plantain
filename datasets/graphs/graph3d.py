@@ -28,5 +28,6 @@ class Edge3d(Batchable):
 class Graph3d(Graph[Node3d, Edge3d]):
     def __init__(self, nodes: List[Node3d],
                  edges: List[Tuple[int, int]],
-                 edata: List[Edge3d]):
-        super(Graph3d, self).__init__(nodes, edges, edata)
+                 edata: List[Edge3d],
+                 directed: bool = False):
+        super(Graph3d, self).__init__(nodes, edges, edata, directed)

@@ -8,6 +8,7 @@ from Bio.PDB.PDBExceptions import PDBConstructionWarning
 from Bio.PDB import PDBParser
 
 from terrace.type_data import ClassTD, TensorTD, ShapeVar
+from terrace.batch import Batch
 from terrace.graph import GraphTD
 from datasets.graphs.graph3d import Graph3d, Node3d, Edge3d
 from datasets.graphs.knn import make_knn_edgelist
@@ -120,24 +121,56 @@ class ProtResidueNode(Node3d):
 
 def get_nodes_and_edges_from_model(cfg: DictConfig, prot: Model):
     prot_cfg = cfg.data.rec_graph
-    nodes = []
+    # nodes = []
+    # for chain in prot:
+    #     for residue in chain:
+    #         if residue.get_resname() not in possible_residue_feats["residue_type"]: continue
+    #         if prot_cfg.node_type == "residue":
+    #             nodes.append(ProtResidueNode(prot_cfg, residue, prot))
+    #         elif prot_cfg.node_type == "atom":
+    #             for atom in residue:
+    #                 nodes.append(ProtAtomNode(prot_cfg, atom, prot))
+
+    residues = []
     for chain in prot:
         for residue in chain:
             if residue.get_resname() not in possible_residue_feats["residue_type"]: continue
-            if prot_cfg.node_type == "residue":
-                nodes.append(ProtResidueNode(prot_cfg, residue, prot))
-            elif prot_cfg.node_type == "atom":
-                for atom in residue:
-                    nodes.append(ProtAtomNode(prot_cfg, atom, prot))
+            residues.append(residue)
+
     
+    cat_feat = torch.zeros((len(residues), len(prot_cfg.residue_feats)), dtype=torch.long)
+    coord = torch.zeros((len(residues), 3), dtype=torch.float32)
+
+    assert prot_cfg.node_type == "residue"
+    for i, feat_name in enumerate(prot_cfg.residue_feats):
+        get_feat = globals()["get_" + feat_name]
+        possible = possible_residue_feats[feat_name]
+        for j, residue in enumerate(residues):
+            cat_feat[j, i] = safe_index(possible, get_feat(residue, prot))
+
+    for j, residue in enumerate(residues):
+        for atom in residue:
+            if atom.name == "CA":
+                coord[j] = torch.tensor(list(atom.get_vector()), dtype=torch.float32)
+                break
+        else:
+            raise AssertionError("Failed to find alpha carbon in residue")
+    
+    nodes = Batch(ProtResidueNode,
+                coord = coord,
+                cat_feat = cat_feat,
+                scal_feat = torch.zeros((len(residues), 0)))
+
     if prot_cfg.edge_method.type == "knn":
-        edges = make_knn_edgelist(nodes, 
-                                    prot_cfg.edge_method.knn_rad,
-                                    prot_cfg.edge_method.max_neighbors)
+        edges, dists = make_knn_edgelist(nodes, 
+                                         prot_cfg.edge_method.knn_rad,
+                                         prot_cfg.edge_method.max_neighbors)
     else:
         raise AssertionError()
 
-    return nodes, edges
+    edata = DistEdge.make_from_dists(dists)
+
+    return nodes, edges, edata
 
 class ProtGraph(Graph3d):
 
@@ -154,15 +187,15 @@ class ProtGraph(Graph3d):
     def __init__(self, cfg: DictConfig, prot: Model):
         prot_cfg = cfg.data.rec_graph
 
-        nodes, edges = get_nodes_and_edges_from_model(cfg, prot)
+        nodes, edges, edata = get_nodes_and_edges_from_model(cfg, prot)
 
-        edata = []
-        for (i, j) in edges:
-            node1 = nodes[i]
-            node2 = nodes[j]
-            edata.append(DistEdge(prot_cfg, node1, node2))
+        # edata = []
+        # for (i, j) in edges:
+        #     node1 = nodes[i]
+        #     node2 = nodes[j]
+        #     edata.append(DistEdge(prot_cfg, node1, node2))
 
-        super(ProtGraph, self).__init__(nodes, edges, edata)
+        super(ProtGraph, self).__init__(nodes, edges, edata, directed=True)
 
 def prot_graph_from_pdb(cfg, pdb_file):
     parser = PDBParser()
@@ -178,5 +211,5 @@ def get_node_and_edge_nums_from_pdb(cfg, pdb_file):
         warnings.filterwarnings("ignore", category=PDBConstructionWarning)
         structure = parser.get_structure('random_id', pdb_file)
         rec = structure[0]
-    nodes, edges = get_nodes_and_edges_from_model(cfg, rec)
+    nodes, edges, edata = get_nodes_and_edges_from_model(cfg, rec)
     return len(nodes), len(edges)

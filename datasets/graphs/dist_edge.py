@@ -1,6 +1,7 @@
 from omegaconf import DictConfig
 import torch
 
+from terrace.batch import Batch
 from terrace.type_data import ClassTD, TensorTD
 from datasets.graphs.graph3d import Graph3d, Node3d, Edge3d
 
@@ -12,6 +13,15 @@ class DistEdge(Edge3d):
         cat_td = TensorTD((len(max_cat_vals), ), dtype=torch.long, max_values=max_cat_vals)
         scal_td = TensorTD((1,), dtype=torch.float32)
         return ClassTD(DistEdge, cat_feat=cat_td, scal_feat=scal_td)
+
+    @staticmethod
+    def make_from_dists(dists):
+        scal_feat = torch.tensor(dists, dtype=torch.float32).unsqueeze(-1)
+        cat_feat = torch.zeros((len(scal_feat), 0), dtype=torch.long)
+        edata = Batch(DistEdge,
+                      cat_feat=cat_feat,
+                      scal_feat=scal_feat)
+        return edata
 
     def __init__(self, prot_cfg: DictConfig, node1: Node3d, node2: Node3d):
         cat_feat = []
