@@ -41,7 +41,7 @@ def train(cfg):
         if "SLURM_JOB_ID" in os.environ:
             logger.log_hyperparams({ "slurm_job_id": os.environ["SLURM_JOB_ID"] })
 
-        primary_task = get_all_tasks(cfg)
+        primary_task = get_all_tasks(cfg)[0]
 
         val_metric = {
             "classification": "val_auroc",
