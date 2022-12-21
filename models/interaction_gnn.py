@@ -49,7 +49,8 @@ class InteractionGNN(nn.Module):
             edge_feat = self.edge_embed(graph.edata)
 
             gnn_out = self.gnn(graph.dgl_batch, node_feat, edge_feat)
-            x = self.readout(graph.dgl_batch, gnn_out)
+            node_out = self.node_out(gnn_out)
+            x = self.readout(graph.dgl_batch, node_out)
             xs.append(x)
 
         x = torch.stack(xs, 1) #(B, C, F)

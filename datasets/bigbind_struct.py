@@ -52,6 +52,8 @@ class BigBindStructDataset(BigBindDataset):
         try:
             lig_graph = mol_graph_from_sdf(self.cfg, lig_file)
             rec_graph = prot_graph_from_pdb(self.cfg, rec_file)
+        except KeyboardInterrupt:
+            raise
         except:
             print(f"Error proccessing item at {index=}")
             print(f"{lig_file=}")

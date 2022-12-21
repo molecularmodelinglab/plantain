@@ -3,7 +3,8 @@ import torch
 import torch.nn as nn
 
 from terrace.comp_node import Input
-from common.task_metrics import get_task_metrics
+from common.cfg_utils import get_all_tasks
+from common.task_metrics import get_epoch_task_metrics, get_task_metrics
 from models.make_model import make_model
 from datasets.make_dataset import make_dataloader
 from common.losses import get_losses
@@ -64,7 +65,9 @@ class AIRoutine(pl.LightningModule):
             if isinstance(val.compute(), torch.Tensor):
                 self.log(f"{prefix}_{key}", val, prog_bar=False, on_step=on_step, on_epoch=on_epoch, batch_size=len(batch))
         
-        task_mets = get_task_metrics(self.cfg.task, prefix, batch_idx, self.model, batch)
+        task_mets = {}
+        for task in get_all_tasks(self.cfg):
+            task_mets.update(get_task_metrics(task, prefix, batch_idx, self.model, batch))
         for key, val in task_mets.items():
             self.log(f"{prefix}_{key}", val, prog_bar=True, on_step=on_step, on_epoch=on_epoch, batch_size=len(batch))
         
@@ -82,14 +85,22 @@ class AIRoutine(pl.LightningModule):
     def configure_optimizers(self):
         return torch.optim.AdamW(self.parameters(), lr=self.learn_rate)
 
-    def validation_epoch_end(self, outputs):
-        pass
-        # re-add later
-        # plot_metrics(self.metrics["val_metric"], "val", True)
+    def on_validation_epoch_end(self) -> None:
+        num_iter = 10 if self.trainer.state.stage == "sanity_check" else None
+        metrics = self.get_all_epoch_task_metrics("val", num_iter)
+        for key, val in metrics.items():
+            self.log(f"val_{key}", val)
+
+    def get_all_epoch_task_metrics(self, split, num_iter):
+        ret = {}
+        for task in get_all_tasks(self.cfg):
+            ret.update(get_epoch_task_metrics(self.cfg, task, self.model, split, num_iter))
+        return ret
 
     def fit(self, logger, callbacks):
         gpus = int(torch.cuda.is_available()) # self.cfg.gpus
-        trainer = pl.Trainer(gpus=gpus,
+
+        self.trainer = pl.Trainer(gpus=gpus,
                              max_epochs=self.cfg.max_epochs,
                              val_check_interval=self.cfg.val_check_interval,
                              logger=logger,
@@ -97,5 +108,6 @@ class AIRoutine(pl.LightningModule):
                              # replace_sampler_ddp=False,
                              # strategy='ddp',
                              resume_from_checkpoint=self.checkpoint_file)
-        trainer.fit(self, self.train_dataloader, self.val_dataloader)
-        trainer.validate(self, self.val_dataloader)
+
+        self.trainer.fit(self, self.train_dataloader, self.val_dataloader)
+        self.trainer.validate(self, self.val_dataloader)

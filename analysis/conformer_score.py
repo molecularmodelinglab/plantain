@@ -15,7 +15,6 @@ from common.cfg_utils import *
 from common.old_routine import *
 from datasets.make_dataset import *
 from models.gnn_bind import *
-from models.learnable_ff import LearnableFF
 from routines.ai_routine import *
 from terrace.batch import *
 from terrace.type_data import *

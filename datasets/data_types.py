@@ -34,7 +34,7 @@ class ActivityData(StructData):
         is_act_td = TensorTD((1,), dtype=bool)
         return ClassTD(ActivityData, lig=lig_td, rec=rec_td, activity=act_td, is_active=is_act_td)
 
-class InteractionActivityData(StructData):
+class InteractionActivityData(Batchable):
 
     graphs: Tuple[InteractionGraph, ...]
     is_active: torch.Tensor
@@ -45,6 +45,20 @@ class InteractionActivityData(StructData):
         graphs = (inter_td,)*cfg.data.num_conformers
         is_act_td = TensorTD((1,), dtype=bool)
         return ClassTD(InteractionActivityData, graphs=graphs, is_active=is_act_td)
+
+class InteractionStructData(Batchable):
+
+    graphs: Tuple[InteractionGraph, ...]
+    lig: MolGraph
+    rmsds: torch.Tensor
+
+    @staticmethod
+    def get_type_data(cfg: DictConfig):
+        inter_td = InteractionGraph.get_type_data(cfg)
+        graphs = (inter_td,)*cfg.data.num_conformers
+        lig_td = MolGraph.get_type_data(cfg)
+        rmsd_td = TensorTD(cfg.data.num_conformers,)
+        return ClassTD(InteractionActivityData, graphs=graphs, lig=lig_td, rmsds=rmsd_td)
 
 class IsActiveData(StructData):
     lig: MolGraph

@@ -2,6 +2,8 @@ import torch
 from torch import nn
 from torchmetrics import Metric, Accuracy, AUROC, ROC, Precision, R2Score, MeanSquaredError
 
+from common.cfg_utils import get_all_tasks
+
 class MetricWrapper(Metric):
 
     def __init__(self, metric, get_y_p, get_y_t):
@@ -28,7 +30,7 @@ def get_activity(b):
 def identity(b):
     return b
 
-def get_metrics(cfg):
+def get_single_task_metric(task):
     return {
         "classification": nn.ModuleDict({
             "acc": MetricWrapper(Accuracy(), torch.sigmoid, get_is_active),
@@ -41,5 +43,12 @@ def get_metrics(cfg):
             "r2": MetricWrapper(R2Score(), identity, get_activity),
             "mse": MetricWrapper(MeanSquaredError(), identity, get_activity)
         }),
-        "pose": nn.ModuleDict({})
-    }[cfg.task]
+        "pose": nn.ModuleDict({}),
+        "pose_rank": nn.ModuleDict({}),
+    }[task]
+
+def get_metrics(cfg):
+    ret = nn.ModuleDict({})
+    for task in get_all_tasks(cfg):
+        ret.update(get_single_task_metric(task))
+    return ret

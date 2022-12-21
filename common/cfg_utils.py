@@ -28,3 +28,11 @@ def get_config(cfg_name, folder="./configs"):
     platform_conf = OmegaConf.load(folder + "/local.yaml")
     cli_conf = OmegaConf.from_cli()
     return OmegaConf.merge(base_conf, platform_conf, cli_conf)
+
+def get_all_tasks(cfg):
+    """ Returns all the config tasks (if there is only one, creates
+    a new list containing only the current task) """
+    if isinstance(cfg.task, str):
+        return [ cfg.task ]
+    else:
+        return cfg.task

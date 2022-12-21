@@ -39,7 +39,7 @@ data:
     max_neighbors: null
     edge_feats: [ "dist"]
 
-task: "classification"
+task: ["classification", "pose_rank"]
 
 losses:
   act_ce_lambda: 1.0

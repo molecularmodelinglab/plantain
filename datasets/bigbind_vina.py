@@ -30,10 +30,6 @@ class BigBindVinaDataset(CacheableDataset):
         self.cfg = cfg
         self.split = split
         self.tars = {}
-        # self.tar_files = {}
-        # if self.cfg.data.use_tar:
-        #     for item in tqdm(self.tar):
-        #         self.tar_files[item.name] = self.tar.extractfile(item.name)
 
     def __len__(self):
         return len(self.activities)
@@ -105,6 +101,8 @@ class BigBindVinaDataset(CacheableDataset):
             else:
                 lig = get_mol_from_file(lig_file)
                 rec = get_prot_from_file(rec_file)
+
+            lig = Chem.RemoveHs(lig)
 
             rec_graph = ProtGraph(self.cfg, rec)
 

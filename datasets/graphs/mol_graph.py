@@ -1,5 +1,6 @@
 from typing import Optional
 from omegaconf import DictConfig
+from rdkit.Geometry import Point3D
 from rdkit import Chem
 import torch
 
@@ -44,7 +45,7 @@ def get_formal_charge(atom, mol):
     return atom.GetFormalCharge()
     
 def get_hybridization(atom, mol):
-    return str(atom.GetHybridization())
+    return atom.GetHybridization()
 
 def get_is_aromatic(atom, mol):
     return atom.GetIsAromatic()
@@ -55,7 +56,7 @@ def get_numH(atom, mol):
 possible_atom_feats = {
     "element": [ None, "H", "C", "N", "O", "F", "S", "P", "Cl", "Br", "I", "misc" ],
     "formal_charge": [ None, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 'misc'],
-    "hybridization": [ None, 'SP', 'SP2', 'SP3', 'SP3D', 'SP3D2', 'misc'],
+    "hybridization": [ None, Chem.HybridizationType.SP, Chem.HybridizationType.SP2, Chem.HybridizationType.SP3, Chem.HybridizationType.SP3D, Chem.HybridizationType.SP3D2, 'misc'],
     "is_aromatic": [ None, True, False, 'misc' ],
     "numH": [ None, 0, 1, 2, 3, 4, 5, 6, 7, 8, 'misc']
 }
@@ -157,7 +158,46 @@ class MolGraph(Graph3d):
             edges.append((idx1, idx2))
             edata.append(BondEdge(bond_feats, bond, mol))
 
-        super(MolGraph, self).__init__(nodes, edges, edata)
+        super().__init__(nodes, edges, edata)
+
+    def to_rdkit(self):
+        """ Turns this bad boi into a nice rdkit mol"""
+        mol = Chem.RWMol()
+
+        for atom_feat in self.ndata.cat_feat:
+            elem_idx = int(atom_feat[0])
+            charge_idx = int(atom_feat[1])
+            hybrid_idx = int(atom_feat[2])
+            h_idx = int(atom_feat[4])
+            elem = possible_atom_feats["element"][elem_idx]
+            charge = possible_atom_feats["formal_charge"][charge_idx]
+            hybrid = possible_atom_feats["hybridization"][hybrid_idx]
+            numH = possible_atom_feats["numH"][h_idx]
+            atom = Chem.Atom(elem)
+            atom.SetFormalCharge(charge)
+            atom.SetHybridization(hybrid)
+            atom.SetNumExplicitHs(numH)
+            mol.AddAtom(atom)
+
+        seen = set()
+        for (i, j), bond_idx in zip(self.edges, self.edata.cat_feat[:,0]):
+            if (j, i) in seen: continue
+            seen.add((i, j))
+            order = possible_bond_feats["bond_order"][int(bond_idx)]
+            mol.AddBond(i, j, order)
+
+        conformer = Chem.Conformer(mol.GetNumAtoms())
+        for i, coord in enumerate(self.ndata.coord):
+            conformer.SetAtomPosition(i, Point3D(float(coord[0]),
+                                                 float(coord[1]),
+                                                 float(coord[2])))
+
+        mol.AddConformer(conformer)
+        Chem.SanitizeMol(mol)
+        # Chem.AssignAtomChiralTagsFromStructure(mol)
+        Chem.AssignStereochemistryFrom3D(mol)
+
+        return mol
 
 def mol_graph_from_sdf(cfg, sdf_file):
     return MolGraph(cfg, next(Chem.SDMolSupplier(sdf_file, sanitize=True)))
