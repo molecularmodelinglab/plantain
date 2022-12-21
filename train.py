@@ -15,7 +15,7 @@ from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.callbacks import ModelCheckpoint
 
 from routines.ai_routine import AIRoutine
-from common.cfg_utils import get_config, get_run_config
+from common.cfg_utils import get_all_tasks, get_config, get_run_config
 
 def train(cfg):
 
@@ -41,11 +41,13 @@ def train(cfg):
         if "SLURM_JOB_ID" in os.environ:
             logger.log_hyperparams({ "slurm_job_id": os.environ["SLURM_JOB_ID"] })
 
+        primary_task = get_all_tasks(cfg)
+
         val_metric = {
             "classification": "val_auroc",
             "regression": "val_r2",
             "pose": "val_acc_2",
-        }[cfg.task]
+        }[primary_task]
         checkpoint_callback = ModelCheckpoint(monitor=val_metric, mode="max", save_last=True, every_n_epochs=1)
         callbacks.append(checkpoint_callback)
         routine = AIRoutine(cfg)

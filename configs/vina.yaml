@@ -7,7 +7,7 @@ val_check_interval: 1.0
 dataset: bigbind_vina
 data:
   cache: false
-  use_tar: true
+  use_tar: false
   
   use_rec: true
   use_lig: true
