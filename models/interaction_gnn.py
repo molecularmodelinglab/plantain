@@ -29,7 +29,17 @@ class InteractionGNN(nn.Module):
 
         combined_hid_sz = 2*cfg.model.out_size
 
-        self.weight_nn = nn.Linear(combined_hid_sz, 1)
+        self.weight_nn = nn.Sequential()            
+        for prev, size in zip([combined_hid_sz] + list(cfg.model.weight_mlp_sizes), cfg.model.weight_mlp_sizes):
+            self.weight_nn.append(nn.Sequential(
+                nn.Linear(prev, size),
+                nn.LayerNorm(size),
+                nn.LeakyReLU(),
+                nn.Dropout(cfg.model.dropout_rate),
+            ))
+        self.weight_nn.append(nn.Linear(cfg.model.weight_mlp_sizes[-1], 1))
+        
+        
         self.out_nns = nn.ModuleList()            
         for prev, size in zip([combined_hid_sz] + list(cfg.model.out_mlp_sizes), cfg.model.out_mlp_sizes):
             self.out_nns.append(nn.Sequential(
