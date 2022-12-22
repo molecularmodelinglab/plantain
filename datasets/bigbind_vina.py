@@ -1,6 +1,7 @@
 import os
 import pickle
 import multiprocessing
+import random
 import tarfile
 import warnings
 import pandas as pd
@@ -106,10 +107,13 @@ class BigBindVinaDataset(CacheableDataset):
 
             rec_graph = ProtGraph(self.cfg, rec)
 
+            all_confs = list(range(lig.GetNumConformers()))
+            if self.cfg.data.shuffle_poses:
+                random.shuffle(all_confs)
+
             inter_graphs = []
-            for conformer in range(self.cfg.data.num_conformers):
-                if conformer >= lig.GetNumConformers():
-                    conformer = 0
+            for idx in range(self.cfg.data.num_conformers):
+                conformer = all_confs[idx % len(all_confs)]
 
                 lig_graph = MolGraph(self.cfg, lig, conformer)
                 inter_graph = InteractionGraph(self.cfg, lig_graph, rec_graph)

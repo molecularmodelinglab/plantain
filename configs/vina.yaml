@@ -16,6 +16,7 @@ data:
   only_ki_kd: false
 
   num_conformers: 1
+  shuffle_poses: True
   
   lig_graph:
     atom_feats: [ "element", "formal_charge", "hybridization", "is_aromatic", "numH"]
