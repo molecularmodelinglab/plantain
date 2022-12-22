@@ -71,3 +71,6 @@ model:
   out_mlp_sizes: [512, 256, 128, 64]
   weight_mlp_sizes: [512, 256, 128, 64]
   dropout_rate: 0.2
+
+  weigh_at_end: True
+  weight_norm: 'softmax'

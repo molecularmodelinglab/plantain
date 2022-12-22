@@ -12,6 +12,8 @@ class InteractionGNN(nn.Module):
     def __init__(self, cfg, in_node):
         super().__init__()
 
+        self.cfg = cfg
+
         self.node_embed = CatScalEmbedding(cfg.model.node_embed_size,
                                            in_node.out_type_data.graphs[0].ndata)
         self.edge_embed = CatScalEmbedding(cfg.model.edge_embed_size,
@@ -83,9 +85,21 @@ class InteractionGNN(nn.Module):
         x = torch.stack(xs, 1) #(B, C, F)
         # attention-like mechanism along conformer dim
         beta_unnorm = self.weight_nn(x)
-        beta = torch.softmax(beta_unnorm, 1)
-        x = torch.sum(x*beta, 1)
+        if self.cfg.model.weight_norm == 'softmax':
+            beta = torch.softmax(beta_unnorm, 1)
+        elif self.cfg.model.weight_norm == 'sum':
+            beta = beta_unnorm/(beta_unnorm.sum(-2).unsqueeze(-2))
+        else:
+            raise AssertionError()
+
+        if not self.cfg.model.weigh_at_end:
+            x = torch.sum(x*beta, 1)
 
         for nn in self.out_nns:
             x = nn(x)
-        return self.out(x).squeeze(-1)
+        x = self.out(x)
+
+        if self.cfg.model.weigh_at_end:
+            x = torch.sum(x*beta, 1)
+
+        return x.squeeze(-1)
