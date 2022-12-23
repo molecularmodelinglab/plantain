@@ -108,8 +108,12 @@ class BigBindVinaDataset(CacheableDataset):
             rec_graph = ProtGraph(self.cfg, rec)
 
             all_confs = list(range(lig.GetNumConformers()))
-            if self.cfg.data.shuffle_poses:
+            if self.cfg.data.pose_order == "shuffle":
                 random.shuffle(all_confs)
+            elif self.cfg.data.pose_order == "worst":
+                all_confs = list(reversed(all_confs))
+            else:
+                assert self.cfg.data.pose_order == "best"
 
             inter_graphs = []
             for idx in range(self.cfg.data.num_conformers):

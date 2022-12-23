@@ -16,7 +16,7 @@ data:
   only_ki_kd: false
 
   num_conformers: 1
-  shuffle_poses: True
+  pose_order: shuffle
   
   lig_graph:
     atom_feats: [ "element", "formal_charge", "hybridization", "is_aromatic", "numH"]
@@ -73,4 +73,4 @@ model:
   dropout_rate: 0.2
 
   weigh_at_end: True
-  weight_norm: 'softmax'
+  weight_norm: softmax
