@@ -22,6 +22,8 @@ else
 fi
 unset __conda_setup
 
+conda activate chem2
+
 module load cuda/11.3
 
 cd /nas/longleaf/home/mixarcid/plantain
