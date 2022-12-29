@@ -19,3 +19,4 @@ argparse
 meeko
 mmtf-python
 roma
+omegaconf
