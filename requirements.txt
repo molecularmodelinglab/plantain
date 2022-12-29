@@ -11,7 +11,7 @@ biopandas
 scipy
 dgllife
 sympy
-torchmetrics
+torchmetrics==0.7.0
 git-timewarp
 seaborn
 terrace
