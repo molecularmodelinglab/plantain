@@ -133,9 +133,6 @@ class BigBindVinaDataset(CacheableDataset):
             print(f"{rec_file=}")
             raise
 
-        for graph in inter_graphs:
-            graph.dgl_graph.create_formats_()
-
         return ret
 
     def get_variance(self):
