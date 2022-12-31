@@ -64,7 +64,7 @@ def get_pose_rank_metrics(cfg, model, split, num_iter):
         scores = model.get_conformer_scores(batch)[0,:,0]
         # scores = torch.randn_like(d.rmsds)
         
-        correct = d.rmsds < 2.0
+        correct = (d.rmsds < 2.0).to(device)
 
         idx = randomized_argsort(-scores)
         correct_sorted = correct[idx]

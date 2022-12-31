@@ -155,7 +155,6 @@ def get_nodes_and_edges_from_model(cfg: DictConfig, prot: Model):
                 break
         else:
             raise AssertionError("Failed to find alpha carbon in residue")
-    
     nodes = Batch(ProtResidueNode,
                 coord = coord,
                 cat_feat = cat_feat,

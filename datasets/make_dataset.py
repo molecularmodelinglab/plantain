@@ -34,7 +34,8 @@ def make_dataset(cfg, split):
 
 def make_dataloader(cfg, split, force_no_shuffle=False):
     dataset = make_dataset(cfg, split)
-    n_workers = cfg.platform.num_workers
+    # todo: change back once we've solved the infamous dgl bug
+    n_workers = cfg.platform.num_workers if split == "train" else 0
     if force_no_shuffle:
         shuffle = False
     else:
