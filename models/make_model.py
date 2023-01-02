@@ -3,6 +3,7 @@ from models.fp_nn import FpNN
 from models.diffusion import Diffusion
 from models.outer_prod_gnn import OuterProdGNN
 from models.interaction_gnn import InteractionGNN
+from models.force_field import ForceField
 
 name2model_cls = {
    "gnn_bind": GNNBind,
@@ -10,6 +11,7 @@ name2model_cls = {
    "diffusion": Diffusion,
    "outer_prod_gnn": OuterProdGNN,
    "interaction_gnn": InteractionGNN,
+   "force_field": ForceField
 }
 
 def get_model_cls(cfg):

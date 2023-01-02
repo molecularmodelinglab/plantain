@@ -115,16 +115,19 @@ class BigBindVinaDataset(CacheableDataset):
             else:
                 assert self.cfg.data.pose_order == "best"
 
+            lig_graphs = []
             inter_graphs = []
             for idx in range(self.cfg.data.num_conformers):
                 conformer = all_confs[idx % len(all_confs)]
 
                 lig_graph = MolGraph(self.cfg, lig, conformer)
-                inter_graph = InteractionGraph(self.cfg, lig_graph, rec_graph)
-                inter_graphs.append(inter_graph)
+                if self.cfg.data.use_interaction_graph:
+                    inter_graph = InteractionGraph(self.cfg, lig_graph, rec_graph)
+                    inter_graphs.append(inter_graph)
+                lig_graphs.append(lig_graph)
 
 
-            ret = InteractionActivityData(tuple(inter_graphs), is_active)
+            ret = InteractionActivityData(tuple(lig_graphs), rec_graph, tuple(inter_graphs), is_active)
         except KeyboardInterrupt:
             raise
         except:

@@ -79,18 +79,21 @@ class BigBindVinaStructDataset(CacheableDataset):
             rec_graph = ProtGraph(self.cfg, rec)
             lig_graph = MolGraph(self.cfg, lig)
             
+            lig_graphs = []
             rmsds = []
             inter_graphs = []
             # for now: use all conformers
             for conformer in range(docked_lig.GetNumConformers()):
 
                 docked_lig_graph = MolGraph(self.cfg, docked_lig, conformer)
-                inter_graph = InteractionGraph(self.cfg, docked_lig_graph, rec_graph)
-                inter_graphs.append(inter_graph)
+                if self.cfg.data.use_interaction_graph:
+                    inter_graph = InteractionGraph(self.cfg, docked_lig_graph, rec_graph)
+                    inter_graphs.append(inter_graph)
+                lig_graphs.append(docked_lig_graph)
 
                 rmsds.append(rdMolAlign.CalcRMS(lig, docked_lig, 0, conformer))
             
-            ret = InteractionStructData(tuple(inter_graphs), lig_graph, torch.tensor(rmsds, dtype=torch.float32))
+            ret = InteractionStructData(lig_graph, tuple(lig_graphs), rec_graph, tuple(inter_graphs), torch.tensor(rmsds, dtype=torch.float32))
         
         except KeyboardInterrupt:
             raise

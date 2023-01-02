@@ -36,29 +36,39 @@ class ActivityData(StructData):
 
 class InteractionActivityData(Batchable):
 
+    ligs: Tuple[MolGraph, ...]
+    rec: ProtGraph
     graphs: Tuple[InteractionGraph, ...]
     is_active: torch.Tensor
 
     @staticmethod
     def get_type_data(cfg: DictConfig):
         inter_td = InteractionGraph.get_type_data(cfg)
+        mol_td = MolGraph.get_type_data(cfg)
+        rec_td = ProtGraph.get_type_data(cfg)
         graphs = (inter_td,)*cfg.data.num_conformers
+        mol_graphs = (mol_td,)*cfg.data.num_conformers
         is_act_td = TensorTD((1,), dtype=bool)
-        return ClassTD(InteractionActivityData, graphs=graphs, is_active=is_act_td)
+        return ClassTD(InteractionActivityData, ligs=mol_graphs, rec=rec_td, graphs=graphs, is_active=is_act_td)
 
 class InteractionStructData(Batchable):
 
-    graphs: Tuple[InteractionGraph, ...]
     lig: MolGraph
+    ligs: Tuple[MolGraph, ...]
+    rec: ProtGraph
+    graphs: Tuple[InteractionGraph, ...]
     rmsds: torch.Tensor
 
     @staticmethod
     def get_type_data(cfg: DictConfig):
         inter_td = InteractionGraph.get_type_data(cfg)
+        mol_td = MolGraph.get_type_data(cfg)
+        rec_td = ProtGraph.get_type_data(cfg)
         graphs = (inter_td,)*cfg.data.num_conformers
         lig_td = MolGraph.get_type_data(cfg)
+        mol_graphs = (mol_td,)*cfg.data.num_conformers
         rmsd_td = TensorTD(cfg.data.num_conformers,)
-        return ClassTD(InteractionActivityData, graphs=graphs, lig=lig_td, rmsds=rmsd_td)
+        return ClassTD(InteractionActivityData, lig=lig_td, ligs=mol_graphs, rec=rec_td, graphs=graphs, rmsds=rmsd_td)
 
 class IsActiveData(StructData):
     lig: MolGraph

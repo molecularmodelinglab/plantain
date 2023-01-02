@@ -35,6 +35,7 @@ data:
     edge_feats: [ "dist"]
     include_h: False
 
+  use_interaction_graph: false
   interaction_graph:
     dist_cutoff: 10
     max_neighbors: null
@@ -47,7 +48,7 @@ losses:
 
 optimizer: adamw
 learn_rate: 1e-5
-max_epochs: 10
+max_epochs: 50
 
 batch_size: 16
 # gpus: [0,1]
@@ -58,19 +59,30 @@ sampler:
 
 model:
 
-  type: interaction_gnn
+  type: force_field
   
-  node_embed_size: 32
-  edge_embed_size: 32
-  num_mpnn_layers: 2
-  edge_hidden_size: 64
-  node_hidden_size: 64
+  rec_encoder:
+    node_embed_size: 64
+    edge_embed_size: 64
+    num_mpnn_layers: 2
+    edge_hidden_size: 32
 
-  out_size: 512
+  lig_encoder:
+    node_embed_size: 16
+    edge_embed_size: 64
+    num_mpnn_layers: 2
+    edge_hidden_size: 32
 
-  out_mlp_sizes: [512, 256, 128, 64]
-  weight_mlp_sizes: [512, 256, 128, 64]
-  dropout_rate: 0.2
+  out_size: 16
 
-  weigh_at_end: True
-  weight_norm: softmax
+  diffusion:
+    timesteps: 32
+    max_trans_sigma: 0.0
+    max_rot_frac: 1.0
+
+  rbf_start: 0
+  rbf_end: 16
+  rbf_steps: 16
+
+  norm_grad: false
+  energy_scale: 1e-3
