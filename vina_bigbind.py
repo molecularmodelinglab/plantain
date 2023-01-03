@@ -92,7 +92,7 @@ def run_vina(cfg, program, out_folder, i, row, lig_file, rec_file, exhaust=16):
         return out_file
 
     if program == "gnina":
-        cmd = [ "apptainer", "run", cfg.platform.gnina_sif, "gnina", "--cnn", "crossdock_default2018" ]
+        cmd = [ "apptainer", "run", "--bind", cfg.platform.bigbind_gnina_dir, cfg.platform.gnina_sif, "gnina", "--cnn", "crossdock_default2018" ]
     elif program == "vina":
         cmd = [ cfg.platform.vina_exec ]
     else:
