@@ -62,7 +62,7 @@ def get_lig_size(lig, padding=3):
     size = (bounds_max - center + padding)*2
     return tuple(center), tuple(size)
 
-def run_vina(cfg, out_folder, i, row, lig_file, rec_file, exhaust=16):
+def run_vina(cfg, program, out_folder, i, row, lig_file, rec_file, exhaust=16):
     
     name = rec_file.split("/")[-1] + "_" + lig_file.split("/")[-1]
     center = (row.pocket_center_x, row.pocket_center_y, row.pocket_center_z)
@@ -91,11 +91,20 @@ def run_vina(cfg, out_folder, i, row, lig_file, rec_file, exhaust=16):
     if os.path.exists(out_file):
         return out_file
 
-    cmd = [cfg.platform.vina_exec, "--receptor", rec_file, "--ligand", lig_pdbqt, "--exhaustiveness", str(exhaust), "--cpu", str(exhaust) ]
+    if program == "gnina":
+        cmd = [ "apptainer", "run", cfg.platform.gnina_sif, "gnina", "--cnn", "crossdock_default2018" ]
+    elif program == "vina":
+        cmd = [ cfg.platform.vina_exec ]
+    else:
+        raise AssertionError()
+
+    cmd += [ "--receptor", rec_file, "--ligand", lig_pdbqt, "--exhaustiveness", str(exhaust), "--cpu", str(exhaust) ]
     for c, s, ax in zip(center, size, ["x", "y", "z"]):
         cmd += ["--center_"+ax, str(c)]
         cmd += ["--size_"+ax, str(s)]
     cmd += [ "--out", out_file ]
+
+    # print(" ".join(cmd))
 
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE)
     # proc.check_returncode()
@@ -103,7 +112,7 @@ def run_vina(cfg, out_folder, i, row, lig_file, rec_file, exhaust=16):
     return out_file
 
 
-def get_vina_score(cfg, out_folder, tup):
+def get_vina_score(cfg, program, out_folder, tup):
     i, row = tup
 
     lig_file = cfg.platform.bigbind_dir + "/" + row.lig_file
@@ -115,7 +124,7 @@ def get_vina_score(cfg, out_folder, tup):
     
     ret = None
     try:
-        ret = run_vina(cfg, out_folder, i, row, lig_file, rec_file)
+        ret = run_vina(cfg, program, out_folder, i, row, lig_file, rec_file)
     except KeyboardInterrupt:
         raise
     except:
@@ -124,10 +133,10 @@ def get_vina_score(cfg, out_folder, tup):
     
     return ret
 
-def dock_all(cfg, file_prefix):
+def dock_all(cfg, program, file_prefix):
     """ to be run in parallel on slurm """
     for split in [ "train", "val", "test" ]:
-        out_folder = cfg.platform.bigbind_vina_dir + "/" + file_prefix + "_" + split
+        out_folder = cfg.platform[f"bigbind_{program}_dir"]+ "/" + file_prefix + "_" + split
         os.makedirs(out_folder, exist_ok=True)
 
         screen_csv = cfg.platform.bigbind_dir + f"/{file_prefix}_{split}.csv"
@@ -136,7 +145,7 @@ def dock_all(cfg, file_prefix):
         screen_df = screen_df.sample(frac=1, random_state=seed)
 
         with Pool(processes=cfg.platform.vina_processes) as p:
-            score_fn = partial(get_vina_score, cfg, out_folder)
+            score_fn = partial(get_vina_score, cfg, program, out_folder)
             for ret_file in p.imap_unordered(score_fn, screen_df.iterrows()):
                 print(ret_file)
 
@@ -156,7 +165,7 @@ def can_load_docked_file(file_prefix, split, item):
     return None
 
 
-def finalize_bigbind_vina(cfg, file_prefix):
+def finalize_bigbind_vina(cfg, program, file_prefix):
     for split in [ "val", "test", "train" ]:
         screen_csv = cfg.platform.bigbind_dir + f"/{file_prefix}_{split}.csv"
         screen_df = pd.read_csv(screen_csv)
@@ -170,7 +179,7 @@ def finalize_bigbind_vina(cfg, file_prefix):
         screen_df["docked_lig_file"] = docked_lig_files
         screen_df = screen_df.dropna().reset_index(drop=True)
         
-        out_file = cfg.platform.bigbind_vina_dir + f"/{file_prefix}_{split}.csv"
+        out_file = cfg.platform[f"bigbind_{program}_dir"] + f"/{file_prefix}_{split}.csv"
         print(f"Saving docked df to {out_file}")
         screen_df.to_csv(out_file, index=False)
 
@@ -235,8 +244,8 @@ def tar_all_structures(cfg, prefix):
 
 if __name__ == "__main__":
 
-    cfg = get_config("vina")
-    # dock_all(cfg, "activities_sna_1")
-    # dock_all(cfg, "structures")
+    cfg = get_config("vina_ff")
+    dock_all(cfg, "gnina", "activities_sna_1")
+    dock_all(cfg, "gnina", "structures")
     # finalize_bigbind_vina(cfg, "structures")
-    tar_all_structures(cfg, "activities_sna_1")
+    # tar_all_structures(cfg, "activities_sna_1")
