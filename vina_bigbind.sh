@@ -18,6 +18,8 @@ else
 fi
 unset __conda_setup
 
+conda activate chem-py3.9
+
 cd /nas/longleaf/home/mixarcid/plantain
 
 python vina_bigbind.py
