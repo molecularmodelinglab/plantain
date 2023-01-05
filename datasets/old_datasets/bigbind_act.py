@@ -1,34 +1,28 @@
-from rdkit import Chem
 import torch
-from traceback import print_exc
-from Bio.PDB import PDBParser
-from Bio.PDB.PDBExceptions import PDBConstructionWarning
 
 from datasets.bigbind import BigBindDataset
-from datasets.graphs.mol_graph import MolGraph, mol_graph_from_sdf
-from datasets.graphs.prot_graph import ProtGraph, prot_graph_from_pdb
-from datasets.data_types import StructData
+from datasets.data_types import ActivityData
 
-class BigBindStructDataset(BigBindDataset):
+class BigBindActDataset(BigBindDataset):
 
     def __init__(self, cfg, split):
-        super(BigBindStructDataset, self).__init__(cfg, "bigbind_struct", split)
+        super(BigBindActDataset, self).__init__(cfg, "bigbind_act", split)
 
     def __len__(self):
-        return len(self.structures)
+        return len(self.activities)
 
     def get_lig_file(self, index):
         """ returns the first lig file if use_lig is false, to ensure
         that all ligs are the same """
         if not self.cfg.data.use_lig:
-            return self.dir + "/ELNE_HUMAN_30_247_0/3q77_2hy_lig.sdf"
-        return self.dir + "/" + self.structures.lig_file[index]
+            return self.dir + "/" + "chembl_structures/mol_4.sdf"
+        return self.dir + "/" + self.activities.lig_file[index]
 
     def get_rec_file(self, index):
         """ same as above """
         if self.cfg.data.use_rec:
-            poc_file = self.structures.ex_rec_pocket_file[index]
-            rec_file = self.structures.ex_rec_file[index]
+            poc_file = self.activities.ex_rec_pocket_file[index]
+            rec_file = self.activities.ex_rec_file[index]
         else:
             poc_file = "ELNE_HUMAN_30_247_0/3q77_A_rec_pocket.pdb"
             rec_file = "ELNE_HUMAN_30_247_0/3q77_A_rec.pdb"
@@ -48,28 +42,32 @@ class BigBindStructDataset(BigBindDataset):
         
         lig_file = self.get_lig_file(index)
         rec_file = self.get_rec_file(index)
-        
+
         try:
             lig_graph = mol_graph_from_sdf(self.cfg, lig_file)
             rec_graph = prot_graph_from_pdb(self.cfg, rec_file)
-        except KeyboardInterrupt:
-            raise
         except:
             print(f"Error proccessing item at {index=}")
             print(f"{lig_file=}")
             print(f"{rec_file=}")
             raise
 
-        # center everything around lig centroid
+        if "pchembl_value" in self.activities:
+            activity = torch.tensor(self.activities.pchembl_value[index], dtype=torch.float32)
+        else:
+            activity = torch.tensor(0.0, dtype=torch.float32)
+        is_active = torch.tensor(self.activities.active[index], dtype=bool)
 
-        lig_centroid = lig_graph.ndata.coord.mean(0)
-        lig_graph.ndata.coord -= lig_centroid
-        rec_graph.ndata.coord -= lig_centroid
-
-        return StructData(lig_graph, rec_graph)
+        return ActivityData(lig_graph, rec_graph, activity, is_active)
 
     def get_variance(self):
-        return {}
+        # todo: generalize variance dict
+        if "pchembl_value" in self.activities:
+            return {
+                "activity": self.activities.pchembl_value.var(),
+            }
+        else:
+            return {}
 
     def get_type_data(self):
-        return StructData.get_type_data(self.cfg)
+        return ActivityData.get_type_data(self.cfg)

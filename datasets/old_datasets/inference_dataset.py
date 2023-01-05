@@ -3,8 +3,6 @@ import torch
 from torch.utils import data
 from rdkit import Chem
 
-from datasets.graphs.mol_graph import MolGraph
-from datasets.graphs.prot_graph import ProtGraph, prot_graph_from_pdb
 from datasets.data_types import IsActiveData
 
 class InferenceDataset(data.Dataset):

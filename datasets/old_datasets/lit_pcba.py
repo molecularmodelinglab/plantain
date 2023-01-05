@@ -3,8 +3,6 @@ from rdkit import Chem
 import torch
 from glob import glob
 from datasets.cacheable_dataset import CacheableDataset
-from datasets.graphs.mol_graph import MolGraph
-from datasets.graphs.prot_graph import ProtGraph, prot_graph_from_pdb
 from datasets.data_types import IsActiveIndexData
 
 class LitPcbaDataset(CacheableDataset):

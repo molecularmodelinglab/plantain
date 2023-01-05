@@ -8,8 +8,6 @@ from Bio.PDB import PDBParser
 from Bio.PDB.PDBExceptions import PDBConstructionWarning
 
 from datasets.cacheable_dataset import CacheableDataset
-from datasets.graphs.mol_graph import MolGraph, mol_graph_from_sdf
-from datasets.graphs.prot_graph import ProtGraph, prot_graph_from_pdb
 from datasets.data_types import IsActiveIndexData
 
 class BigBindScreenDataset(CacheableDataset):

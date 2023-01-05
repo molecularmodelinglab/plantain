@@ -1,36 +1,25 @@
-import os
-import pickle
-import multiprocessing
-import random
-import tarfile
-import warnings
-import pandas as pd
 import torch
-import tempfile
-from tqdm import tqdm
-from rdkit import Chem
-from common.utils import get_mol_from_file, get_prot_from_file
+from typing import Set, Type
+import pandas as pd
+from common.utils import get_mol_from_file, get_prot_from_file, get_docked_scores_from_pdbqt
+from data_formats.base_formats import IsActive, LigAndRecDocked
+from data_formats.tasks import Task
+from datasets.base_datasets import Dataset
 
-from Bio.PDB.mmtf import MMTFParser
-from Bio.PDB.PDBExceptions import PDBConstructionWarning
+class BigBindVinaDataset(Dataset):
 
-from datasets.cacheable_dataset import CacheableDataset
-from datasets.data_types import InteractionActivityData
-from datasets.graphs.interaction_graph import InteractionGraph
-from datasets.graphs.mol_graph import MolGraph
-from datasets.graphs.prot_graph import ProtGraph
-
-class BigBindVinaDataset(CacheableDataset):
-
-    def __init__(self, cfg, split):
-        super().__init__(cfg, "bigbind_vina")
+    def __init__(self, cfg, split, transform):
+        super().__init__(transform)
         csv = cfg.platform.bigbind_vina_dir + f"/activities_sna_1_{split}.csv"
         self.activities = pd.read_csv(csv)
         self.dir = cfg.platform.bigbind_dir
         self.vina_dir = cfg.platform.bigbind_vina_dir
         self.cfg = cfg
         self.split = split
-        self.tars = {}
+
+    @staticmethod
+    def get_name():
+        return "bigbind_vina"
 
     def __len__(self):
         return len(self.activities)
@@ -56,93 +45,19 @@ class BigBindVinaDataset(CacheableDataset):
         else:
             return self.dir + "/" + rec_file
 
-    def get_cache_key(self, index):
-        
-        lig_file = self.get_lig_file(index).split("/")[-1]
-        rec_file = self.get_rec_file(index).split("/")[-1]
+    def get_label_classes(self) -> Set[Type[Task]]:
+        return { IsActive }
 
-        return lig_file + "_" + rec_file
-
-    def get_lig(self, lig_file, tar):
-        lig_file = "/".join(lig_file.split("/")[-2:])
-        f = tar.extractfile(lig_file)
-        # f = self.tar_files[lig_file]
-        return pickle.load(f)
-
-    def get_rec(self, rec_file, tar):
-        rec_file = "/".join(rec_file.split("/")[-2:])
-        f = tar.extractfile(rec_file)
-        # f = self.tar_files[rec_file]
-        with tempfile.NamedTemporaryFile() as tmp:
-            tmp.write(f.read())
-            tmp.seek(0, os.SEEK_SET)
-            with warnings.catch_warnings():
-                warnings.filterwarnings("ignore", category=PDBConstructionWarning)
-                structure = MMTFParser().get_structure(tmp.name)
-        return structure[0]
-
-    def get_item_pre_cache(self, index):
-
-        if self.cfg.data.use_tar:
-            proc = multiprocessing.current_process()
-            if proc not in self.tars:
-                self.tars[proc] = tarfile.open(self.cfg.platform.bigbind_vina_dir + f"/{self.split}_files.tar", "r:")
-            tar = self.tars[proc]
+    def getitem_impl(self, index):
 
         lig_file = self.get_lig_file(index)
         rec_file = self.get_rec_file(index)
 
-        try:
+        lig = get_mol_from_file(lig_file)
+        rec = get_prot_from_file(rec_file)
+        vina_scores = torch.tensor(get_docked_scores_from_pdbqt(lig_file), dtype=torch.float32)
 
-            is_active = torch.tensor(self.activities.active[index], dtype=bool)
+        x = LigAndRecDocked(lig, rec, vina_scores)
+        y = IsActive(self.activities.active[index])
 
-            if self.cfg.data.use_tar:
-                lig = self.get_lig(lig_file, tar)
-                rec = self.get_rec(rec_file, tar)
-            else:
-                lig = get_mol_from_file(lig_file)
-                rec = get_prot_from_file(rec_file)
-
-            lig = Chem.RemoveHs(lig)
-
-            rec_graph = ProtGraph(self.cfg, rec)
-
-            all_confs = list(range(lig.GetNumConformers()))
-            if self.cfg.data.pose_order == "shuffle":
-                random.shuffle(all_confs)
-            elif self.cfg.data.pose_order == "worst":
-                all_confs = list(reversed(all_confs))
-            else:
-                assert self.cfg.data.pose_order == "best"
-
-            lig_graphs = []
-            inter_graphs = []
-            for idx in range(self.cfg.data.num_conformers):
-                conformer = all_confs[idx % len(all_confs)]
-
-                lig_graph = MolGraph(self.cfg, lig, conformer)
-                if self.cfg.data.use_interaction_graph:
-                    inter_graph = InteractionGraph(self.cfg, lig_graph, rec_graph)
-                    inter_graphs.append(inter_graph)
-                lig_graphs.append(lig_graph)
-
-
-            ret = InteractionActivityData(tuple(lig_graphs), rec_graph, tuple(inter_graphs), is_active)
-        except KeyboardInterrupt:
-            raise
-        except:
-            print(f"Error proccessing item at {index=}")
-            print(f"{lig_file=}")
-            print(f"{rec_file=}")
-            raise
-
-        for graph in inter_graphs:
-            graph.dgl_graph.create_formats_()
-
-        return ret
-
-    def get_variance(self):
-        return {}
-
-    def get_type_data(self):
-        return InteractionActivityData.get_type_data(self.cfg)
+        return x, y

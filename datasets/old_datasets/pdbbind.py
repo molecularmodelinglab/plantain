@@ -3,8 +3,6 @@ import os
 
 from datasets.cacheable_dataset import CacheableDataset
 from datasets.data_types import IsActiveData
-from datasets.graphs.mol_graph import MolGraph, mol_graph_from_sdf
-from datasets.graphs.prot_graph import ProtGraph, prot_graph_from_pdb
 
 class PDBBindDataset(CacheableDataset):
     """ Only supports 2016 core set for speed testing """

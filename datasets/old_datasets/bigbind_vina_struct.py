@@ -10,10 +10,6 @@ from common.utils import get_mol_from_file, get_prot_from_file
 from datasets.cacheable_dataset import CacheableDataset
 
 from datasets.data_types import InteractionStructData
-from datasets.graphs.interaction_graph import InteractionGraph
-from datasets.graphs.mol_graph import MolGraph
-from datasets.graphs.prot_graph import ProtGraph
-
 class BigBindVinaStructDataset(CacheableDataset):
 
     def __init__(self, cfg, split):
