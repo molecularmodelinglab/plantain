@@ -1,4 +1,5 @@
 from typing import Callable, Optional, Set, Type
+from terrace import collate
 from data_formats.base_formats import Data, Input, Prediction
 from data_formats.tasks import Task
 
@@ -10,8 +11,15 @@ class Model():
         for task in tasks:
             assert task in my_tasks
             method_name = task.get_name()
-            ret.append(getattr(self, method_name)(x))
-        # todo: merge everythig once we get merged batches working
+            single_method_name = task.get_name() + "_single"
+            if hasattr(self, method_name):
+                ret.append(getattr(self, method_name)(x))
+            elif hasattr(self, single_method_name):
+                pred = collate([ getattr(self, single_method_name)(item) for item in x ])
+                ret.append(pred)
+            else:
+                raise AttributeError(f"Do perform {task.get_name()}, model must have either {method_name} or {single_method_name} methods")
+        # smh there's a terrace bug...
         return ret[0] # Data.merge(ret)
 
     @staticmethod

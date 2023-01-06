@@ -28,7 +28,19 @@ def seed_worker(worker_id):
     random.seed(worker_seed)
 
 def make_dataset(cfg, split, transform):
-    return name_to_dataset[cfg.dataset](cfg, split, transform)
+    ret = name_to_dataset[cfg.dataset](cfg, split, transform)
+
+    # In order for pickle to work on the results from this dataset,
+    # it must know the types of the data (which are created dynamically).
+    # Thus, we must ensure that the return types are created in the main
+    # thread before the dataset is used in any other thread.
+    # This is why we create the first item in the dataset and do
+    # nothing with it
+
+    ret[0]
+
+    return ret
+
 
 def make_dataloader(cfg, split, transform, force_no_shuffle=False):
     dataset = make_dataset(cfg, split, transform)

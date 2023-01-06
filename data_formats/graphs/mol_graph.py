@@ -3,12 +3,10 @@ from omegaconf import DictConfig
 from rdkit.Geometry import Point3D
 from rdkit import Chem
 import torch
+from terrace import CategoricalTensor, collate
 
-from datasets.graphs.graph3d import Graph3d, Node3d, Edge3d
+from .graph3d import Graph3d, Node3d, Edge3d
 from datasets.utils import safe_index
-
-from terrace.graph import GraphTD
-from terrace.type_data import ClassTD, TensorTD, ShapeVar
 
 ATOM_RADII_DICT = {
     'H': 1.1,
@@ -70,23 +68,15 @@ possible_bond_feats = {
 
 class AtomNode(Node3d):
 
-    @staticmethod
-    def get_type_data(mol_cfg: DictConfig) -> ClassTD:
-        max_cat_vals = []
-        for feat_name in mol_cfg.atom_feats:
-            max_cat_vals.append(len(possible_atom_feats[feat_name]))
-        cat_td = TensorTD((len(max_cat_vals), ), dtype=torch.long, max_values=max_cat_vals)
-        scal_td = TensorTD((0,), dtype=torch.float32)
-        coord_td = TensorTD((3,), dtype=torch.float32)
-        return ClassTD(AtomNode, coord=coord_td, cat_feat=cat_td, scal_feat=scal_td)
-
     def __init__(self, atom_feats, atom: Chem.Atom, mol: Chem.Mol, conformer: Optional[int]):
         cat_feats = []
         scal_feats = []
+        num_classes = []
         for feat_name in atom_feats:
             get_feat = globals()["get_" + feat_name]
             possible = possible_atom_feats[feat_name]
             feat = safe_index(possible, get_feat(atom, mol))
+            num_classes.append(len(possible))
             cat_feats.append(feat)
         
         if conformer is not None:
@@ -97,6 +87,7 @@ class AtomNode(Node3d):
 
         coord = torch.tensor(coord, dtype=torch.float32)
         cat_feats = torch.tensor(cat_feats, dtype=torch.long)
+        cat_feats = CategoricalTensor(cat_feats, num_classes=num_classes)
         scal_feats = torch.tensor(scal_feats, dtype=torch.float32)
 
         super(AtomNode, self).__init__(coord, cat_feats, scal_feats)
@@ -112,37 +103,24 @@ class AtomNode(Node3d):
         return ATOM_COLOR_DICT[self.get_element()]
 
 class BondEdge(Edge3d):
-
-    @staticmethod
-    def get_type_data(mol_cfg: DictConfig) -> ClassTD:
-        max_cat_vals = []
-        for feat_name in mol_cfg.bond_feats:
-            max_cat_vals.append(len(possible_bond_feats[feat_name]))
-        cat_td = TensorTD((len(max_cat_vals), ), dtype=torch.long, max_values=max_cat_vals)
-        scal_td = TensorTD((0,), dtype=torch.float32)
-        return ClassTD(BondEdge, cat_feat=cat_td, scal_feat=scal_td)
-    
+ 
     def __init__(self, bond_feats, bond: Chem.Bond, mol: Chem.Mol):
         cat_feats = []
         scal_feats = []
+        num_classes = []
         for feat_name in bond_feats:
             get_feat = globals()["get_" + feat_name]
             possible = possible_bond_feats[feat_name]
+            num_classes.append(len(possible))
             feat = safe_index(possible, get_feat(bond, mol))
             cat_feats.append(feat)
         
         cat_feats = torch.tensor(cat_feats, dtype=torch.long)
+        cat_feats = CategoricalTensor(cat_feats, num_classes=num_classes)
         scal_feats = torch.tensor(scal_feats, dtype=torch.float32)
         super(BondEdge, self).__init__(cat_feats, scal_feats)
 
 class MolGraph(Graph3d):
-
-    @staticmethod
-    def get_type_data(cfg: DictConfig) -> GraphTD:
-        mol_cfg = cfg.data.lig_graph
-        atom_td = AtomNode.get_type_data(mol_cfg)
-        bond_td = BondEdge.get_type_data(mol_cfg)
-        return GraphTD(MolGraph, atom_td, bond_td, ShapeVar("LN"), ShapeVar("LE"))
 
     def __init__(self, cfg: DictConfig, mol: Chem.Mol, conformer: Optional[int] = 0):
         mol_cfg = cfg.data.lig_graph
@@ -201,7 +179,3 @@ class MolGraph(Graph3d):
 
 def mol_graph_from_sdf(cfg, sdf_file):
     return MolGraph(cfg, next(Chem.SDMolSupplier(sdf_file, sanitize=True)))
-
-def get_node_and_edge_nums_from_sdf(cfg, sdf_file):
-    mol = next(Chem.SDMolSupplier(sdf_file, sanitize=True))
-    return mol.GetNumAtoms(), mol.GetNumBonds()

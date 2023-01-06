@@ -1,23 +1,20 @@
+import warnings
 import torch
 import torch.nn as nn
+from terrace import Module, LazyEmbedding, LazyLinear
 
-class CatScalEmbedding(nn.Module):
+class CatScalEmbedding(Module):
     """ For graphs with both categorical and scalar features,
     embed all cat. features and concatenate them with the scalar
     feats. """
 
-    def __init__(self, embed_size, td):
+    def __init__(self, embed_size):
         super().__init__()
-        self.embeddings = nn.ModuleList()
-        total_dim = td.scal_feat.shape[-1]
-        for i, val in enumerate(td.cat_feat.max_values):
-            embedding = nn.Embedding(val, embed_size)
-            total_dim += embed_size
-            self.embeddings.append(embedding)
-        self.total_dim = total_dim
+        self.embed_size = embed_size
 
     def forward(self, batch):
-        ret = [ batch.scal_feat ]
-        for i, embed in enumerate(self.embeddings):
-            ret.append(embed(batch.cat_feat[:,i]))
-        return torch.cat(ret, -1)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            scal = self.make(LazyLinear, self.embed_size)(batch.scal_feat)
+            cat = self.make(LazyEmbedding, self.embed_size)(batch.cat_feat)
+        return torch.cat((scal, cat), -1)

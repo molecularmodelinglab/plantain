@@ -5,7 +5,8 @@ from dataclasses import dataclass
 from rdkit import Chem
 from Bio.PDB.Model import Model
 from typing import List, Optional, Tuple, Type, TypeVar, Generic
-from terrace import Batchable
+from terrace import Batchable, Batch
+
 
 class Data(Batchable):
     """ Base class for all the input, label, and prediction formats. Main 
@@ -23,16 +24,37 @@ class Data(Batchable):
         type_keys = set().union(*[set(typing.get_type_hints(cls).keys()) for cls in subclasses ])
         s = Signature([Parameter(name, Parameter.KEYWORD_ONLY) for name in type_keys])
         s.bind(**kwargs)
+        
+        if type_name in globals():
+            type_ = globals()[type_name]
+        else:
+            type_ = dataclass(type(type_name, subclasses, {}))
+            globals()[type_name] = type_
 
-        return dataclass(type(type_name, subclasses, {}))(**kwargs)
+        return type_(**kwargs)
 
     def merge(items: List["Data"]):
         """ Merge items of different data subclasses into a single object """
-        subclasses = tuple(map(type, items))
-        kwargs = {}
-        for item in items:
-            kwargs.update(item.__dict__)
-        return Data.create(subclasses, **kwargs)
+        assert len(items) > 0
+        if isinstance(items[0], Batch):
+            """ Very hacky, relies on implimentation details of terrace. Will add support
+            for this kind of thing in terrace shortly"""
+            batch_subclasses = tuple(map(lambda item: item.type_tree.type, items))
+            type_name = "Data[" + ", ".join(map(lambda cls: cls.__qualname__, batch_subclasses)) + "]"
+            batch_subclass = dataclass(type(type_name, batch_subclasses, {}))
+
+            kwargs = {}
+            for item in items:
+                kwargs.update(item.store)
+
+            return Batch(batch_subclass, **kwargs)
+        else:
+            subclasses = tuple(map(type, items))
+
+            kwargs = {}
+            for item in items:
+                kwargs.update(item.__dict__)
+            return Data.create(subclasses, **kwargs)
 
 class Input(Data):
     pass
@@ -47,8 +69,8 @@ class Prediction(Data):
 class LigAndRec(Input):
     lig: Chem.Mol
     rec: Model
+    pocket_id: str
 
-@dataclass
 class LigAndRecDocked(LigAndRec):
     # The number of docked poses for each datapoint is not necessarily
     # the same, so we must define a custom collate method
@@ -58,11 +80,9 @@ class LigAndRecDocked(LigAndRec):
     def collate_docked_scores(all_docked_scores: List[torch.Tensor]) -> List[torch.Tensor]:
         return all_docked_scores
 
-@dataclass
 class IsActive(Label):
     is_active: bool
 
-@dataclass
 class Activity(Label):
     activity: bool
 

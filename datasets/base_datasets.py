@@ -1,14 +1,15 @@
 from typing import Set, Tuple, Type
 from torch.utils import data
-from data_formats.base_formats import Input, Label
+from data_formats.base_formats import Data, Input, Label
 from data_formats.tasks import Task
 
 class Dataset(data.Dataset):
 
-    def __init__(self, transform=None):
+    def __init__(self, cfg, transform=None):
         super().__init__()
+        self.cfg = cfg
         self.transform = transform
-
+        
     @staticmethod
     def get_name() -> str:
         raise NotImplementedError()
@@ -37,7 +38,10 @@ class Dataset(data.Dataset):
         try:
             ret = self.getitem_impl(index)
             if self.transform is not None:
-                return self.transform(ret)
+                x, y = ret
+                # we want all the attributes of the og data + the processed data
+                x_trans = self.transform(self.cfg, x)
+                return Data.merge([x, x_trans]), y
             else:
                 return ret
         except KeyboardInterrupt:

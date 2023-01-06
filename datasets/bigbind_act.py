@@ -1,39 +1,37 @@
 import torch
 from typing import Set, Type
 import pandas as pd
-from common.utils import get_mol_from_file, get_prot_from_file, get_docked_scores_from_pdbqt
-from data_formats.base_formats import Activity, IsActive, LigAndRecDocked
+from common.utils import get_mol_from_file, get_prot_from_file
+from data_formats.base_formats import Activity, IsActive, LigAndRec
 from data_formats.tasks import Task
 from datasets.base_datasets import Dataset
 
-class BigBindVinaDataset(Dataset):
+class BigBindActDataset(Dataset):
 
     def __init__(self, cfg, split, transform):
         super().__init__(cfg, transform)
         self.sna_frac = cfg.sna_frac
         if self.sna_frac is None:
-            csv = cfg.platform.bigbind_vina_dir + f"/activities_{split}.csv"
+            csv = cfg.platform.bigbind_dir + f"/activities_{split}.csv"
         else:
-            csv = cfg.platform.bigbind_vina_dir + f"/activities_sna_{self.sna_frac}_{split}.csv"
+            csv = cfg.platform.bigbind_dir + f"/activities_sna_{self.sna_frac}_{split}.csv"
         self.activities = pd.read_csv(csv)
         self.dir = cfg.platform.bigbind_dir
-        self.vina_dir = cfg.platform.bigbind_vina_dir
         self.split = split
 
     @staticmethod
     def get_name():
-        return "bigbind_vina"
+        return "bigbind_act"
 
     def __len__(self):
         return len(self.activities)
 
-    # smh a lot of this is brazenly copy-and-pasted from bigbind_act
     def get_lig_file(self, index):
         """ returns the first lig file if use_lig is false, to ensure
         that all ligs are the same """
         if not self.cfg.data.use_lig:
-            return self.vina_dir + "/train/0.pdbqt"
-        return self.vina_dir + "/" + self.activities.docked_lig_file[index]
+            return self.dir + "/" + "chembl_structures/mol_4.sdf"
+        return self.dir + "/" + self.activities.lig_file[index]
 
     def get_rec_file(self, index):
         """ same as above """
@@ -61,9 +59,8 @@ class BigBindVinaDataset(Dataset):
         lig = get_mol_from_file(lig_file)
         rec = get_prot_from_file(rec_file)
         poc_id = self.activities.pocket[index]
-        vina_scores = torch.tensor(get_docked_scores_from_pdbqt(lig_file), dtype=torch.float32)
 
-        x = LigAndRecDocked(lig, rec, poc_id, vina_scores)
+        x = LigAndRec(lig, rec, poc_id)
         if self.sna_frac is None:
             y = Activity(torch.tensor(self.activities.pchembl_value[index], dtype=torch.float32))
         else:

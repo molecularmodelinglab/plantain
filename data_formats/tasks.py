@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from typing import List
-from data_formats.base_formats import LigAndRec, Label, Prediction, IsActive
+from data_formats.base_formats import Activity, LigAndRec, Label, Prediction, IsActive
 
 class Task:
     """ Note: _all_ tasks should be defined in this file. This is required
@@ -10,10 +10,23 @@ class Task:
     def get_name() -> str:
         raise NotImplementedError()
 
-class ScoreActivity(Task):
+class ScoreActivityClass(Task):
 
     Input = LigAndRec
     Label = IsActive
+
+    @dataclass
+    class Prediction(Prediction):
+        is_active_score: float
+        
+    @staticmethod
+    def get_name() -> str:
+        return "score_activity_class"
+
+class ScoreActivityRegr(Task):
+
+    Input = LigAndRec
+    Label = Activity
 
     @dataclass
     class Prediction(Prediction):
@@ -21,7 +34,8 @@ class ScoreActivity(Task):
         
     @staticmethod
     def get_name() -> str:
-        return "score_activity"
+        return "score_activity_regr"
+
 
 
 class ClassifyActivity(Task):

@@ -1,9 +1,9 @@
 from omegaconf import DictConfig
 import torch
 
-from terrace.batch import Batch
+from terrace import Batch, CategoricalTensor
 from terrace.type_data import ClassTD, TensorTD
-from datasets.graphs.graph3d import Graph3d, Node3d, Edge3d
+from .graph3d import Graph3d, Node3d, Edge3d
 
 class DistEdge(Edge3d):
 
@@ -18,6 +18,7 @@ class DistEdge(Edge3d):
     def make_from_dists(dists):
         scal_feat = torch.tensor(dists, dtype=torch.float32).unsqueeze(-1)
         cat_feat = torch.zeros((len(scal_feat), 0), dtype=torch.long)
+        cat_feat = CategoricalTensor(cat_feat, num_classes=[])
         edata = Batch(DistEdge,
                       cat_feat=cat_feat,
                       scal_feat=scal_feat)

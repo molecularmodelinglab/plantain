@@ -183,69 +183,34 @@ def finalize_bigbind_vina(cfg, program, file_prefix):
         print(f"Saving docked df to {out_file}")
         screen_df.to_csv(out_file, index=False)
 
-def add_rec_file(file):
-    rec_file = cfg.platform.bigbind_dir + "/" + file
-    out_file = rec_file.split(".")[0] + ".mmtf"
-    # if not os.path.exists(out_file):
-    get_prot_from_file(rec_file)
+def make_activity_csvs(cfg, program):
+    for split in ["val", "test", "train"]:
+        sna_csv = cfg.platform[f"bigbind_{program}_dir"] + f"/activities_sna_1_{split}.csv"
+        sna_df = pd.read_csv(sna_csv)
 
+        act_csv = cfg.platform.bigbind_dir + f"/activities_{split}.csv"
+        act_df = pd.read_csv(act_csv)
+        sna_rows = {}
+        for i, row in tqdm(sna_df.iterrows(), total=len(sna_df)):
+            sna_rows[(row.lig_file, row.pocket)] = row
+        docked_lig_files = []
+        for i, act_row in tqdm(act_df.iterrows(), total=len(act_df)):
+            key = (act_row.lig_file, act_row.pocket)
+            if key in sna_rows:
+                docked_lig_files.append(sna_rows[key].docked_lig_file)
+            else:
+                docked_lig_files.append("None")
+        act_df["docked_lig_file"] = docked_lig_files
+        len(act_df), len(sna_df)
+        act_df = act_df.query("docked_lig_file != 'None'").reset_index(drop=True)
 
-def add_lig_file(file):
-    docked_file = cfg.platform.bigbind_vina_dir + "/" + file
-    out_file = docked_file.split(".")[0] + ".pkl"
-    # if not os.path.exists(out_file):
-    get_mol_from_file(docked_file)
-
-def get_file_size(f):
-    f.seek(0, os.SEEK_END)
-    ret = f.tell()
-    f.seek(0, os.SEEK_SET)
-    return ret
-
-def tar_structures(cfg, prefix, split):
-
-    df = pd.read_csv(cfg.platform.bigbind_vina_dir + f"/{prefix}_{split}.csv")
-    tar = tarfile.open(cfg.platform.bigbind_vina_dir + f"/{split}_files.tar", "w:")
-
-    # for file in tqdm(df.ex_rec_pocket_file):
-    #     add_rec_file(tar, file)
-    with Pool(processes=8) as p:
-
-        rec_files = df.ex_rec_pocket_file.unique()
-        lig_files = df.docked_lig_file.unique()
-
-        for _ in tqdm(p.imap(add_rec_file, rec_files), total=len(rec_files)):
-            pass
-        for _ in tqdm(p.imap(add_lig_file, lig_files), total=len(lig_files)):
-            pass
-
-        for file in rec_files:
-            rec_file = cfg.platform.bigbind_dir + "/" + file
-            out_file = rec_file.split(".")[0] + ".mmtf"
-            with open(out_file, 'rb') as f:
-                info = tarfile.TarInfo(file)
-                info.size = get_file_size(f)
-                tar.addfile(info, f)
-
-        for file in lig_files:
-            docked_file = cfg.platform.bigbind_vina_dir + "/" + file
-            out_file = docked_file.split(".")[0] + ".pkl"
-            with open(out_file, 'rb') as f:
-                info = tarfile.TarInfo(file)
-                info.size = get_file_size(f)
-                tar.addfile(info, f)
-
-    tar.close()
-
-def tar_all_structures(cfg, prefix):
-    for split in ("val", "test", "train"):
-        print(f"Tarring {split}")
-        tar_structures(cfg, prefix, split)
+        out_csv = cfg.platform[f"bigbind_{program}_dir"] + f"/activities_{split}.csv"
+        act_df.to_csv(out_csv)
 
 if __name__ == "__main__":
 
     cfg = get_config("vina_ff")
-    dock_all(cfg, "gnina", "activities_sna_1")
-    dock_all(cfg, "gnina", "structures")
+    # dock_all(cfg, "gnina", "activities_sna_1")
+    # dock_all(cfg, "gnina", "structures")
     # finalize_bigbind_vina(cfg, "structures")
-    # tar_all_structures(cfg, "activities_sna_1")
+    make_activity_csvs(cfg, "vina")

@@ -4,7 +4,7 @@ import numpy as np
 import scipy.spatial as spa
 
 from terrace.batch import Batch
-from datasets.graphs.graph3d import Graph3d, Node3d, Edge3d
+from .graph3d import Graph3d, Node3d, Edge3d
 
 def make_knn_edgelist(nodes: List[Node3d],
                       radius: float,

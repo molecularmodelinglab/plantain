@@ -6,13 +6,14 @@ from Bio.PDB.Residue import Residue
 from Bio.PDB.Atom import Atom
 from Bio.PDB.PDBExceptions import PDBConstructionWarning
 from Bio.PDB import PDBParser
+from terrace import CategoricalTensor
 
 from terrace.type_data import ClassTD, TensorTD, ShapeVar
 from terrace.batch import Batch
 from terrace.graph import GraphTD
-from datasets.graphs.graph3d import Graph3d, Node3d, Edge3d
-from datasets.graphs.knn import make_knn_edgelist
-from datasets.graphs.dist_edge import DistEdge
+from .graph3d import Graph3d, Node3d, Edge3d
+from .knn import make_knn_edgelist
+from .dist_edge import DistEdge
 from datasets.utils import safe_index
 
 # http://acces.ens-lyon.fr/biotic/rastop/help/colour.htm
@@ -60,16 +61,6 @@ def get_residue_type(residue, rec):
 
 class ProtAtomNode(Node3d):
 
-    @staticmethod
-    def get_type_data(prot_cfg: DictConfig) -> ClassTD:
-        max_cat_vals = []
-        for feat_name in prot_cfg.atom_feats:
-            max_cat_vals.append(len(possible_atom_feats[feat_name]))
-        cat_td = TensorTD((len(max_cat_vals), ), dtype=torch.long, max_values=max_cat_vals)
-        scal_td = TensorTD((0,), dtype=torch.float32)
-        coord_td = TensorTD((3,), dtype=torch.float32)
-        return ClassTD(ProtAtomNode, coord=coord_td, cat_feat=cat_td, scal_feat=scal_td)
-
     def __init__(self, prot_cfg: DictConfig, atom: Atom, prot: Model):
         coord = torch.tensor(list(atom.get_vector()), dtype=torch.float32)
         cat_feat = []
@@ -85,16 +76,6 @@ class ProtAtomNode(Node3d):
 
 class ProtResidueNode(Node3d):
 
-    @staticmethod
-    def get_type_data(prot_cfg: DictConfig) -> ClassTD:
-        max_cat_vals = []
-        for feat_name in prot_cfg.residue_feats:
-            max_cat_vals.append(len(possible_residue_feats[feat_name]))
-        cat_td = TensorTD((len(max_cat_vals), ), dtype=torch.long, max_values=max_cat_vals)
-        scal_td = TensorTD((0,), dtype=torch.float32)
-        coord_td = TensorTD((3,), dtype=torch.float32)
-        return ClassTD(ProtResidueNode, coord=coord_td, cat_feat=cat_td, scal_feat=scal_td)
-
     def __init__(self, prot_cfg: DictConfig, residue: Residue, prot: Model):
         coord = None
         for atom in residue:
@@ -103,12 +84,15 @@ class ProtResidueNode(Node3d):
         assert coord is not None
         cat_feat = []
         scal_feat = []
+        num_classes = []
         for feat_name in prot_cfg.residue_feats:
             get_feat = globals()["get_" + feat_name]
             possible = possible_residue_feats[feat_name]
+            num_classes.append(len(possible))
             feat = safe_index(possible, get_feat(residue, prot))
             cat_feat.append(feat)
         cat_feat = torch.tensor(cat_feat, dtype=torch.long)
+        cat_feat = CategoricalTensor(cat_feat, num_classes=num_classes)
         scal_feat = torch.tensor(scal_feat, dtype=torch.float32)
         super(ProtResidueNode, self).__init__(coord, cat_feat, scal_feat)
 
@@ -139,6 +123,7 @@ def get_nodes_and_edges_from_model(cfg: DictConfig, prot: Model):
 
     
     cat_feat = torch.zeros((len(residues), len(prot_cfg.residue_feats)), dtype=torch.long)
+    num_classes = [ len(possible_residue_feats[feat_name]) for feat_name in prot_cfg.residue_feats]
     coord = torch.zeros((len(residues), 3), dtype=torch.float32)
 
     assert prot_cfg.node_type == "residue"
@@ -155,10 +140,12 @@ def get_nodes_and_edges_from_model(cfg: DictConfig, prot: Model):
                 break
         else:
             raise AssertionError("Failed to find alpha carbon in residue")
+    
+    cat_feat = CategoricalTensor(cat_feat, num_classes=num_classes)
     nodes = Batch(ProtResidueNode,
-                coord = coord,
-                cat_feat = cat_feat,
-                scal_feat = torch.zeros((len(residues), 0)))
+                  coord = coord,
+                  cat_feat = cat_feat,
+                  scal_feat = torch.zeros((len(residues), 0)))
 
     if prot_cfg.edge_method.type == "knn":
         edges, dists = make_knn_edgelist(nodes, 
@@ -172,16 +159,6 @@ def get_nodes_and_edges_from_model(cfg: DictConfig, prot: Model):
     return nodes, edges, edata
 
 class ProtGraph(Graph3d):
-
-    @staticmethod
-    def get_type_data(cfg: DictConfig) -> GraphTD:
-        prot_cfg = cfg.data.rec_graph
-        if prot_cfg.node_type == "residue":
-            node_td = ProtResidueNode.get_type_data(prot_cfg)
-        elif prot_cfg.node_type == "atom":
-            node_td = ProtAtomNode.get_type_data(prot_cfg)
-        edge_td = DistEdge.get_type_data(prot_cfg)
-        return GraphTD(ProtGraph, node_td, edge_td, ShapeVar("RN"), ShapeVar("RE"))
 
     def __init__(self, cfg: DictConfig, prot: Model):
         prot_cfg = cfg.data.rec_graph
