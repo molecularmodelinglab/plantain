@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH -J vina_bigbind
-#SBATCH -t 2-00:00:00
+#SBATCH -t 10-00:00:00
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=16G
 #SBATCH --output=R-%x.%j.out
