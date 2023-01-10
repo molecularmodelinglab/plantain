@@ -93,4 +93,14 @@ def get_mol_from_file(fname, cache=True):
 def get_docked_scores_from_pdbqt(fname):
     return PDBQTMolecule.from_file(fname)._pose_data["free_energies"]
 
+def flatten_dict(d):
+    ret = {}
+    for key, val in d.items():
+        if isinstance(val, dict):
+            for key2, val2 in flatten_dict(val).items():
+                ret[f"{key}_{key2}"] = val2
+        else:
+            ret[key] = val
+    return ret
+
             

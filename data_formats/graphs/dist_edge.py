@@ -2,17 +2,9 @@ from omegaconf import DictConfig
 import torch
 
 from terrace import Batch, CategoricalTensor
-from terrace.type_data import ClassTD, TensorTD
 from .graph3d import Graph3d, Node3d, Edge3d
 
 class DistEdge(Edge3d):
-
-    @staticmethod
-    def get_type_data(prot_cfg: DictConfig) -> ClassTD:
-        max_cat_vals = []
-        cat_td = TensorTD((len(max_cat_vals), ), dtype=torch.long, max_values=max_cat_vals)
-        scal_td = TensorTD((1,), dtype=torch.float32)
-        return ClassTD(DistEdge, cat_feat=cat_td, scal_feat=scal_td)
 
     @staticmethod
     def make_from_dists(dists):

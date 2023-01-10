@@ -8,9 +8,7 @@ from Bio.PDB.PDBExceptions import PDBConstructionWarning
 from Bio.PDB import PDBParser
 from terrace import CategoricalTensor
 
-from terrace.type_data import ClassTD, TensorTD, ShapeVar
 from terrace.batch import Batch
-from terrace.graph import GraphTD
 from .graph3d import Graph3d, Node3d, Edge3d
 from .knn import make_knn_edgelist
 from .dist_edge import DistEdge

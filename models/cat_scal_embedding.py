@@ -13,8 +13,12 @@ class CatScalEmbedding(Module):
         self.embed_size = embed_size
 
     def forward(self, batch):
+        self.start_forward()
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            scal = self.make(LazyLinear, self.embed_size)(batch.scal_feat)
-            cat = self.make(LazyEmbedding, self.embed_size)(batch.cat_feat)
-        return torch.cat((scal, cat), -1)
+            ret = []
+            if batch.scal_feat.shape[-1] > 0:
+                ret.append(self.make(LazyLinear, self.embed_size)(batch.scal_feat))
+            if batch.cat_feat.shape[-1] > 0:
+                ret.append(self.make(LazyEmbedding, self.embed_size)(batch.cat_feat))
+        return torch.cat(ret, -1)

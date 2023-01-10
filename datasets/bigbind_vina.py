@@ -10,7 +10,7 @@ class BigBindVinaDataset(Dataset):
 
     def __init__(self, cfg, split, transform):
         super().__init__(cfg, transform)
-        self.sna_frac = cfg.sna_frac
+        self.sna_frac = cfg.data.sna_frac
         if self.sna_frac is None:
             csv = cfg.platform.bigbind_vina_dir + f"/activities_{split}.csv"
         else:

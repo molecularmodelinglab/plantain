@@ -1,5 +1,5 @@
 from terrace import Batch, collate
-from typing import Callable, Set, Type
+from typing import Callable, Dict, Set, Type
 import torch
 from torch import nn
 from torchmetrics import Metric, SpearmanCorrCoef, Accuracy, AUROC, ROC, Precision, R2Score, MeanSquaredError
@@ -19,9 +19,9 @@ class FullMetric(Metric):
 
 class MetricWrapper(FullMetric):
 
-    def __init__(self, metric_class: Type[Metric], get_y_p: Callable, get_y_t: Callable):
+    def __init__(self, metric_class: Type[Metric], get_y_p: Callable, get_y_t: Callable, *args, **kwargs):
         super().__init__()
-        self.metric = metric_class()
+        self.metric = metric_class(*args, **kwargs)
         self.get_y_p = get_y_p
         self.get_y_t = get_y_t
 
@@ -35,12 +35,14 @@ class MetricWrapper(FullMetric):
 
 
 class PerPocketMetric(FullMetric):
+    """ Computes a specific metric for every pocket and returns the 
+    mean and median values """
 
-    def __init__(self, metric_class: Type[FullMetric]):
+    def __init__(self, metric_class: Type[FullMetric], *args, **kwargs):
         """ reduce is either mean or median"""
         super().__init__()
-        self.metric_class = metric_class
-        self.metric = metric_class()
+        self.metric_maker = lambda: metric_class(*args, **kwargs)
+        self.metric = self.metric_maker()
         self.pocket_metrics = nn.ModuleDict()
 
     def update(self, x_b: Batch[LigAndRec], pred_b: Batch[Prediction], label_b: Batch[Label]):
@@ -51,8 +53,8 @@ class PerPocketMetric(FullMetric):
             predi = collate([pred])
             labeli = collate([label])
             if poc_id not in self.pocket_metrics:
-                self.pocket_metrics[poc_id] = self.metric_class()
-            self.pocket_metrics[poc_id].update(xi, predi, label)
+                self.pocket_metrics[poc_id] = self.metric_maker()
+            self.pocket_metrics[poc_id].update(xi, predi, labeli)
 
     def pre_compute(self):
         pass
@@ -62,23 +64,17 @@ class PerPocketMetric(FullMetric):
         results = []
         for metric in self.pocket_metrics.values():
             results.append(metric.compute())
-        results = torch.stack(results)
-        return {
-            "all": self.metric.compute(),
-            "mean": results.mean(),
-            "median": results.median()
-        }
-
-class PerPocketAUC(PerPocketMetric):
-
-    def __init__(self):
-        super().__init__(IsActiveAUC)
-
-    def pre_compute(self):
-        """ Can't compute AUC for labels that are all active or all inactive"""
-        for key, val in list(self.pocket_metrics.items()):
-            if True not in val.metric.target or False not in val.metric.target:
-                del self.pocket_metrics[key]
+        if len(results) == 0:
+            return {
+                "all": self.metric.compute()
+            }
+        else:
+            results = torch.stack(results)
+            return {
+                "all": self.metric.compute(),
+                "mean": results.mean(),
+                "median": results.median()
+            }
 
 # needed because the pickle can't handle lambdas
 def get_is_active(b):
@@ -90,6 +86,9 @@ def get_is_active_score(p):
 def get_activity_score(p):
     return p.activity_score
 
+def get_active_prob(p):
+    return p.active_prob
+
 def get_activity(b):
     return b.activity
 
@@ -99,7 +98,21 @@ def identity(b):
 class IsActiveAUC(MetricWrapper):
 
     def __init__(self):
-        super().__init__(AUROC, get_is_active_score, get_is_active)
+        super().__init__(AUROC, get_is_active_score, get_is_active, 'binary')
+
+    def reset(self):
+        super().reset()
+
+class PerPocketAUC(PerPocketMetric):
+
+    def __init__(self):
+        super().__init__(IsActiveAUC)
+
+    def pre_compute(self):
+        """ Can't compute AUC for labels that are all active or all inactive"""
+        for key, val in list(self.pocket_metrics.items()):
+            if True not in val.metric.target or False not in val.metric.target:
+                del self.pocket_metrics[key]
 
 class ActivitySpearman(MetricWrapper):
 
@@ -113,7 +126,11 @@ def get_single_task_metrics(task: Type[Task]):
         }),
         "score_activity_regr": nn.ModuleDict({
             "spearman": PerPocketMetric(ActivitySpearman),
-        })
+        }),
+        "classify_activity": nn.ModuleDict({
+            "acc": MetricWrapper(Accuracy, get_active_prob, get_is_active, 'binary'),
+            "precision": MetricWrapper(Precision, get_active_prob, get_is_active, 'binary')
+        }),
     }[task.get_name()]
 
 def get_metrics(tasks: Set[Type[Task]]):
@@ -121,3 +138,7 @@ def get_metrics(tasks: Set[Type[Task]]):
     for task in tasks:
         ret.update(get_single_task_metrics(task))
     return ret
+
+def reset_metrics(module):
+    if isinstance(module, Metric):
+        module.reset()

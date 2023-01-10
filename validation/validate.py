@@ -2,21 +2,11 @@
 from tqdm import tqdm
 from datasets.make_dataset import make_dataloader
 from validation.metrics import get_metrics
+from common.utils import flatten_dict
 
-def flatten_dict(d):
-    ret = {}
-    for key, val in d.items():
-        if isinstance(val, dict):
-            for key2, val2 in flatten_dict(val).items():
-                ret[f"{key}_{key2}"] = val2
-        else:
-            ret[key] = val
-    return ret
+def validate(cfg, model, dataset_name, split, num_batches=None):
 
-
-def validate(cfg, model, split, num_batches=None):
-
-    loader = make_dataloader(cfg, split, model.get_data_format())
+    loader = make_dataloader(cfg, dataset_name, split, model.get_data_format())
     tasks = model.get_tasks().intersection(loader.dataset.get_tasks())
     metrics = get_metrics(tasks)
 

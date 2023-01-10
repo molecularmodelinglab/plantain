@@ -1,22 +1,27 @@
-from models.gnn_bind import GNNBind
-from models.fp_nn import FpNN
-from models.diffusion import Diffusion
-from models.outer_prod_gnn import OuterProdGNN
-from models.interaction_gnn import InteractionGNN
-from models.force_field import ForceField
+import importlib
+from models.model import Model
 
-name2model_cls = {
-   "gnn_bind": GNNBind,
-   "fp_nn": FpNN,
-   "diffusion": Diffusion,
-   "outer_prod_gnn": OuterProdGNN,
-   "interaction_gnn": InteractionGNN,
-   "force_field": ForceField
-}
+# import all the files in the directory so we can create
+# a name to model mapping
+import os
+for module in os.listdir(os.path.dirname(__file__)):
+    if module == '__init__.py' or module[-3:] != '.py':
+        continue
+    importlib.import_module('models.'+module[:-3])
 
-def get_model_cls(cfg):
-    return name2model_cls[cfg.model.type]
+def flatten_subclasses(cls):
+    ret = [ cls ]
+    for subclass in cls.__subclasses__():
+        ret += flatten_subclasses(subclass)
+    return ret
 
-def make_model(cfg, in_node,):
-    mdl_cls = get_model_cls(cfg)
-    return mdl_cls(cfg, in_node)
+name_to_model_cls = {}
+for class_ in flatten_subclasses(Model):
+    try:
+        name_to_model_cls[class_.get_name()] = class_
+    except NotImplementedError:
+        pass
+
+def make_model(cfg):
+    mdl_cls = name_to_model_cls[cfg.model.type]
+    return mdl_cls(cfg)

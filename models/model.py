@@ -1,7 +1,8 @@
 from typing import Callable, Optional, Set, Type
-from terrace import collate
+import torch
+from terrace import collate, Batch
 from data_formats.base_formats import Data, Input, Prediction
-from data_formats.tasks import Task
+from data_formats.tasks import ClassifyActivity, ScoreActivityClass, Task
 
 class Model():   
     
@@ -18,9 +19,8 @@ class Model():
                 pred = collate([ getattr(self, single_method_name)(item) for item in x ])
                 ret.append(pred)
             else:
-                raise AttributeError(f"Do perform {task.get_name()}, model must have either {method_name} or {single_method_name} methods")
-        # smh there's a terrace bug...
-        return ret[0] # Data.merge(ret)
+                raise AttributeError(f"To perform {task.get_name()}, model must have either {method_name} or {single_method_name} methods")
+        return Data.merge(ret)
 
     @staticmethod
     def get_name() -> str:
@@ -31,3 +31,22 @@ class Model():
 
     def get_data_format(self) -> Optional[Callable[[Input], Input]]:
         raise NotImplementedError()
+
+class ScoreActivityClassModel(Model):
+
+    def get_tasks(self):
+        return { ScoreActivityClass }
+
+class ClassifyActivityModel(ScoreActivityClassModel):
+
+    def get_tasks(self):
+        return { ScoreActivityClass, ClassifyActivity }
+
+    def score_activity_class(self, x):
+        score = self.classify_activity(x).active_prob_unnorm
+        return Batch(ScoreActivityClass.Prediction, is_active_score=score)
+
+    def classify_activity(self, x):
+        unnorm = self(x)
+        prob = torch.sigmoid(unnorm)
+        return Batch(ClassifyActivity.Prediction, active_prob_unnorm=unnorm, active_prob=prob)

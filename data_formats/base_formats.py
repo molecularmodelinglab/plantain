@@ -4,7 +4,7 @@ from inspect import Signature, Parameter
 from dataclasses import dataclass
 from rdkit import Chem
 from Bio.PDB.Model import Model
-from typing import List, Optional, Tuple, Type, TypeVar, Generic
+from typing import List, Optional, Tuple, Type, TypeVar, Generic, get_type_hints
 from terrace import Batchable, Batch
 
 
@@ -41,8 +41,11 @@ class Data(Batchable):
             for this kind of thing in terrace shortly"""
             batch_subclasses = tuple(map(lambda item: item.type_tree.type, items))
             type_name = "Data[" + ", ".join(map(lambda cls: cls.__qualname__, batch_subclasses)) + "]"
-            batch_subclass = dataclass(type(type_name, batch_subclasses, {}))
-
+            if type_name in globals():
+                batch_subclass = globals()[type_name]
+            else:
+                batch_subclass = dataclass(type(type_name, batch_subclasses, {}))
+                
             kwargs = {}
             for item in items:
                 kwargs.update(item.store)
@@ -71,6 +74,7 @@ class LigAndRec(Input):
     rec: Model
     pocket_id: str
 
+@dataclass
 class LigAndRecDocked(LigAndRec):
     # The number of docked poses for each datapoint is not necessarily
     # the same, so we must define a custom collate method
