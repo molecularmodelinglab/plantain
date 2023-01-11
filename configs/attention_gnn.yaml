@@ -9,7 +9,7 @@ train_dataset: bigbind_act
 val_datasets: [ bigbind_act ]
 
 monitor_metric:
-  name: val_auroc
+  name: val_auroc_all
   mode: max
 
 data:
