@@ -70,6 +70,9 @@ class Trainer(pl.LightningModule):
         for key, val in flatten_dict(computed_metrics).items():
             self.log(f"{prefix}_{key}", val, prog_bar=False, on_step=on_step, on_epoch=on_epoch, batch_size=len(x))
         
+        if self.trainer.is_last_batch and prefix != "train":
+            self.log_all_metrics(prefix)
+
         return loss
 
     def training_step(self, batch, batch_idx):
@@ -81,6 +84,15 @@ class Trainer(pl.LightningModule):
     def test_step(self, batch, batch_idx):
         return self.shared_eval('test', batch, batch_idx)
 
+    def log_all_metrics(self, prefix):
+        tasks = self.get_tasks(self.get_dataloader(prefix))
+        metrics = self.make_metrics(prefix, tasks)
+        computed_metrics = {}
+        for key, val in metrics.items():
+            computed_metrics[key] = val.compute()
+        for key, val in flatten_dict(computed_metrics).items():
+            self.log(f"{prefix}_{key}", val, prog_bar=False, on_epoch=True, batch_size=1)
+
     def on_train_end(self):
         self.get_metrics("train").apply(reset_metrics)
 
@@ -88,7 +100,7 @@ class Trainer(pl.LightningModule):
         self.get_metrics("val").apply(reset_metrics)
 
     def on_test_end(self):
-        self.get_metrics("train").apply(reset_metrics)
+        self.get_metrics("test").apply(reset_metrics)
 
     def configure_optimizers(self):
         return torch.optim.AdamW(self.parameters(), lr=self.cfg.learn_rate)

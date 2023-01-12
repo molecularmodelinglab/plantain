@@ -25,3 +25,4 @@ notebooks
 .vscode
 *.prof
 terrace
+terrace_tmp
