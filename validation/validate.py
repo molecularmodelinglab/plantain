@@ -1,9 +1,10 @@
-
+import torch
 from tqdm import tqdm
 from datasets.make_dataset import make_dataloader
 from validation.metrics import get_metrics
 from common.utils import flatten_dict
 
+@torch.no_grad()
 def validate(cfg, model, dataset_name, split, num_batches=None):
 
     loader = make_dataloader(cfg, dataset_name, split, model.get_data_format())

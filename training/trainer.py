@@ -73,6 +73,9 @@ class Trainer(pl.LightningModule):
         if self.trainer.is_last_batch and prefix != "train":
             self.log_all_metrics(prefix)
 
+        if "profile_max_batches" in self.cfg and batch_idx >= self.cfg.profile_max_batches:
+            raise RuntimeError("Stop the process!")
+
         return loss
 
     def training_step(self, batch, batch_idx):

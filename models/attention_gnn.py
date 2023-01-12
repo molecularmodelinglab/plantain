@@ -18,14 +18,14 @@ class MPNN(Module):
         node_size = node_feats.shape[-1]
         edge_func = self.make(LazyLinear, node_size*node_size)
         gnn = self.make(NNConv, node_size, node_size, edge_func, 'mean')
-        x = gnn(g.dgl_batch, node_feats, edge_feats)
+        x = gnn(g.dgl(), node_feats, edge_feats)
         return self.make(LazyLinear, node_size)(F.leaky_relu(x))
 
 def batched_outer_prod(x, batch_lig_feat, batch_rec_feat):
     tot_rec = 0
     tot_lig = 0
     ret = []
-    for l, r in zip(x.lig_graph.dgl_batch.batch_num_nodes(), x.rec_graph.dgl_batch.batch_num_nodes()):
+    for l, r in zip(x.lig_graph.dgl().batch_num_nodes(), x.rec_graph.dgl().batch_num_nodes()):
         lig_feat = batch_lig_feat[tot_lig:tot_lig+l]
         rec_feat = batch_rec_feat[tot_rec:tot_rec+r]
 
@@ -49,7 +49,7 @@ class AttentionGNN(Module, ClassifyActivityModel):
         return "attention_gnn"
 
     def get_data_format(self):
-        return LigAndRecGraph
+        return LigAndRecGraph.make
 
     def forward(self, x):
 
