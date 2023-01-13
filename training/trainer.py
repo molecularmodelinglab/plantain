@@ -13,11 +13,22 @@ from .loss import get_losses
 class Trainer(pl.LightningModule):
     """ General trainer for the neural networks """
 
+    @classmethod
+    def from_checkpoint(cls, cfg, checkpoint_file):
+        return cls.load_from_checkpoint(checkpoint_file, cfg=cfg)
+
     def __init__(self, cfg):
         super().__init__()
         self.cfg = cfg
         self.model = make_model(cfg)
         self.metrics = nn.ModuleDict()
+
+        val_loader = make_dataloader(self.cfg, self.cfg.val_datasets[0], "val", self.model.get_data_format())
+
+        # give the model an initial batch before training to initialize
+        # its (lazily created) parameters
+        x, y = collate([val_loader.dataset[0]])
+        self.model(x)
     
     def get_tasks(self, loader):
         if isinstance(loader.dataset, CombinedDataset):

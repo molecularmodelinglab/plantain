@@ -51,7 +51,7 @@ class AttentionGNN(Module, ClassifyActivityModel):
     def get_data_format(self):
         return LigAndRecGraph.make
 
-    def forward(self, x):
+    def forward(self, x, return_matrix=False):
 
         self.start_forward()
 
@@ -82,6 +82,9 @@ class AttentionGNN(Module, ClassifyActivityModel):
 
 
         ops = batched_outer_prod(x, lig_hid, rec_hid)
+        if return_matrix:
+            return ops
+
         out = torch.stack([ op.mean() for op in ops ])
 
         return out

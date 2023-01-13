@@ -123,6 +123,7 @@ class BondEdge(Edge3d):
 class MolGraph(Graph3d):
 
     def __init__(self, cfg: DictConfig, mol: Chem.Mol, conformer: Optional[int] = 0):
+        mol = Chem.RemoveHs(mol)
         mol_cfg = cfg.data.lig_graph
         atom_feats = list(mol_cfg.atom_feats)
         bond_feats = list(mol_cfg.bond_feats)

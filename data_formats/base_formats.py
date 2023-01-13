@@ -95,3 +95,11 @@ class IsActive(Label):
 class Activity(Label):
     activity: bool
 
+class Pose(Label):
+    lig_coords: torch.Tensor
+
+    @staticmethod
+    def collate_lig_coords(all_lig_coords: List[torch.Tensor]) -> List[torch.Tensor]:
+        return all_lig_coords
+
+

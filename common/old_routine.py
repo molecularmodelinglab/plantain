@@ -8,7 +8,7 @@ from common.cache import cache
 
 def get_weight_artifact(run, tag="latest"):
     api = wandb.Api()
-    return api.artifact(f"{run.project}/model-{run.id}:latest", type='model')
+    return api.artifact(f"{run.project}/model-{run.id}:{tag}", type='model')
 
 def get_old_routine(cfg, run, tag="latest"):
     cfg = get_run_config(run, cfg)
