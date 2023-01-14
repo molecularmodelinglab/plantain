@@ -74,5 +74,6 @@ model:
     node_out_size: 32
 
   num_mpnn_layers: 5
+  inner_attention: true
 
   out_size: 16

@@ -1,7 +1,7 @@
 import torch
 import torch.nn.functional as F
 from data_formats.graphs.graph_formats import LigAndRecGraph
-from terrace import Module, LazyLinear
+from terrace import Module, LazyLinear, LazyMultiheadAttention, LazyLayerNorm
 from dgl.nn.pytorch import NNConv
 from data_formats.tasks import ClassifyActivity
 from .model import ClassifyActivityModel
@@ -70,6 +70,10 @@ class AttentionGNN(Module, ClassifyActivityModel):
         for layer in range(self.cfg.num_mpnn_layers):
             lig_hid = self.make(MPNN)(x.lig_graph, F.leaky_relu(lig_hid), lig_edge_feats)
             rec_hid = self.make(MPNN)(x.rec_graph, F.leaky_relu(rec_hid), rec_edge_feats)
+
+            if self.cfg.get("inner_attention", False):
+                rec_hid = self.make(LazyLayerNorm)(rec_hid + self.make(LazyMultiheadAttention, 1)(rec_hid, lig_hid, lig_hid)[0])
+                lig_hid = self.make(LazyLayerNorm)(lig_hid + self.make(LazyMultiheadAttention, 1)(lig_hid, rec_hid, rec_hid)[0])
 
             # make it residual!
             prev_layer = layer - 2

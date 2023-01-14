@@ -4,6 +4,7 @@ import pytorch_lightning as pl
 from pytorch_lightning.trainer.supporters import CombinedDataset
 from common.utils import flatten_dict
 from terrace import collate
+from git_timewarp import GitTimeWarp
 
 from datasets.make_dataset import make_dataloader
 from models.make_model import make_model
@@ -14,13 +15,25 @@ class Trainer(pl.LightningModule):
     """ General trainer for the neural networks """
 
     @classmethod
-    def from_checkpoint(cls, cfg, checkpoint_file):
-        return cls.load_from_checkpoint(checkpoint_file, cfg=cfg)
+    def from_checkpoint(cls, cfg, checkpoint_file, commit=None):
+        return cls.load_from_checkpoint(checkpoint_file, cfg=cfg, commit=commit)
 
-    def __init__(self, cfg):
+    def __init__(self, cfg, commit=None):
         super().__init__()
         self.cfg = cfg
+
+        from models.make_model import make_model
         self.model = make_model(cfg)
+
+        # this is some truly cursed shit right here
+        if commit is not None:
+            with GitTimeWarp(commit):
+                old_class = self.model.__class__
+                from models.make_model import make_model
+                self.model = make_model(cfg)
+                old_class.forward = self.model.__class__.forward
+                self.model.__class__ = old_class
+
         self.metrics = nn.ModuleDict()
 
         val_loader = make_dataloader(self.cfg, self.cfg.val_datasets[0], "val", self.model.get_data_format())
@@ -123,11 +136,6 @@ class Trainer(pl.LightningModule):
 
         train_loader = make_dataloader(self.cfg, self.cfg.train_dataset, "train", self.model.get_data_format())
         val_loader = make_dataloader(self.cfg, self.cfg.val_datasets[0], "val", self.model.get_data_format())
-
-        # give the model an initial batch before training to initialize
-        # its (lazily created) parameters
-        x, y = collate([train_loader.dataset[0]])
-        self.model(x)
 
         gpus = int(torch.cuda.is_available())
 

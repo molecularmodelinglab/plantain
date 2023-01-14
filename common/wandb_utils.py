@@ -21,5 +21,5 @@ def get_old_model(cfg, run_name, tag="latest"):
     if not os.path.exists(artifact_dir):
         assert os.path.normpath(artifact_dir) == os.path.normpath(artifact.download())
     checkpoint_file = artifact_dir + "/model.ckpt"
-    trainer = Trainer.from_checkpoint(cfg, checkpoint_file)
+    trainer = Trainer.from_checkpoint(cfg, checkpoint_file)#, run.commit)
     return trainer.model
