@@ -7,7 +7,7 @@ def bce_loss(x, pred, y):
 def inv_dist_mse(x, pred, y):
     losses = []
     for rec, lig_coords, pred_mat in zip(x.rec_graph, y.lig_coords, pred.inv_dist_mat):
-        true_mat = torch.cdist(lig_coords, rec.ndata.coord)
+        true_mat = 1.0/torch.cdist(lig_coords, rec.ndata.coord)
         loss = F.mse_loss(pred_mat, true_mat)
         losses.append(loss)
     return torch.stack(losses).mean()
