@@ -16,6 +16,10 @@ def get_old_model(cfg, run_name, tag="latest"):
     assert len(runs) == 1
     run = runs[0]
     cfg = get_run_config(run, cfg)
+
+    if run.commit == "cc756c9d0482e4453f4185cc0506e3700349cba5":
+        cfg.model.use_slope_intercept = True
+
     artifact = get_weight_artifact(run, tag)
     artifact_dir = f"artifacts/model-{run.id}:{artifact.version}"
     if not os.path.exists(artifact_dir):

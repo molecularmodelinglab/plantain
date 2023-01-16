@@ -44,8 +44,9 @@ class AttentionGNN(Module, ClassifyActivityModel):
     def __init__(self, cfg):
         super().__init__()
         self.cfg = cfg.model
-        self.slope = nn.Parameter(torch.tensor(0.0))
-        self.intercept = nn.Parameter(torch.tensor(0.1))
+        if self.cfg.get("use_slope_intercept", False):
+            self.slope = nn.Parameter(torch.tensor(0.0))
+            self.intercept = nn.Parameter(torch.tensor(0.1))
 
     @staticmethod
     def get_name():
@@ -83,8 +84,11 @@ class AttentionGNN(Module, ClassifyActivityModel):
                 lig_hid = self.make(LazyLayerNorm)(lig_hid)
 
             if self.cfg.get("inner_attention", False):
-                rec_hid = self.make(LazyLayerNorm)(rec_hid + self.make(LazyMultiheadAttention, 1)(rec_hid, lig_hid, lig_hid)[0])
-                lig_hid = self.make(LazyLayerNorm)(lig_hid + self.make(LazyMultiheadAttention, 1)(lig_hid, rec_hid, rec_hid)[0])
+                rec_hid = (rec_hid + self.make(LazyMultiheadAttention, 1)(rec_hid, lig_hid, lig_hid)[0])
+                lig_hid = (lig_hid + self.make(LazyMultiheadAttention, 1)(lig_hid, rec_hid, rec_hid)[0])
+                if self.cfg.get("use_layer_norm", False):
+                    rec_hid = self.make(LazyLayerNorm)(rec_hid)
+                    lig_hid = self.make(LazyLayerNorm)(lig_hid)
 
             # make it residual!
             prev_layer = layer - 2
@@ -97,7 +101,8 @@ class AttentionGNN(Module, ClassifyActivityModel):
 
 
         ops = batched_outer_prod(x, lig_hid, rec_hid)
-        ops = [ op*self.slope + self.intercept for op in ops ]
+        if self.cfg.get("use_slope_intercept", False):
+            ops = [ op*self.slope + self.intercept for op in ops ]
 
         out = torch.stack([ op.mean() for op in ops ])
 

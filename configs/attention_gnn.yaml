@@ -85,5 +85,6 @@ model:
   num_mpnn_layers: 5
   inner_attention: false
   use_layer_norm: true
+  use_slope_intercept: true
 
   out_size: 16
