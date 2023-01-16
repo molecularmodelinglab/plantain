@@ -11,8 +11,10 @@ train_dataset: bigbind_struct
 val_datasets: [ bigbind_struct ]
 
 monitor_metric:
-  name: val_auroc_all
-  mode: max
+  # name: val_auroc_all
+  # mode: max
+  name: val_inv_dist_mse
+  mode: min
 
 data:
   
