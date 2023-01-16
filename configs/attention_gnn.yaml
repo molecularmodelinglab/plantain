@@ -75,14 +75,14 @@ model:
   rec_encoder:
     node_embed_size: 64
     edge_embed_size: 64
-    node_out_size: 32
+    node_out_size: 64
 
   lig_encoder:
     node_embed_size: 16
     edge_embed_size: 64
-    node_out_size: 32
+    node_out_size: 64
 
-  num_mpnn_layers: 5
+  num_mpnn_layers: 10
   inner_attention: true
   use_layer_norm: true
   use_slope_intercept: true
