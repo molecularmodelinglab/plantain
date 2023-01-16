@@ -1,4 +1,4 @@
-from typing import Callable, Optional, Set, Type
+from typing import Callable, List, Optional, Set, Type
 import torch
 from terrace import collate, Batch
 from data_formats.base_formats import Data, Input, Prediction
@@ -28,8 +28,11 @@ class Model():
     def get_name() -> str:
         raise NotImplementedError()
 
-    def get_tasks(self) -> Set[Type[Task]]:
+    def get_tasks(self) -> List[Type[Task]]:
         raise NotImplementedError()
+
+    def get_pred_type(self) -> Type[Prediction]:
+        return Data.create_type([ t.Prediction for t in self.get_tasks() ])
 
     def get_data_format(self) -> Optional[Callable[[Input], Input]]:
         raise NotImplementedError()
@@ -37,7 +40,7 @@ class Model():
 class ScoreActivityClassModel(Model):
 
     def get_tasks(self):
-        return { ScoreActivityClass }
+        return [ ScoreActivityClass ]
 
     def score_activity_class(self, x, pred):
         return Batch(ScoreActivityClass.Prediction, is_active_score=pred)
@@ -45,7 +48,7 @@ class ScoreActivityClassModel(Model):
 class ScoreActivityRegrModel(Model):
 
     def get_tasks(self):
-        return { ScoreActivityRegr }
+        return [ ScoreActivityRegr ]
 
     def score_activity_regr(self, x, pred):
         return Batch(ScoreActivityRegr.Prediction, activity_score=pred)
@@ -53,14 +56,19 @@ class ScoreActivityRegrModel(Model):
 class ScoreActivityModel(ScoreActivityClassModel, ScoreActivityRegrModel):
     
     def get_tasks(self):
-        return { ScoreActivityRegr, ScoreActivityClass }
+        return [ ScoreActivityRegr, ScoreActivityClass ]
 
 class ClassifyActivityModel(ScoreActivityClassModel):
 
     def get_tasks(self):
-        return { ScoreActivityClass, ClassifyActivity }
+        return [ ScoreActivityClass, ClassifyActivity ]
 
     def classify_activity(self, x, pred):
         unnorm = pred
         prob = torch.sigmoid(unnorm)
         return Batch(ClassifyActivity.Prediction, active_prob_unnorm=unnorm, active_prob=prob)
+
+    def make_prediction(self, unnorm):
+        prob = torch.sigmoid(unnorm)
+        type_ = self.get_pred_type()
+        return Batch(type_, active_prob_unnorm=unnorm, active_prob=prob, is_active_score=unnorm)

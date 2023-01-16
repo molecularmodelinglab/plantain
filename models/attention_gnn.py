@@ -1,7 +1,8 @@
 import torch
 import torch.nn.functional as F
+from data_formats.base_formats import Data, InvDistMat
 from data_formats.graphs.graph_formats import LigAndRecGraph
-from terrace import Module, LazyLinear, LazyMultiheadAttention, LazyLayerNorm
+from terrace import Module, LazyLinear, LazyMultiheadAttention, LazyLayerNorm, Batch
 from dgl.nn.pytorch import NNConv
 from data_formats.tasks import ClassifyActivity
 from .model import ClassifyActivityModel
@@ -37,7 +38,6 @@ def batched_outer_prod(x, batch_lig_feat, batch_rec_feat):
 
     return ret
 
-
 class AttentionGNN(Module, ClassifyActivityModel):
 
     def __init__(self, cfg):
@@ -51,7 +51,7 @@ class AttentionGNN(Module, ClassifyActivityModel):
     def get_data_format(self):
         return LigAndRecGraph.make
 
-    def forward(self, x, return_matrix=False):
+    def forward(self, x):
 
         self.start_forward()
 
@@ -86,10 +86,14 @@ class AttentionGNN(Module, ClassifyActivityModel):
 
 
         ops = batched_outer_prod(x, lig_hid, rec_hid)
-        if return_matrix:
-            return ops
 
         out = torch.stack([ op.mean() for op in ops ])
 
-        return out
+        return out, ops
+
+    def predict(self, tasks, x):
+        score, mats = self(x)
+        p1 = super().make_prediction(score)
+        p2 = Batch(InvDistMat, inv_dist_mat=mats)
+        return Data.merge([p1, p2])
             

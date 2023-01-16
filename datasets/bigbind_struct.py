@@ -62,7 +62,7 @@ class BigBindStructDataset(Dataset):
             point = conformer.GetAtomPosition(atom.GetIdx())
             coord = [ point.x, point.y, point.z ]
             lig_coords.append(coord)
-
+        
         y = Pose(torch.tensor(lig_coords, dtype=torch.float32))
 
         return x, y

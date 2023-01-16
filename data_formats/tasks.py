@@ -15,7 +15,6 @@ class ScoreActivityClass(Task):
     Input = LigAndRec
     Label = IsActive
 
-    @dataclass
     class Prediction(Prediction):
         is_active_score: float
         
@@ -28,7 +27,6 @@ class ScoreActivityRegr(Task):
     Input = LigAndRec
     Label = Activity
 
-    @dataclass
     class Prediction(Prediction):
         activity_score: float
         
@@ -36,14 +34,11 @@ class ScoreActivityRegr(Task):
     def get_name() -> str:
         return "score_activity_regr"
 
-
-
 class ClassifyActivity(Task):
 
     Input = LigAndRec
     Label = IsActive
 
-    @dataclass
     class Prediction(Prediction):
         active_prob_unnorm: float
         active_prob: float
@@ -59,7 +54,6 @@ class ScorePose(Task):
     class Label(Label):
         pose_rmsds: List[float]
 
-    @dataclass
     class Prediction(Prediction):
         pose_scores: List[float]
 

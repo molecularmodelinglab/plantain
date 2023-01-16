@@ -49,7 +49,7 @@ class Trainer(pl.LightningModule):
             # dataset = loader.dataset.datasets[0]
         else:
             dataset = loader.dataset
-        return self.model.get_tasks().intersection(dataset.get_tasks())
+        return set(self.model.get_tasks()).intersection(dataset.get_tasks())
 
     @property
     def device(self):
@@ -76,7 +76,7 @@ class Trainer(pl.LightningModule):
         metrics = self.make_metrics(prefix, tasks)
 
         pred = self.model.predict(tasks, x)
-        loss, loss_dict = get_losses(self.cfg, pred, y)
+        loss, loss_dict = get_losses(self.cfg, x, pred, y)
 
         self.log(f"{prefix}_loss", loss, prog_bar=True, batch_size=len(x))
         for key, val in loss_dict.items():
