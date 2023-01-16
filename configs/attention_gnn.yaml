@@ -84,5 +84,6 @@ model:
 
   num_mpnn_layers: 5
   inner_attention: false
+  use_layer_norm: true
 
   out_size: 16

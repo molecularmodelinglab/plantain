@@ -1,4 +1,5 @@
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 from data_formats.base_formats import Data, InvDistMat
 from data_formats.graphs.graph_formats import LigAndRecGraph
@@ -43,6 +44,8 @@ class AttentionGNN(Module, ClassifyActivityModel):
     def __init__(self, cfg):
         super().__init__()
         self.cfg = cfg.model
+        self.slope = nn.Parameter(torch.tensor(0.0))
+        self.intercept = nn.Parameter(torch.tensor(0.1))
 
     @staticmethod
     def get_name():
@@ -64,12 +67,20 @@ class AttentionGNN(Module, ClassifyActivityModel):
         lig_hid = self.make(LazyLinear, lig_cfg.node_out_size)(F.leaky_relu(lig_node_feats))
         rec_hid = self.make(LazyLinear, rec_cfg.node_out_size)(F.leaky_relu(rec_node_feats))
 
+        if self.cfg.get("use_layer_norm", False):
+            rec_hid = self.make(LazyLayerNorm)(rec_hid)
+            lig_hid = self.make(LazyLayerNorm)(lig_hid)
+
         prev_lig_hid = []
         prev_rec_hid = []
 
         for layer in range(self.cfg.num_mpnn_layers):
             lig_hid = self.make(MPNN)(x.lig_graph, F.leaky_relu(lig_hid), lig_edge_feats)
             rec_hid = self.make(MPNN)(x.rec_graph, F.leaky_relu(rec_hid), rec_edge_feats)
+
+            if self.cfg.get("use_layer_norm", False):
+                rec_hid = self.make(LazyLayerNorm)(rec_hid)
+                lig_hid = self.make(LazyLayerNorm)(lig_hid)
 
             if self.cfg.get("inner_attention", False):
                 rec_hid = self.make(LazyLayerNorm)(rec_hid + self.make(LazyMultiheadAttention, 1)(rec_hid, lig_hid, lig_hid)[0])
@@ -86,6 +97,7 @@ class AttentionGNN(Module, ClassifyActivityModel):
 
 
         ops = batched_outer_prod(x, lig_hid, rec_hid)
+        ops = [ op*self.slope + self.intercept for op in ops ]
 
         out = torch.stack([ op.mean() for op in ops ])
 
