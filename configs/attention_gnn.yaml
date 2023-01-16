@@ -83,7 +83,7 @@ model:
     node_out_size: 32
 
   num_mpnn_layers: 5
-  inner_attention: false
+  inner_attention: true
   use_layer_norm: true
   use_slope_intercept: true
 
