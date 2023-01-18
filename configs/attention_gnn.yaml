@@ -13,7 +13,7 @@ val_datasets: [ bigbind_struct ]
 monitor_metric:
   # name: val_auroc_all
   # mode: max
-  name: val_inv_dist_mse
+  name: val_loss
   mode: min
 
 data:
