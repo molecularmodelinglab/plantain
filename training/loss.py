@@ -12,10 +12,28 @@ def inv_dist_mse(x, pred, y):
         losses.append(loss)
     return torch.stack(losses).mean()
 
+def rec_interaction_bce(x, pred, y):
+    
+    losses = []
+    for lig_graph, rec_graph, pred_mat in zip(x.lig_graph, x.rec_graph, pred.inv_dist_mat):
+        lig_coord = lig_graph.ndata.coord
+        rec_coord = rec_graph.ndata.coord
+        dist = torch.cdist(lig_coord, rec_coord)
+
+        nulls = torch.tensor([[5.0]]*len(lig_coord))
+        dist = torch.cat((dist, nulls), 1)
+        labels = torch.argmin(dist, 1)
+
+        losses.append(F.cross_entropy(pred_mat, labels))
+
+    return torch.stack(losses).mean()
+
+
 def get_single_loss(loss_cfg, x, pred, y):
     loss_fn = {
         "bce": bce_loss,
         "inv_dist_mse": inv_dist_mse,
+        "rec_interaction_bce": rec_interaction_bce,
     }[loss_cfg.func]
     if "x" in loss_cfg:
         x = getattr(x, loss_cfg["x"])

@@ -95,10 +95,6 @@ class LigAndRecDocked(LigAndRec):
     def collate_docked_scores(all_docked_scores: List[torch.Tensor]) -> List[torch.Tensor]:
         return all_docked_scores
 
-    # @staticmethod
-    # def index_docked_scores(all_docked_scores, index):
-    #     return all_docked_scores[index]
-
 class IsActive(Label):
     is_active: bool
 

@@ -57,16 +57,21 @@ data:
 #     y: is_active
 #     weight: 1.0
 
+# losses:
+#   inv_dist_mse:
+#     func: inv_dist_mse
+#     weight: 1.0
+
 losses:
-  inv_dist_mse:
-    func: inv_dist_mse
+  rec_inter_bce:
+    func: rec_interaction_bce
     weight: 1.0
 
 optimizer: adamw
-learn_rate: 1e-5
+learn_rate: 1e-3
 max_epochs: 500
 
-batch_size: 16
+batch_size: 32
 
 model:
 
@@ -85,6 +90,7 @@ model:
   num_mpnn_layers: 10
   inner_attention: true
   use_layer_norm: true
-  use_slope_intercept: true
+  use_slope_intercept: false
+  use_null_residue: true
 
   out_size: 16

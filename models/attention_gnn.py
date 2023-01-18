@@ -23,7 +23,7 @@ class MPNN(Module):
         x = gnn(g.dgl(), node_feats, edge_feats)
         return self.make(LazyLinear, node_size)(F.leaky_relu(x))
 
-def batched_outer_prod(x, batch_lig_feat, batch_rec_feat):
+def batched_feats(x, batch_lig_feat, batch_rec_feat):
     tot_rec = 0
     tot_lig = 0
     ret = []
@@ -34,10 +34,9 @@ def batched_outer_prod(x, batch_lig_feat, batch_rec_feat):
         tot_rec += r
         tot_lig += l
 
-        op = torch.einsum('lf,rf->lr', lig_feat, rec_feat)
-        ret.append(op)
-
-    return ret
+        yield lig_feat, rec_feat
+        # op = torch.einsum('lf,rf->lr', lig_feat, rec_feat)
+        # ret.append(op)
 
 class AttentionGNN(Module, ClassifyActivityModel):
 
@@ -68,9 +67,16 @@ class AttentionGNN(Module, ClassifyActivityModel):
         lig_hid = self.make(LazyLinear, lig_cfg.node_out_size)(F.leaky_relu(lig_node_feats))
         rec_hid = self.make(LazyLinear, rec_cfg.node_out_size)(F.leaky_relu(rec_node_feats))
 
+        # lig_hid = lig_hid.type(torch.complex64)
+        # rec_hid = rec_hid.type(torch.complex64)
+
         if self.cfg.get("use_layer_norm", False):
+            # lig_hid = torch.view_as_real(lig_hid)
+            # rec_hid = torch.view_as_real(rec_hid)
             rec_hid = self.make(LazyLayerNorm)(rec_hid)
             lig_hid = self.make(LazyLayerNorm)(lig_hid)
+            # lig_hid = torch.view_as_complex(lig_hid)
+            # rec_hid = torch.view_as_complex(rec_hid)
 
         prev_lig_hid = []
         prev_rec_hid = []
@@ -99,12 +105,31 @@ class AttentionGNN(Module, ClassifyActivityModel):
             prev_lig_hid.append(lig_hid)
             prev_rec_hid.append(rec_hid)
 
+        # add null rec atom to provide option for ligands
+        # to not interact with anything
+        if self.cfg.get("use_null_residue", False):
+            null_data = torch.rand((1, rec_hid.size(-1)))
+            null = self.make_param(nn.Parameter, null_data)
 
-        ops = batched_outer_prod(x, lig_hid, rec_hid)
+        ops = []
+        for lig_feat, rec_feat in batched_feats(x, lig_hid, rec_hid):
+            if self.cfg.get("use_null_residue", False):
+                rec_feat = torch.cat((rec_feat, null), 0)
+            op = torch.einsum('lf,rf->lr', lig_feat, rec_feat)
+            ops.append(op)
+
         if self.cfg.get("use_slope_intercept", False):
             ops = [ op*self.slope + self.intercept for op in ops ]
 
-        out = torch.stack([ op.mean() for op in ops ])
+        if self.cfg.get("use_null_residue", False):
+            # take out the null value when returning the activity
+            out_inp = torch.stack([ op[:, :-1].mean() for op in ops ]).unsqueeze(-1)
+            null_inp = torch.stack([ op[:, -1:].mean() for op in ops ]).unsqueeze(-1)
+
+            out_inp = torch.cat((out_inp, null_inp), -1)
+            out = self.make(LazyLinear, 1)(out_inp)[:,0]
+        else:
+            out = torch.stack([ op.mean() for op in ops ])
 
         return out, ops
 

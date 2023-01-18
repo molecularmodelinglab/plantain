@@ -1,4 +1,5 @@
 import os
+import re
 import traceback
 import warnings
 import numpy as np
@@ -92,6 +93,24 @@ def get_mol_from_file(fname, cache=True):
 
 def get_docked_scores_from_pdbqt(fname):
     return PDBQTMolecule.from_file(fname)._pose_data["free_energies"]
+
+
+score_re = re.compile(".*CNNscore\s+([\d|\.]+)")
+affinity_re = re.compile(".*CNNaffinity\s+([\d|\.]+)")
+def get_gnina_scores_from_pdbqt(fname):
+    """ returns pose scores and affinities for all the poses in
+    pdbqt file fname """
+    scores = []
+    affinities = []
+    with open(fname) as f:
+        for line in f.readlines():
+            m = score_re.match(line)
+            if m is not None:
+                scores.append(float(m.groups()[0]))
+            m = affinity_re.match(line)
+            if m is not None:
+                affinities.append(float(m.groups()[0]))
+    return scores, affinities
 
 def flatten_dict(d):
     ret = {}

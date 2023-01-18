@@ -19,17 +19,22 @@ def make_sphere(center, radius, color, res = 8, opacity=1.0):
 
     return trace
 
-def make_graph_meshes(graph, opacity=1.0):
+def make_graph_meshes(graph, opacity=1.0, coords=None):
+
+    if coords is None:
+        coords = graph.ndata.coord
+
     meshes = []
-    for node in graph.ndata:
-        pos = node.coord
-        radius = node.get_radius()
-        color = node.get_color()
+    for i, node in enumerate(graph.ndata):
+        pos = coords[i]
+        radius = 1.0 # node.get_radius()
+        color = "red" # node.get_color()
         meshes.append(make_sphere(pos, radius, color, opacity=opacity))
+
     for src, dst in graph.edges:
-        xs = [graph.ndata.coord[src][0], graph.ndata.coord[dst][0]]
-        ys = [graph.ndata.coord[src][1], graph.ndata.coord[dst][1]]
-        zs = [graph.ndata.coord[src][2], graph.ndata.coord[dst][2]]
+        xs = [coords[src][0], coords[dst][0]]
+        ys = [coords[src][1], coords[dst][1]]
+        zs = [coords[src][2], coords[dst][2]]
         meshes.append(go.Scatter3d(x=xs, y=ys, z=zs, hoverinfo='skip', showlegend=False, line={"color": "black"}))
     return meshes
 
@@ -41,13 +46,14 @@ def plot_meshes(meshes):
     fig = go.Figure(data=meshes, layout=get_plot_layout())
     iplot(fig)
 
-def plot_graph(graph):
-    plot_meshes(make_graph_meshes(graph))
+def plot_graph(graph, coords=None):
+    plot_meshes(make_graph_meshes(graph, coords=coords))
 
-def plot_graphs(graphs):
+def plot_graphs(graphs, coords=None):
     meshes = []
-    for graph in graphs:
-        meshes += make_graph_meshes(graph)
+    for i, graph in enumerate(graphs):
+        cur_coord = None if coords is None else coords[i]
+        meshes += make_graph_meshes(graph, coords=cur_coord)
     plot_meshes(meshes)
 
 def plot_moving_graph(graph, coord_list, other_graphs=[]):
