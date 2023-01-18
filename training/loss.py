@@ -20,7 +20,7 @@ def rec_interaction_bce(x, pred, y):
         rec_coord = rec_graph.ndata.coord
         dist = torch.cdist(lig_coord, rec_coord)
 
-        nulls = torch.tensor([[5.0]]*len(lig_coord))
+        nulls = torch.tensor([[5.0]]*len(lig_coord), device=lig_coord.device)
         dist = torch.cat((dist, nulls), 1)
         labels = torch.argmin(dist, 1)
 
