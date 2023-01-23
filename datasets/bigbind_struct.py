@@ -19,7 +19,7 @@ class BigBindStructDataset(Dataset):
     def get_name():
         return "bigbind_struct"
 
-    def __len__(self):
+    def len_impl(self):
         return len(self.structures)
 
     def get_lig_file(self, index):

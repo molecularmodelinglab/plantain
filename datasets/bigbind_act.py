@@ -23,7 +23,7 @@ class BigBindActDataset(Dataset):
     def get_name():
         return "bigbind_act"
 
-    def __len__(self):
+    def len_impl(self):
         return len(self.activities)
 
     def get_lig_file(self, index):

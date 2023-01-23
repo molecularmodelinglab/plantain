@@ -27,6 +27,14 @@ class Dataset(data.Dataset):
                 ret.add(task)
         return ret
 
+    def len_impl(self):
+        raise NotImplementedError
+
+    def __len__(self):
+        if "debug_dataset_len" in self.cfg and self.cfg.debug_dataset_len is not None:
+            return self.cfg.debug_dataset_len
+        return self.len_impl()
+
     def getitem_impl(self, index: int) -> Tuple[Input, Label]:
         raise NotImplementedError
 

@@ -10,12 +10,12 @@ train_dataset:
     - bigbind_act
     - bigbind_struct
 
-val_datasets: [ bigbind_act ]
+val_datasets: [ bigbind_act, bigbind_struct ]
 # train_dataset: bigbind_struct
 # val_datasets: [ bigbind_struct ]
 
 monitor_metric:
-  name: val_auroc_all
+  name: val/bigbind_act/auroc_all
   mode: max
   # name: val_loss
   # mode: min

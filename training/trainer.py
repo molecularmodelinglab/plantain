@@ -28,24 +28,16 @@ class Trainer(pl.LightningModule):
 
         self.metrics = nn.ModuleDict()
 
-        val_loader = make_dataloader(self.cfg, self.cfg.val_datasets[0], "val", self.model.get_data_format())
+        for name in self.cfg.val_datasets:
+            val_loader = make_dataloader(self.cfg, name, "val", self.model.get_data_format())
 
-        # give the model an initial batch before training to initialize
-        # its (lazily created) parameters
-        x, y = collate([val_loader.dataset[0]])
-        self.model(x)
+            # give the model an initial batch before training to initialize
+            # its (lazily created) parameters
+            x, y = collate([val_loader.dataset[0]])
+            self.model(x)
     
-    def get_tasks(self, loader, dataset_idx):
-        if isinstance(loader.dataset, CombinedDataset):
-            dataset = loader.dataset.datasets
-            # dataset = loader.dataset.datasets[0]
-        else:
-            dataset = loader.dataset
-
-        if isinstance(dataset, ComboDataset):
-            assert dataset_idx is not None
-            dataset = dataset.datasets[dataset_idx]
-
+    def get_tasks(self, prefix, dataset_idx):
+        dataset = self.get_dataset(prefix, dataset_idx)
         return set(self.model.get_tasks()).intersection(dataset.get_tasks())
 
     @property
@@ -62,35 +54,45 @@ class Trainer(pl.LightningModule):
         return self.metrics[key]
 
     def get_metrics(self, name):
-        return self.metrics[f"{name}_metrics"]
+        ret = nn.ModuleDict()
+        for key in self.metrics:
+            if f"{name}_metrics" in key:
+                ret.update(self.metrics[key])
+        return ret
         
     def get_dataloader(self, prefix):
         if prefix == 'train':
             return self.trainer.train_dataloader
         elif prefix == 'val':
-            return self.trainer.val_dataloaders[0]
+            return self.trainer.val_dataloaders
 
-    def get_dataset(self, prefix):
+    def get_dataset(self, prefix, dataset_idx):
         loader = self.get_dataloader(prefix)
+        if isinstance(loader, list) and dataset_idx is not None:
+            loader = loader[dataset_idx]
+
         if isinstance(loader.dataset, CombinedDataset):
             dataset = loader.dataset.datasets
-            # dataset = loader.dataset.datasets[0]
         else:
             dataset = loader.dataset
+
+        if isinstance(dataset, ComboDataset) and dataset_idx is not None:
+            dataset = dataset.datasets[dataset_idx]
+
         return dataset
 
     def shared_eval(self, prefix, batch, batch_idx, dataset_idx=None):
         x, y = batch
-        tasks = self.get_tasks(self.get_dataloader(prefix), dataset_idx)
+        tasks = self.get_tasks(prefix, dataset_idx)
         metrics = self.make_metrics(prefix, tasks, dataset_idx)
 
         pred = self.model.predict(tasks, x)
         loss, loss_dict = get_losses(self.cfg, tasks, x, pred, y)
 
         if dataset_idx is not None:
-            self.log(f"{prefix}_loss", loss, prog_bar=True, batch_size=len(x))
+            self.log(f"{prefix}/loss", loss, prog_bar=True, batch_size=len(x))
         for key, val in loss_dict.items():
-            self.log(f"{prefix}_{key}", val, prog_bar=True, batch_size=len(x))
+            self.log(f"{prefix}/{key}", val, prog_bar=True, batch_size=len(x))
         
         on_step = prefix == "train"
         on_epoch = not on_step
@@ -101,8 +103,9 @@ class Trainer(pl.LightningModule):
                 computed_metrics[key] = val.compute()
                 val.apply(reset_metrics)
 
+        dataset_name = self.get_dataset(prefix, dataset_idx).get_name()
         for key, val in flatten_dict(computed_metrics).items():
-            self.log(f"{prefix}_{key}", val, prog_bar=False, on_step=on_step, on_epoch=on_epoch, batch_size=len(x))
+            self.log(f"{prefix}/{dataset_name}/{key}", val, prog_bar=False, on_step=on_step, on_epoch=on_epoch, batch_size=len(x), add_dataloader_idx=False)
         
         if self.trainer.is_last_batch and prefix != "train":
             self.log_all_metrics(prefix, dataset_idx)
@@ -113,27 +116,28 @@ class Trainer(pl.LightningModule):
         return loss
 
     def training_step(self, batch, batch_idx):
-        if isinstance(self.get_dataset("train"), ComboDataset):
+        if isinstance(self.get_dataset("train", None), ComboDataset):
             loss = 0.0
             for i, item in enumerate(batch):
                 loss += self.shared_eval("train", item, batch_idx, i)
             return loss
         return self.shared_eval('train', batch, batch_idx)
     
-    def validation_step(self, batch, batch_idx):
-        return self.shared_eval('val', batch, batch_idx)
+    def validation_step(self, batch, batch_idx, dataset_idx=None):
+        return self.shared_eval('val', batch, batch_idx, dataset_idx)
 
-    def test_step(self, batch, batch_idx):
-        return self.shared_eval('test', batch, batch_idx)
+    def test_step(self, batch, batch_idx, dataset_idx=None):
+        return self.shared_eval('test', batch, batch_idx, dataset_idx)
 
     def log_all_metrics(self, prefix, dataset_idx):
-        tasks = self.get_tasks(self.get_dataloader(prefix), dataset_idx)
-        metrics = self.make_metrics(prefix, tasks)
+        dataset_name = self.get_dataset(prefix, dataset_idx).get_name()
+        tasks = self.get_tasks(prefix, dataset_idx)
+        metrics = self.make_metrics(prefix, tasks, dataset_idx)
         computed_metrics = {}
         for key, val in metrics.items():
             computed_metrics[key] = val.compute()
         for key, val in flatten_dict(computed_metrics).items():
-            self.log(f"{prefix}_{key}", val, prog_bar=False, on_epoch=True, batch_size=1)
+            self.log(f"{prefix}/{dataset_name}/{key}", val, prog_bar=False, on_epoch=True, batch_size=1, add_dataloader_idx=False)
 
     def on_train_end(self):
         self.get_metrics("train").apply(reset_metrics)
@@ -151,7 +155,10 @@ class Trainer(pl.LightningModule):
 
         train_loader = make_train_dataloader(self.cfg, self.model.get_data_format())
         # train_loader = make_dataloader(self.cfg, self.cfg.train_dataset, "train", self.model.get_data_format())
-        val_loader = make_dataloader(self.cfg, self.cfg.val_datasets[0], "val", self.model.get_data_format())
+        val_loaders = []
+        for name in self.cfg.val_datasets:
+            val_loader = make_dataloader(self.cfg, name, "val", self.model.get_data_format())
+            val_loaders.append(val_loader)
 
         gpus = int(torch.cuda.is_available())
 
@@ -162,4 +169,4 @@ class Trainer(pl.LightningModule):
                              callbacks=callbacks,
                              resume_from_checkpoint=None)
 
-        self.trainer.fit(self, train_loader, val_loader)
+        self.trainer.fit(self, train_loader, val_loaders)
