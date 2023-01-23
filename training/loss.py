@@ -58,6 +58,6 @@ def get_losses(cfg, x, pred, y):
     for loss_name, loss_cfg in cfg.losses.items():
         loss = get_single_loss(loss_cfg, x, pred, y)
         if loss_cfg.weight > 0.0:
-            total_loss += loss
+            total_loss += loss*loss_cfg.weight
         ret[loss_name] = loss
     return total_loss, ret
