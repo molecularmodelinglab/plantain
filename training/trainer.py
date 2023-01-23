@@ -3,10 +3,11 @@ import torch.nn as nn
 import pytorch_lightning as pl
 from pytorch_lightning.trainer.supporters import CombinedDataset
 from common.utils import flatten_dict
+from datasets.combo_dataset import ComboDataset
 from terrace import collate
 from git_timewarp import GitTimeWarp
 
-from datasets.make_dataset import make_dataloader
+from datasets.make_dataset import make_dataloader, make_train_dataloader
 from models.make_model import make_model
 from validation.metrics import get_metrics, reset_metrics
 from .loss import get_losses
@@ -18,21 +19,12 @@ class Trainer(pl.LightningModule):
     def from_checkpoint(cls, cfg, checkpoint_file, commit=None):
         return cls.load_from_checkpoint(checkpoint_file, cfg=cfg, commit=commit)
 
-    def __init__(self, cfg, commit=None):
+    def __init__(self, cfg):
         super().__init__()
         self.cfg = cfg
 
         from models.make_model import make_model
         self.model = make_model(cfg)
-
-        # this is some truly cursed shit right here
-        if commit is not None:
-            with GitTimeWarp(commit):
-                old_class = self.model.__class__
-                from models.make_model import make_model
-                self.model = make_model(cfg)
-                old_class.forward = self.model.__class__.forward
-                self.model.__class__ = old_class
 
         self.metrics = nn.ModuleDict()
 
@@ -43,20 +35,28 @@ class Trainer(pl.LightningModule):
         x, y = collate([val_loader.dataset[0]])
         self.model(x)
     
-    def get_tasks(self, loader):
+    def get_tasks(self, loader, dataset_idx):
         if isinstance(loader.dataset, CombinedDataset):
             dataset = loader.dataset.datasets
             # dataset = loader.dataset.datasets[0]
         else:
             dataset = loader.dataset
+
+        if isinstance(dataset, ComboDataset):
+            assert dataset_idx is not None
+            dataset = dataset.datasets[dataset_idx]
+
         return set(self.model.get_tasks()).intersection(dataset.get_tasks())
 
     @property
     def device(self):
         return next(iter(self.parameters())).device
 
-    def make_metrics(self, name, tasks):
-        key = f"{name}_metrics"
+    def make_metrics(self, name, tasks, dataset_idx):
+        if dataset_idx is None:
+            key = f"{name}_metrics"
+        else:
+            key = f"{name}_metrics_{dataset_idx}"
         if key not in self.metrics:
             self.metrics[key] = get_metrics(tasks).to(self.device)
         return self.metrics[key]
@@ -70,15 +70,25 @@ class Trainer(pl.LightningModule):
         elif prefix == 'val':
             return self.trainer.val_dataloaders[0]
 
-    def shared_eval(self, prefix, batch, batch_idx):
+    def get_dataset(self, prefix):
+        loader = self.get_dataloader(prefix)
+        if isinstance(loader.dataset, CombinedDataset):
+            dataset = loader.dataset.datasets
+            # dataset = loader.dataset.datasets[0]
+        else:
+            dataset = loader.dataset
+        return dataset
+
+    def shared_eval(self, prefix, batch, batch_idx, dataset_idx=None):
         x, y = batch
-        tasks = self.get_tasks(self.get_dataloader(prefix))
-        metrics = self.make_metrics(prefix, tasks)
+        tasks = self.get_tasks(self.get_dataloader(prefix), dataset_idx)
+        metrics = self.make_metrics(prefix, tasks, dataset_idx)
 
         pred = self.model.predict(tasks, x)
-        loss, loss_dict = get_losses(self.cfg, x, pred, y)
+        loss, loss_dict = get_losses(self.cfg, tasks, x, pred, y)
 
-        self.log(f"{prefix}_loss", loss, prog_bar=True, batch_size=len(x))
+        if dataset_idx is not None:
+            self.log(f"{prefix}_loss", loss, prog_bar=True, batch_size=len(x))
         for key, val in loss_dict.items():
             self.log(f"{prefix}_{key}", val, prog_bar=True, batch_size=len(x))
         
@@ -95,7 +105,7 @@ class Trainer(pl.LightningModule):
             self.log(f"{prefix}_{key}", val, prog_bar=False, on_step=on_step, on_epoch=on_epoch, batch_size=len(x))
         
         if self.trainer.is_last_batch and prefix != "train":
-            self.log_all_metrics(prefix)
+            self.log_all_metrics(prefix, dataset_idx)
 
         if "profile_max_batches" in self.cfg and batch_idx >= self.cfg.profile_max_batches:
             raise RuntimeError("Stop the process!")
@@ -103,6 +113,11 @@ class Trainer(pl.LightningModule):
         return loss
 
     def training_step(self, batch, batch_idx):
+        if isinstance(self.get_dataset("train"), ComboDataset):
+            loss = 0.0
+            for i, item in enumerate(batch):
+                loss += self.shared_eval("train", item, batch_idx, i)
+            return loss
         return self.shared_eval('train', batch, batch_idx)
     
     def validation_step(self, batch, batch_idx):
@@ -111,8 +126,8 @@ class Trainer(pl.LightningModule):
     def test_step(self, batch, batch_idx):
         return self.shared_eval('test', batch, batch_idx)
 
-    def log_all_metrics(self, prefix):
-        tasks = self.get_tasks(self.get_dataloader(prefix))
+    def log_all_metrics(self, prefix, dataset_idx):
+        tasks = self.get_tasks(self.get_dataloader(prefix), dataset_idx)
         metrics = self.make_metrics(prefix, tasks)
         computed_metrics = {}
         for key, val in metrics.items():
@@ -134,7 +149,8 @@ class Trainer(pl.LightningModule):
 
     def fit(self, logger, callbacks):
 
-        train_loader = make_dataloader(self.cfg, self.cfg.train_dataset, "train", self.model.get_data_format())
+        train_loader = make_train_dataloader(self.cfg, self.model.get_data_format())
+        # train_loader = make_dataloader(self.cfg, self.cfg.train_dataset, "train", self.model.get_data_format())
         val_loader = make_dataloader(self.cfg, self.cfg.val_datasets[0], "val", self.model.get_data_format())
 
         gpus = int(torch.cuda.is_available())

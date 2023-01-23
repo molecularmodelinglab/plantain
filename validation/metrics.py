@@ -163,7 +163,8 @@ def get_single_task_metrics(task: Type[Task]):
         "score_pose": nn.ModuleDict({
             "acc_2": PoseAcc(2.0),
             "acc_5": PoseAcc(5.0)
-        })
+        }),
+        "predict_interaction_mat": nn.ModuleDict(),
     }[task.get_name()]
 
 def get_metrics(tasks: Set[Type[Task]]):

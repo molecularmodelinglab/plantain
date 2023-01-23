@@ -5,7 +5,7 @@ from data_formats.base_formats import Data, InvDistMat
 from data_formats.graphs.graph_formats import LigAndRecGraph
 from terrace import Module, LazyLinear, LazyMultiheadAttention, LazyLayerNorm, Batch
 from dgl.nn.pytorch import NNConv
-from data_formats.tasks import ClassifyActivity
+from data_formats.tasks import ClassifyActivity, PredictInteractionMat, ScoreActivityClass
 from .model import ClassifyActivityModel
 from .graph_embedding import GraphEmbedding
 
@@ -50,6 +50,9 @@ class AttentionGNN(Module, ClassifyActivityModel):
     @staticmethod
     def get_name():
         return "attention_gnn"
+
+    def get_tasks(self):
+        return [ ScoreActivityClass, ClassifyActivity, PredictInteractionMat ]
 
     def get_data_format(self):
         return LigAndRecGraph.make

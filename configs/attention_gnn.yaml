@@ -5,7 +5,11 @@ name: test_run
 val_check_interval: 1.0
 metric_reset_interval: 50
 
-train_dataset: bigbind_act
+train_dataset: 
+  combo:
+    - bigbind_act
+    - bigbind_struct
+
 val_datasets: [ bigbind_act ]
 # train_dataset: bigbind_struct
 # val_datasets: [ bigbind_struct ]
@@ -52,13 +56,19 @@ data:
 
 losses:
   act_bce:
+    task: classify_activity
     func: bce
     pred: active_prob_unnorm
     y: is_active
     weight: 1.0
 
-  inter_inv_std:
-    func: inv_dist_mean_std
+  # inter_inv_std:
+  #   func: inv_dist_mean_std
+  #   weight: 1.0
+
+  rec_inter_bce:
+    task: predict_interaction_mat
+    func: rec_interaction_bce
     weight: 1.0
 
 # losses:

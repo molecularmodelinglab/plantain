@@ -2,7 +2,7 @@ import torch
 from typing import Set, Type
 import pandas as pd
 from common.utils import get_mol_from_file, get_prot_from_file
-from data_formats.base_formats import Activity, IsActive, LigAndRec, Pose
+from data_formats.base_formats import Activity, InvDistMat, IsActive, LigAndRec, Pose
 from data_formats.tasks import Task
 from datasets.base_datasets import Dataset
 
@@ -43,7 +43,7 @@ class BigBindStructDataset(Dataset):
             return self.dir + "/" + rec_file
 
     def get_label_classes(self) -> Set[Type[Task]]:
-        return { Pose }
+        return { Pose, InvDistMat }
 
     def getitem_impl(self, index):
 

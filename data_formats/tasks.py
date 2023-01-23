@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from typing import List
-from data_formats.base_formats import Activity, LigAndRec, Label, PoseRMSDs, Prediction, IsActive
+from data_formats.base_formats import Activity, InvDistMat, LigAndRec, Label, PoseRMSDs, Prediction, IsActive
 
 class Task:
     """ Note: _all_ tasks should be defined in this file. This is required
@@ -59,3 +59,14 @@ class ScorePose(Task):
     @staticmethod
     def get_name() -> str:
         return "score_pose"
+
+class PredictInteractionMat(Task):
+
+    Input = LigAndRec
+    Label = InvDistMat
+    Prediction = InvDistMat
+
+    @staticmethod
+    def get_name() -> str:
+        return "predict_interaction_mat"
+

@@ -21,7 +21,6 @@ def inv_dist_mean_std(x, pred, y):
     return torch.stack(losses).mean()
 
 def rec_interaction_bce(x, pred, y):
-    
     losses = []
     for lig_graph, rec_graph, pred_mat in zip(x.lig_graph, x.rec_graph, pred.inv_dist_mat):
         lig_coord = lig_graph.ndata.coord
@@ -52,10 +51,15 @@ def get_single_loss(loss_cfg, x, pred, y):
         y = getattr(y, loss_cfg["y"])
     return loss_fn(x, pred, y)
 
-def get_losses(cfg, x, pred, y):
+def get_losses(cfg, tasks, x, pred, y):
+    task_names = [ task.get_name() for task in tasks ]
     total_loss = 0.0
     ret = {}
     for loss_name, loss_cfg in cfg.losses.items():
+        if "task" in loss_cfg:
+            if loss_cfg.task not in task_names:
+                continue
+        print(task_names, loss_name)
         loss = get_single_loss(loss_cfg, x, pred, y)
         if loss_cfg.weight > 0.0:
             total_loss += loss*loss_cfg.weight
