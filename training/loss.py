@@ -15,9 +15,10 @@ def inv_dist_mse(x, pred, y):
 def inv_dist_mean_std(x, pred, y):
     losses = []
     for inv_dist_mat in pred.inv_dist_mat:
-        loss = 1.0/(1.0 + pred.inv_dist_mat[0].std(0)).mean()
-        loss += 1.0/(1.0 + pred.inv_dist_mat[0].std(1)).mean()
+        loss = 1.0/(1.0 + (inv_dist_mat/inv_dist_mat.sum(0)).std(0)).mean()
+        loss += 1.0/(1.0 + (inv_dist_mat/inv_dist_mat.sum(1).unsqueeze(1)).std(1)).mean()
         losses.append(loss)
+    print(losses)
     return torch.stack(losses).mean()
 
 def rec_interaction_bce(x, pred, y):
