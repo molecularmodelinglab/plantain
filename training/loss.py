@@ -59,7 +59,6 @@ def get_losses(cfg, tasks, x, pred, y):
         if "task" in loss_cfg:
             if loss_cfg.task not in task_names:
                 continue
-        print(task_names, loss_name)
         loss = get_single_loss(loss_cfg, x, pred, y)
         if loss_cfg.weight > 0.0:
             total_loss += loss*loss_cfg.weight
