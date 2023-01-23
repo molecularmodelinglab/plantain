@@ -9,7 +9,7 @@ _api = wandb.Api()
 def get_weight_artifact(run, tag):
     return _api.artifact(f"{run.project}/model-{run.id}:{tag}", type='model')
 
-def get_old_model(cfg, run_name, tag="latest"):
+def get_old_model(cfg, run_name, tag="best_k"):
     """ Get the wandb run with name run_name, and return a model
     loaded from the saved checkpoint with the correct tag"""
     runs = _api.runs(path=cfg.project, filters={"display_name": run_name})

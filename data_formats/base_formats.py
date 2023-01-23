@@ -112,6 +112,13 @@ class Pose(Label):
     # def collate_rec_coords(x):
     #     return x
 
+class PoseRMSDs(Label):
+    pose_rmsds: torch.Tensor
+
+    @staticmethod
+    def collate_pose_rmsds(x):
+        return x
+
 class InvDistMat(Prediction):
     inv_dist_mat: torch.Tensor
 

@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from typing import List
-from data_formats.base_formats import Activity, LigAndRec, Label, Prediction, IsActive
+from data_formats.base_formats import Activity, LigAndRec, Label, PoseRMSDs, Prediction, IsActive
 
 class Task:
     """ Note: _all_ tasks should be defined in this file. This is required
@@ -51,8 +51,7 @@ class ScorePose(Task):
 
     Input = LigAndRec
 
-    class Label(Label):
-        pose_rmsds: List[float]
+    Label = PoseRMSDs
 
     class Prediction(Prediction):
         pose_scores: List[float]

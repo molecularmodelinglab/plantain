@@ -45,7 +45,7 @@ class BigBindGninaDataset(Dataset):
         """ returns the first lig file if use_lig is false, to ensure
         that all ligs are the same """
         if not self.cfg.data.use_lig:
-            return self.gnina_dir + "/train/0.pdbqt"
+            return self.gnina_dir + "/activities_sna_1_train/0.pdbqt"
         return self.gnina_dir + "/" + self.activities.docked_lig_file[index]
 
     def get_rec_file(self, index):

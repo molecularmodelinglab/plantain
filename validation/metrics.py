@@ -1,3 +1,4 @@
+from collections import defaultdict
 from terrace import Batch, collate
 from typing import Callable, Dict, Set, Type
 import torch
@@ -119,6 +120,34 @@ class ActivitySpearman(MetricWrapper):
     def __init__(self):
         super().__init__(SpearmanCorrCoef, get_activity_score, get_activity)
 
+class PoseAcc(FullMetric):
+
+    def __init__(self, rmsd_cutoff=2.0):
+        super().__init__()
+        self.rmsd_cutoff = rmsd_cutoff
+        self.top_n_correct = defaultdict(int)
+        self.total_seen = 0
+
+    def update(self, x, pred, y):
+        for pred0, y0 in zip(pred, y):
+            # if torch.amax(pred0.pose_scores) < -0.25:
+            #     print("skipping")
+            #     continue
+            # print("doing!")
+            poses_correct = y0.pose_rmsds < self.rmsd_cutoff
+            correct_sorted = [ x[0].cpu().item() for x in sorted(zip(poses_correct, -pred0.pose_scores, torch.randn_like(pred0.pose_scores)), key=lambda x: x[1:])]
+            for n in range(1, len(correct_sorted)+1):
+                self.top_n_correct[n] += int(True in correct_sorted[:n])
+            self.total_seen += 1
+
+    def compute(self):
+        # print("TOTAL: ", self.total_seen)
+        ret = {}
+        for n, correct in self.top_n_correct.items():
+            ret[f"top_{n}"] = correct/self.total_seen
+        return ret
+        
+
 def get_single_task_metrics(task: Type[Task]):
     return {
         "score_activity_class": nn.ModuleDict({
@@ -131,6 +160,10 @@ def get_single_task_metrics(task: Type[Task]):
             "acc": MetricWrapper(Accuracy, get_active_prob, get_is_active, 'binary'),
             "precision": MetricWrapper(Precision, get_active_prob, get_is_active, 'binary')
         }),
+        "score_pose": nn.ModuleDict({
+            "acc_2": PoseAcc(2.0),
+            "acc_5": PoseAcc(5.0)
+        })
     }[task.get_name()]
 
 def get_metrics(tasks: Set[Type[Task]]):

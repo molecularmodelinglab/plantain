@@ -12,6 +12,14 @@ def inv_dist_mse(x, pred, y):
         losses.append(loss)
     return torch.stack(losses).mean()
 
+def inv_dist_mean_std(x, pred, y):
+    losses = []
+    for inv_dist_mat in pred.inv_dist_mat:
+        loss = 1.0/(1.0 + pred.inv_dist_mat[0].std(0)).mean()
+        loss += 1.0/(1.0 + pred.inv_dist_mat[0].std(1)).mean()
+        losses.append(loss)
+    return torch.stack(losses).mean()
+
 def rec_interaction_bce(x, pred, y):
     
     losses = []
@@ -34,6 +42,7 @@ def get_single_loss(loss_cfg, x, pred, y):
         "bce": bce_loss,
         "inv_dist_mse": inv_dist_mse,
         "rec_interaction_bce": rec_interaction_bce,
+        "inv_dist_mean_std": inv_dist_mean_std,
     }[loss_cfg.func]
     if "x" in loss_cfg:
         x = getattr(x, loss_cfg["x"])

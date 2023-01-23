@@ -59,10 +59,21 @@ def get_prot_from_file(fname, cache=True):
         ret = structure[0]
         return ret
 
+smiles_re = re.compile(".*REMARK SMILES\s+(.+)")
 def get_mol_from_file_no_cache(fname):
     """ Loads sdf and pdbqt files, returns rdkit mol"""
     if fname.endswith(".pdbqt"):
-        mol = RDKitMolCreate.from_pdbqt_mol(PDBQTMolecule.from_file(fname))[0]
+        pdbqt = PDBQTMolecule.from_file(fname)
+        # manually fix to account for bug in gnina not writing newlines
+        # after REMARKS
+        if pdbqt._pose_data["smiles"][0] is None:
+            with open(fname, "r") as f:
+                for line in f.readlines():
+                    m = smiles_re.match(line)
+                    if m is not None:
+                        pdbqt._pose_data["smiles"][0] = m.groups()[0]
+                        break
+        mol = RDKitMolCreate.from_pdbqt_mol(pdbqt)[0]
     elif fname.endswith(".sdf"):
         mol = next(Chem.SDMolSupplier(fname, sanitize=True))
     else:
@@ -78,12 +89,15 @@ def get_mol_from_file(fname, cache=True):
         try:
             with open(cache_fname, "rb") as fh:
                 ret = pickle.load(fh)
+                if ret is None:
+                    raise Exception("Molecule is None")
                 return ret
         except KeyboardInterrupt:
             raise
         except:
-            print(f"Error parsing cached {cache_fname}, continuing loading file")
-            traceback.print_exc()
+            pass
+            # print(f"Error parsing cached {cache_fname}, continuing loading file")
+            # traceback.print_exc()
 
     ret = get_mol_from_file_no_cache(fname)
     with open(cache_fname, "wb") as f:

@@ -149,10 +149,10 @@ def dock_all(cfg, program, file_prefix):
             for ret_file in p.imap_unordered(score_fn, screen_df.iterrows()):
                 print(ret_file)
 
-def can_load_docked_file(file_prefix, split, item):
+def can_load_docked_file(cfg, program, file_prefix, split, item):
     i, row = item
     docked_file = f"{file_prefix}_{split}/{i}.pdbqt"
-    full_docked_file = cfg.platform.bigbind_vina_dir + "/" + docked_file
+    full_docked_file = cfg.platform[f"bigbind_{program}_dir"]+ "/" + docked_file
     if os.path.exists(full_docked_file):
         try:
             get_mol_from_file(full_docked_file)
@@ -160,8 +160,9 @@ def can_load_docked_file(file_prefix, split, item):
         except KeyboardInterrupt:
             raise
         except:
-            print(f"Error processing {docked_file}")
-            print_exc()
+            pass
+            # print(f"Error processing {docked_file}")
+            # print_exc()
     return None
 
 
@@ -172,7 +173,7 @@ def finalize_bigbind_vina(cfg, program, file_prefix):
 
         docked_lig_files = []
         with Pool(processes=16) as p:
-            f = partial(can_load_docked_file, file_prefix, split)
+            f = partial(can_load_docked_file, cfg, program, file_prefix, split)
             for res in tqdm(p.imap(f, screen_df.iterrows()), total=len(screen_df)):
                 docked_lig_files.append(res)
 
@@ -212,5 +213,6 @@ if __name__ == "__main__":
     cfg = get_config("vina_ff")
     # dock_all(cfg, "gnina", "activities_sna_1")
     # dock_all(cfg, "gnina", "structures")
-    # finalize_bigbind_vina(cfg, "structures")
-    make_activity_csvs(cfg, "vina")
+    finalize_bigbind_vina(cfg, "gnina", "structures")
+    finalize_bigbind_vina(cfg, "gnina", "activities_sna_1")
+    make_activity_csvs(cfg, "gnina")
