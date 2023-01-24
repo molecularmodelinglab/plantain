@@ -1,13 +1,16 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from data_formats.base_formats import Data, InvDistMat
+from data_formats.base_formats import Data, InvDistMat, Prediction
 from data_formats.graphs.graph_formats import LigAndRecGraph
 from terrace import Module, LazyLinear, LazyMultiheadAttention, LazyLayerNorm, Batch
 from dgl.nn.pytorch import NNConv
 from data_formats.tasks import ClassifyActivity, PredictInteractionMat, ScoreActivityClass
 from .model import ClassifyActivityModel
 from .graph_embedding import GraphEmbedding
+
+class PredBCE(Prediction):
+    pred_bce: float
 
 class MPNN(Module):
     """ Very basic message passing step"""
@@ -134,11 +137,28 @@ class AttentionGNN(Module, ClassifyActivityModel):
         else:
             out = torch.stack([ op.mean() for op in ops ])
 
-        return out, ops
+        if self.cfg.get("predict_bce", False):
+            rec_bce_hid = self.make(LazyLinear, rec_hid.shape[-1])(rec_hid)
+            lig_bce_hid = self.make(LazyLinear, lig_hid.shape[-1])(lig_hid)
+            
+            bce_ops = []
+            for lig_feat, rec_feat in batched_feats(x, lig_bce_hid, rec_bce_hid):
+                if self.cfg.get("use_null_residue", False):
+                    rec_feat = torch.cat((rec_feat, null), 0)
+                op = torch.einsum('lf,rf->lr', lig_feat, rec_feat)
+                bce_ops.append(op)
+
+            bce_out = torch.stack([ op[:, :-1].mean() for op in bce_ops ])
+        else:
+            bce_out = None
+
+        return out, ops, bce_out
 
     def predict(self, tasks, x):
-        score, mats = self(x)
+        score, mats, bce_pred = self(x)
         p1 = super().make_prediction(score)
         p2 = Batch(InvDistMat, inv_dist_mat=mats)
-        return Data.merge([p1, p2])
+        if bce_pred is not None:
+            p3 = Batch(PredBCE, pred_bce=bce_pred)
+        return Data.merge([p1, p2, p3])
             

@@ -5,14 +5,18 @@ name: test_run
 val_check_interval: 1.0
 metric_reset_interval: 50
 
-train_dataset: 
-  combo:
-    - bigbind_act
-    - bigbind_struct
+# train_dataset: 
+#   combo:
+#     - bigbind_act
+#     - bigbind_struct
 
-val_datasets: [ bigbind_act, bigbind_struct ]
+# val_datasets: [ bigbind_act, bigbind_struct ]
+
 # train_dataset: bigbind_struct
 # val_datasets: [ bigbind_struct ]
+
+train_dataset: bigbind_act
+val_datasets: [ bigbind_act ]
 
 monitor_metric:
   name: val/bigbind_act/auroc_all
@@ -60,16 +64,21 @@ losses:
     func: bce
     pred: active_prob_unnorm
     y: is_active
-    weight: 1.0
+    weight: 0.9
+
+  bce_mse:
+    task: classify_active
+    func: bce_mse
+    weight: 0.1
 
   # inter_inv_std:
   #   func: inv_dist_mean_std
   #   weight: 1.0
 
-  rec_inter_bce:
-    task: predict_interaction_mat
-    func: rec_interaction_bce
-    weight: 1.0
+  # rec_inter_bce:
+  #   task: predict_interaction_mat
+  #   func: rec_interaction_bce
+  #   weight: 1.0
 
 # losses:
 #   inv_dist_mse:
@@ -106,5 +115,6 @@ model:
   use_layer_norm: true
   use_slope_intercept: false
   use_null_residue: true
+  predict_bce: true
 
   out_size: 16
