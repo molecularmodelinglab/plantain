@@ -6,7 +6,7 @@ def bce_loss(x, pred, y):
 
 def bce_mse(x, pred, y):
     """ MSE between actual BCE and predicted BCE"""
-    true_bce = F.binary_cross_entropy_with_logits(pred.active_prob_unnorm, y.is_active.float(), reduction='none')
+    true_bce = F.binary_cross_entropy_with_logits(pred.active_prob_unnorm, y.is_active.float(), reduction='none').detach()
     return F.mse_loss(pred.pred_bce, true_bce)
 
 def inv_dist_mse(x, pred, y):
