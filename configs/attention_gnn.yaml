@@ -67,7 +67,7 @@ losses:
     weight: 0.9
 
   bce_mse:
-    task: classify_active
+    task: classify_activity
     func: bce_mse
     weight: 0.1
 
