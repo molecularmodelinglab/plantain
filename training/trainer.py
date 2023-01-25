@@ -68,7 +68,9 @@ class Trainer(pl.LightningModule):
 
     def get_dataset(self, prefix, dataset_idx):
         loader = self.get_dataloader(prefix)
-        if isinstance(loader, list) and dataset_idx is not None:
+        if isinstance(loader, list):
+            if dataset_idx is None:
+                dataset_idx = 0
             loader = loader[dataset_idx]
 
         if isinstance(loader.dataset, CombinedDataset):
