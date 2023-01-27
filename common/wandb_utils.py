@@ -26,4 +26,7 @@ def get_old_model(cfg, run_name, tag="best_k"):
         assert os.path.normpath(artifact_dir) == os.path.normpath(artifact.download())
     checkpoint_file = artifact_dir + "/model.ckpt"
     trainer = Trainer.from_checkpoint(cfg, checkpoint_file)#, run.commit)
+    
+    trainer.model.cache_key = f"wandb:{run.id}:{artifact.version}"
+    
     return trainer.model
