@@ -57,7 +57,28 @@ def get_single_loss(loss_cfg, x, pred, y):
         y = getattr(y, loss_cfg["y"])
     return loss_fn(x, pred, y)
 
+def selective_net_loss(loss_cfg, x, pred, y):
+    bce = F.binary_cross_entropy_with_logits(pred.active_prob_unnorm, y.is_active.float(), reduction='none')
+    selective_bce = bce*pred.select_prob
+    coverage = pred.select_prob.mean()
+    cov_diff = loss_cfg.coverage - coverage
+    cov_loss = 0.0 if cov_diff < 0 else cov_diff**2
+
+    tot = loss_cfg.bce_weight*bce.mean() + loss_cfg.selective_weight*selective_bce.mean() + loss_cfg.coverage_weight*cov_loss
+
+    return tot, {
+        "bce": bce.mean(),
+        "selective_bce": selective_bce.mean(),
+        "coverage": coverage,
+        "coverage_loss": cov_loss
+    }
+
+
 def get_losses(cfg, tasks, x, pred, y):
+
+    if "selective_net" in cfg.losses:
+        return selective_net_loss(cfg.losses.selective_net, x, pred, y)
+
     task_names = [ task.get_name() for task in tasks ]
     total_loss = 0.0
     ret = {}
@@ -69,4 +90,5 @@ def get_losses(cfg, tasks, x, pred, y):
         if loss_cfg.weight > 0.0:
             total_loss += loss*loss_cfg.weight
         ret[loss_name] = loss
+    
     return total_loss, ret

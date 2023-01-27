@@ -59,17 +59,23 @@ data:
     edge_feats: [ "dist"]
 
 losses:
-  act_bce:
-    task: classify_activity
-    func: bce
-    pred: active_prob_unnorm
-    y: is_active
-    weight: 0.9
+  # act_bce:
+  #   task: classify_activity
+  #   func: bce
+  #   pred: active_prob_unnorm
+  #   y: is_active
+  #   weight: 0.5
 
-  bce_mse:
-    task: classify_activity
-    func: bce_mse
-    weight: 0.1
+  selective_net:
+    bce_weight: 0.5
+    selective_weight: 0.5
+    coverage_weight: 0.5
+    coverage: 0.1
+
+  # bce_mse:
+  #   task: classify_activity
+  #   func: bce_mse
+  #   weight: 0.1
 
   # inter_inv_std:
   #   func: inv_dist_mean_std
@@ -79,16 +85,6 @@ losses:
   #   task: predict_interaction_mat
   #   func: rec_interaction_bce
   #   weight: 1.0
-
-# losses:
-#   inv_dist_mse:
-#     func: inv_dist_mse
-#     weight: 1.0
-
-# losses:
-#   rec_inter_bce:
-#     func: rec_interaction_bce
-#     weight: 1.0
 
 optimizer: adamw
 learn_rate: 1e-3
@@ -116,5 +112,6 @@ model:
   use_slope_intercept: false
   use_null_residue: true
   predict_bce: true
+  predict_select: true
 
   out_size: 16
