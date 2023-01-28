@@ -72,6 +72,9 @@ losses:
     coverage_weight: 0.5
     coverage: 0.1
 
+  # selective_softmax:
+  #   alpha: 0.5
+
   # bce_mse:
   #   task: classify_activity
   #   func: bce_mse

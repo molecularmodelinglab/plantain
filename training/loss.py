@@ -64,7 +64,7 @@ def selective_net_loss(loss_cfg, x, pred, y):
     cov_diff = loss_cfg.coverage - coverage
     cov_loss = 0.0 if cov_diff < 0 else cov_diff**2
 
-    tot = loss_cfg.bce_weight*bce.mean() + loss_cfg.selective_weight*selective_bce.mean() + loss_cfg.coverage_weight*cov_loss
+    tot = loss_cfg.bce_weight*bce.mean() + (loss_cfg.selective_weight*selective_bce).mean() + loss_cfg.coverage_weight*cov_loss
 
     return tot, {
         "bce": bce.mean(),
@@ -73,11 +73,22 @@ def selective_net_loss(loss_cfg, x, pred, y):
         "coverage_loss": cov_loss
     }
 
+def selective_softmax_loss(loss_cfg, x, pred, y):
+    bce = F.binary_cross_entropy_with_logits(pred.active_prob_unnorm, y.is_active.float(), reduction='none')
+    select_norm = torch.softmax(pred.select_unnorm, 0)
+    selective_bce = select_norm*bce
+    tot = (1.0-loss_cfg.alpha)*bce.mean() + loss_cfg.alpha*selective_bce.mean()
+    return tot, {
+        "bce": bce.mean(),
+        "selective_bce": selective_bce.mean(),
+    }
 
 def get_losses(cfg, tasks, x, pred, y):
 
     if "selective_net" in cfg.losses:
         return selective_net_loss(cfg.losses.selective_net, x, pred, y)
+    elif "selective_softmax" in cfg.losses:
+        return selective_softmax_loss(cfg.losses.selective_softmax, x, pred, y)
 
     task_names = [ task.get_name() for task in tasks ]
     total_loss = 0.0

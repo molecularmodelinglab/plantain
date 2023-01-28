@@ -13,6 +13,7 @@ class PredBCE(Prediction):
     pred_bce: float
 
 class Select(Prediction):
+    select_unnorm: float
     select_prob: float
 
 class MPNN(Module):
@@ -166,20 +167,22 @@ class AttentionGNN(Module, ClassifyActivityModel):
                 op = torch.einsum('lf,rf->lr', lig_feat, rec_feat)
                 bce_ops.append(op)
 
-            select = torch.sigmoid(torch.stack([ op[:, :-1].mean() for op in bce_ops ]))
+            select_unnorm = torch.stack([ op[:, :-1].mean() for op in bce_ops ])
+            select = torch.sigmoid(select_unnorm)
         else:
+            select_unnorm = None
             select = None
 
-        return out, ops, bce_out, select
+        return out, ops, bce_out, select_unnorm, select
 
     def predict(self, tasks, x):
-        score, mats, bce_pred, select = self(x)
+        score, mats, bce_pred, select_unnorm, select = self(x)
         p1 = super().make_prediction(score)
         p2 = Batch(InvDistMat, inv_dist_mat=mats)
         ret = [ p1, p2 ]
         if bce_pred is not None:
             ret.append(Batch(PredBCE, pred_bce=bce_pred))
         if select is not None:
-            ret.append(Batch(Select, select_prob=select))
+            ret.append(Batch(Select, select_unnorm=select_unnorm, select_prob=select))
         return Data.merge(ret)
             
