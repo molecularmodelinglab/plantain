@@ -76,11 +76,11 @@ def selective_net_loss(loss_cfg, x, pred, y):
 def selective_softmax_loss(loss_cfg, x, pred, y):
     bce = F.binary_cross_entropy_with_logits(pred.active_prob_unnorm, y.is_active.float(), reduction='none')
     select_norm = torch.softmax(pred.select_unnorm, 0)
-    selective_bce = select_norm*bce
-    tot = (1.0-loss_cfg.alpha)*bce.mean() + loss_cfg.alpha*selective_bce.mean()
+    selective_bce = (select_norm*bce).sum()
+    tot = (1.0-loss_cfg.alpha)*bce.mean() + loss_cfg.alpha*selective_bce
     return tot, {
         "bce": bce.mean(),
-        "selective_bce": selective_bce.mean(),
+        "selective_bce": selective_bce,
     }
 
 def get_losses(cfg, tasks, x, pred, y):

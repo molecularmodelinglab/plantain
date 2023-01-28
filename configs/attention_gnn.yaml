@@ -66,14 +66,14 @@ losses:
   #   y: is_active
   #   weight: 0.5
 
-  selective_net:
-    bce_weight: 0.5
-    selective_weight: 0.5
-    coverage_weight: 0.5
-    coverage: 0.1
+  # selective_net:
+  #   bce_weight: 0.5
+  #   selective_weight: 0.5
+  #   coverage_weight: 0.5
+  #   coverage: 0.1
 
-  # selective_softmax:
-  #   alpha: 0.5
+  selective_softmax:
+    alpha: 0.5
 
   # bce_mse:
   #   task: classify_activity
