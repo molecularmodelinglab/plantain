@@ -73,7 +73,7 @@ losses:
   #   coverage: 0.1
 
   selective_softmax:
-    alpha: 0.5
+    alpha: 0.0
 
   # bce_mse:
   #   task: classify_activity
@@ -114,7 +114,7 @@ model:
   use_layer_norm: true
   use_slope_intercept: false
   use_null_residue: true
-  predict_bce: true
+  predict_bce: false
   predict_select: true
 
   out_size: 16
