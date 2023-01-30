@@ -185,4 +185,3 @@ class AttentionGNN(Module, ClassifyActivityModel):
         if select is not None:
             ret.append(Batch(Select, select_unnorm=select_unnorm, select_prob=select))
         return Data.merge(ret)
-            

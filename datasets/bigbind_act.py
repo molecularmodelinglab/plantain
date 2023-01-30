@@ -1,3 +1,5 @@
+from glob import glob
+import random
 import torch
 from typing import Set, Type
 import pandas as pd
@@ -31,20 +33,40 @@ class BigBindActDataset(Dataset):
         that all ligs are the same """
         if not self.cfg.data.use_lig:
             return self.dir + "/" + "chembl_structures/mol_4.sdf"
+
+        # todo: generalize to more sna fractions
+        if self.sna_frac is not None and self.split == "train":
+            assert self.sna_frac == 1
+            if index % 2 == 1:
+                cur_cluster = self.activities.sna_cluster[index]
+                assert self.activities.active[index] == False
+                # instead of using the SNA ligand the df gives us, generate one online
+                while True:
+                    # generate odd index
+                    index = int(random.random()*len(self.activities)/2)*2
+                    new_cluster = self.activities.sna_cluster[index]
+                    if new_cluster != cur_cluster:
+                        break
+
         return self.dir + "/" + self.activities.lig_file[index]
 
     def get_rec_file(self, index):
         """ same as above """
         if self.cfg.data.use_rec:
-            poc_file = self.activities.ex_rec_pocket_file[index]
-            rec_file = self.activities.ex_rec_file[index]
+            poc_folder = self.dir + "/" + self.activities.pocket[index]
+            all_poc_files = glob(f"{poc_folder}/*_pocket.pdb")
+            all_rec_files = glob(f"{poc_folder}/*_rec.pdb")
+            poc_file = random.choice(all_poc_files)
+            rec_file = random.choice(all_rec_files)
+            # poc_file = self.activities.ex_rec_pocket_file[index]
+            # rec_file = self.activities.ex_rec_file[index]
         else:
-            poc_file = "ELNE_HUMAN_30_247_0/3q77_A_rec_pocket.pdb"
-            rec_file = "ELNE_HUMAN_30_247_0/3q77_A_rec.pdb"
+            poc_file = self.dir + "/ELNE_HUMAN_30_247_0/3q77_A_rec_pocket.pdb"
+            rec_file = self.dir + "/ELNE_HUMAN_30_247_0/3q77_A_rec.pdb"
         if self.cfg.data.rec_graph.only_pocket:
-            return self.dir + "/" + poc_file
+            return poc_file
         else:
-            return self.dir + "/" + rec_file
+            return rec_file
 
     def get_label_classes(self) -> Set[Type[Task]]:
         if self.sna_frac is None:
