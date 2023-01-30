@@ -49,7 +49,7 @@ def validate(cfg, model, dataset_name, split, num_batches=None):
 
     ret = {}
 
-    select_score = -pred.pred_bce
+    select_score = -pred.select_unnorm # pred.pred_bce
     idx = torch.argsort(select_score, dim=0)
     prev_idx = 0
     for frac in torch.arange(0.05, 1.05, 0.05):

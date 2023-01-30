@@ -4,9 +4,9 @@ from common.wandb_utils import get_old_model
 from validation.validate import validate
 
 def main(cfg):
-    model = get_old_model(cfg, "bce_mse", "latest")
+    model = get_old_model(cfg, "softmax_0.001", "latest")
     ret = validate(cfg, model, "bigbind_act", "val", None)
-    fname = "outputs/reject_metrics.pkl"
+    fname = "outputs/reject_select_softmax_metrics.pkl"
     print(f"Saving to {fname}")
     with open(fname, 'wb') as f:
         pickle.dump(ret, f)

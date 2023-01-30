@@ -53,7 +53,7 @@ class BigBindActDataset(Dataset):
     def get_rec_file(self, index):
         """ same as above """
         if self.cfg.data.use_rec:
-            if self.split == "train":
+            if False: #self.split == "train":
                 poc_folder = self.dir + "/" + self.activities.pocket[index]
                 all_poc_files = glob(f"{poc_folder}/*_pocket.pdb")
                 all_rec_files = glob(f"{poc_folder}/*_rec.pdb")
