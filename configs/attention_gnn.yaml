@@ -72,7 +72,7 @@ losses:
   #   coverage_weight: 0.5
   #   coverage: 0.1
 
-  selective_softmax:
+  selective_softmax_pos:
     alpha: 0.0
 
   # bce_mse:
