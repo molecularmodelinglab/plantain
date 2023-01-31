@@ -19,7 +19,7 @@ class LigAndRecDescriptors(Input):
     @staticmethod
     def make(cfg, data: LigAndRecGraph):
         rec_diam = torch.cdist(data.lig_graph.ndata.coord, data.rec_graph.ndata.coord).max()
-        lig_clogp = Descriptors.MolLogP(data.lig)
+        lig_clogp = torch.tensor(Descriptors.MolLogP(data.lig), dtype=torch.float32)
         clogp_x_diam = rec_diam*lig_clogp
         return LigAndRecDescriptors(rec_diam, lig_clogp, clogp_x_diam)
 
