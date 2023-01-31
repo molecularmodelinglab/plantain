@@ -1,8 +1,19 @@
+project: null
 resume_id: null
 name: test_run
 
 val_check_interval: 1.0
 metric_reset_interval: 50
+
+# train_dataset: 
+#   combo:
+#     - bigbind_act
+#     - bigbind_struct
+
+# val_datasets: [ bigbind_act, bigbind_struct ]
+
+# train_dataset: bigbind_struct
+# val_datasets: [ bigbind_struct ]
 
 train_dataset: bigbind_act
 val_datasets: [ bigbind_act ]
@@ -48,29 +59,35 @@ data:
     edge_feats: [ "dist"]
 
 losses:
-  act_bce:
-    func: bce
-    pred: active_prob_unnorm
-    y: is_active
-    weight: 1.0
+  # act_bce:
+  #   task: classify_activity
+  #   func: bce
+  #   pred: active_prob_unnorm
+  #   y: is_active
+  #   weight: 0.5
 
-  diam_mse:
-    func: x_mse
-    pred: rec_diam
-    x: rec_diam
-    weight: 0.001
+  # selective_net:
+  #   bce_weight: 0.5
+  #   selective_weight: 0.5
+  #   coverage_weight: 0.5
+  #   coverage: 0.1
 
-  logp_mse:
-    func: x_mse
-    pred: lig_clogp
-    x: lig_clogp
-    weight: 0.01
+  selective_softmax_pos:
+    alpha: 0.0
 
-  logp_x_diam_mse:
-    func: x_mse
-    pred: clogp_x_diam
-    x: clogp_x_diam
-    weight: 0.0001
+  # bce_mse:
+  #   task: classify_activity
+  #   func: bce_mse
+  #   weight: 0.1
+
+  # inter_inv_std:
+  #   func: inv_dist_mean_std
+  #   weight: 1.0
+
+  # rec_inter_bce:
+  #   task: predict_interaction_mat
+  #   func: rec_interaction_bce
+  #   weight: 1.0
 
 optimizer: adamw
 learn_rate: 1e-3
@@ -80,7 +97,7 @@ batch_size: 32
 
 model:
 
-  type: attention_gnn_new
+  type: attention_gnn
   
   rec_encoder:
     node_embed_size: 64
@@ -95,6 +112,11 @@ model:
   num_mpnn_layers: 10
   inner_attention: true
   use_layer_norm: true
+  use_slope_intercept: false
+  use_null_residue: true
+  predict_bce: false
+  predict_select: true
 
-  out_sizes: [ 128, 64 ]
+  out_size: 16
 
+  project: null

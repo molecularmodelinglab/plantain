@@ -4,6 +4,9 @@ import torch.nn.functional as F
 def bce_loss(x, pred, y):
     return F.binary_cross_entropy_with_logits(pred, y.float())
 
+def x_mse_loss(x, pred, y):
+    return F.mse_loss(pred, x)
+
 def bce_mse(x, pred, y):
     """ MSE between actual BCE and predicted BCE"""
     true_bce = F.binary_cross_entropy_with_logits(pred.active_prob_unnorm, y.is_active.float(), reduction='none').detach()
@@ -48,6 +51,7 @@ def get_single_loss(loss_cfg, x, pred, y):
         "rec_interaction_bce": rec_interaction_bce,
         "inv_dist_mean_std": inv_dist_mean_std,
         "bce_mse": bce_mse,
+        "x_mse": x_mse_loss,
     }[loss_cfg.func]
     if "x" in loss_cfg:
         x = getattr(x, loss_cfg["x"])
