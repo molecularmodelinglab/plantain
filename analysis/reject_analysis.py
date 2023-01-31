@@ -1,17 +1,14 @@
 import pickle
 from common.cfg_utils import get_config
 from common.wandb_utils import get_old_model
-from validation.validate import validate
+from validation.validate import save_validation
 
 def main(cfg):
-    model = get_old_model(cfg, "bce_mse", "latest")
-    ret = validate(cfg, model, "bigbind_act", "val", None)
-    fname = "outputs/reject_metrics.pkl"
-    print(f"Saving to {fname}")
-    with open(fname, 'wb') as f:
-        pickle.dump(ret, f)
-    with open(fname, "rb") as f:
-        print(pickle.load(f))
+    model_names = [ "bce_mse" ]
+    for name in model_names:
+        print(f"Validating {name}")
+        model = get_old_model(cfg, name, "latest")
+        save_validation(cfg, model, "bigbind_act", "val", 5000)
 
 if __name__ == "__main__":
     cfg = get_config("attention_gnn")

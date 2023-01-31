@@ -5,16 +5,16 @@ from data_formats.base_formats import Data, InvDistMat, Prediction
 from data_formats.graphs.graph_formats import LigAndRecGraph
 from terrace import Module, LazyLinear, LazyMultiheadAttention, LazyLayerNorm, Batch
 from dgl.nn.pytorch import NNConv
-from data_formats.tasks import ClassifyActivity, PredictInteractionMat, ScoreActivityClass
+from data_formats.tasks import ClassifyActivity, PredictInteractionMat, RejectOption, ScoreActivityClass
 from .model import ClassifyActivityModel
 from .graph_embedding import GraphEmbedding
 
 class PredBCE(Prediction):
     pred_bce: float
 
-class Select(Prediction):
-    select_unnorm: float
-    select_prob: float
+# class Select(Prediction):
+#     select_unnorm: float
+#     select_prob: float
 
 class MPNN(Module):
     """ Very basic message passing step"""
@@ -59,7 +59,7 @@ class AttentionGNN(Module, ClassifyActivityModel):
         return "attention_gnn"
 
     def get_tasks(self):
-        return [ ScoreActivityClass, ClassifyActivity, PredictInteractionMat ]
+        return [ ScoreActivityClass, ClassifyActivity, PredictInteractionMat, RejectOption ]
 
     def get_data_format(self):
         return LigAndRecGraph.make
@@ -168,20 +168,20 @@ class AttentionGNN(Module, ClassifyActivityModel):
                 bce_ops.append(op)
 
             select_unnorm = torch.stack([ op[:, :-1].mean() for op in bce_ops ])
-            select = torch.sigmoid(select_unnorm)
         else:
             select_unnorm = None
-            select = None
 
-        return out, ops, bce_out, select_unnorm, select
+        return out, ops, bce_out, select_unnorm
 
     def predict(self, tasks, x):
-        score, mats, bce_pred, select_unnorm, select = self(x)
+        score, mats, bce_pred, select_unnorm = self(x)
         p1 = super().make_prediction(score)
         p2 = Batch(InvDistMat, inv_dist_mat=mats)
         ret = [ p1, p2 ]
         if bce_pred is not None:
             ret.append(Batch(PredBCE, pred_bce=bce_pred))
-        if select is not None:
-            ret.append(Batch(Select, select_unnorm=select_unnorm, select_prob=select))
+            if select_unnorm is None:
+                ret.append(Batch(RejectOption.Prediction, select_score=-bce_pred))
+        if select_unnorm is not None:
+            ret.append(Batch(RejectOption.Prediction, select_score=select_unnorm))
         return Data.merge(ret)

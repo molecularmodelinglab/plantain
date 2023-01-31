@@ -23,7 +23,7 @@ class Dataset(data.Dataset):
         ret = set()
         label_classes = self.get_label_classes()
         for task in Task.__subclasses__():
-            if task.Label in label_classes:
+            if task.Label in label_classes or task.Label is None:
                 ret.add(task)
         return ret
 

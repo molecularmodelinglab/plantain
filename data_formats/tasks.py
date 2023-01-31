@@ -70,3 +70,15 @@ class PredictInteractionMat(Task):
     def get_name() -> str:
         return "predict_interaction_mat"
 
+# todo: better name
+class RejectOption(Task):
+
+    Input = None
+    Label = None
+
+    class Prediction(Prediction):
+        select_score: float
+
+    @staticmethod
+    def get_name() -> str:
+        return "reject_option"
