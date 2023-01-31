@@ -184,4 +184,24 @@ class AttentionGNN(Module, ClassifyActivityModel):
                 ret.append(Batch(RejectOption.Prediction, select_score=-bce_pred))
         if select_unnorm is not None:
             ret.append(Batch(RejectOption.Prediction, select_score=select_unnorm))
+        
+        # very hacky way to get gnina disagreement
+        if select_unnorm is None and bce_pred is None and hasattr(x, "pose_scores"):
+            pose_bce = docked_pose_bce(x, p2)
+            ret.append(Batch(RejectOption.Prediction, select_score=pose_bce))
+        
         return Data.merge(ret)
+
+def docked_pose_bce(x, pred):
+    bces = []
+    for x0, pred0 in zip(x, pred):
+        rec_coord = x0.rec_graph.ndata.coord
+        lig_coord = x0.lig_graph.ndata.coord
+        dist = torch.cdist(lig_coord, rec_coord)
+
+        nulls = torch.tensor([[5.0]]*len(lig_coord), device=lig_coord.device)
+        dist = torch.cat((dist, nulls), 1)
+        labels = torch.argmin(dist, 1)
+
+        bces.append(F.cross_entropy(pred0.inv_dist_mat, labels))
+    return torch.stack(bces)
