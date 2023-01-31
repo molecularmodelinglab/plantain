@@ -1,4 +1,5 @@
 from collections import defaultdict
+from copy import deepcopy
 from terrace import Batch, collate
 from typing import Callable, Dict, Set, Type
 import torch
@@ -6,7 +7,7 @@ from torch import nn
 from torchmetrics import Metric, SpearmanCorrCoef, Accuracy, AUROC, ROC, Precision, R2Score, MeanSquaredError
 from data_formats.base_formats import Input, LigAndRec, Prediction, Label
 
-from data_formats.tasks import Task
+from data_formats.tasks import RejectOption, Task
 
 class FullMetric(Metric):
     """ Extension of torchmetrics metrics which also allows us
@@ -147,6 +148,49 @@ class PoseAcc(FullMetric):
             ret[f"top_{n}"] = correct/self.total_seen
         return ret
         
+class RejectOptionMetric(FullMetric):
+
+    def __init__(self, cfg, metrics):
+        super().__init__()
+        self.select_fracs = torch.arange(0.05, 1.05, 0.05)
+        self.metrics = nn.ModuleDict(metrics)
+        self.xs = []
+        self.ys = []
+        self.preds = []
+
+    def update(self, x, pred, y):
+        for x0, pred0, y0 in zip(x, pred, y):
+            self.xs.append(x0)
+            self.ys.append(y0)
+            self.preds.append(pred0)
+
+    def reset(self):
+        super().reset()
+        self.xs = []
+        self.ys = []
+        self.preds = []
+
+    def compute(self):
+        ret = {}
+        x, y, pred = collate(self.xs), collate(self.ys), collate(self.preds)
+        select_score = -pred.select_score
+        idx = torch.argsort(select_score, dim=0)
+        prev_idx = 0
+        for frac in self.select_fracs:
+            length = int(len(idx)*frac)
+            if length == prev_idx: continue
+            for index in idx[prev_idx:length]:
+                x0 = collate([x[index]])
+                y0 = collate([y[index]])
+                pred0 = collate([pred[index]])
+                for metric in self.metrics.values():
+                    metric.update(x0, pred0, y0)
+            prev_idx = length
+
+            ret[f"{frac:.2f}"] = {
+                key: val.compute() for key, val in self.metrics.items()
+            }
+        return ret
 
 def get_single_task_metrics(task: Type[Task]):
     return {
@@ -167,10 +211,14 @@ def get_single_task_metrics(task: Type[Task]):
         "predict_interaction_mat": nn.ModuleDict(),
     }[task.get_name()]
 
-def get_metrics(tasks: Set[Type[Task]]):
+def get_metrics(cfg, tasks: Set[Type[Task]]):
     ret = nn.ModuleDict({})
     for task in tasks:
+        if task == RejectOption: continue
         ret.update(get_single_task_metrics(task))
+    # pretty hacky way of integrating reject option
+    if RejectOption in tasks:
+        ret["select"] = RejectOptionMetric(cfg, deepcopy(ret))
     return ret
 
 def reset_metrics(module):
