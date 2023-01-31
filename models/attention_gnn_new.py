@@ -88,6 +88,10 @@ class AttentionGNNNew(Module, ClassifyActivityModel):
             prev_rec_hid.append(rec_hid)
 
         feats = self.make(WeightAndSum, lig_hid.size(-1))(x.lig_graph.dgl(), lig_hid)
+        if self.cfg.get("use_rec_out", False):
+            rec_feats = self.make(WeightAndSum, rec_hid.size(-1))(x.rec_graph.dgl(), rec_hid)
+            feats = torch.cat([feats, rec_feats], -1)
+
         for size in self.cfg.out_sizes:
             feats = self.make(LazyLinear, size)(F.leaky_relu(feats))
             feats = self.make(LazyLayerNorm)(feats)

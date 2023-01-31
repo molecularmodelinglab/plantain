@@ -94,7 +94,7 @@ model:
     node_out_size: 64
 
   num_mpnn_layers: 10
-  use_layer_norm: true
 
+  use_rec_out: true
   out_sizes: [ 128, 64 ]
 
