@@ -1,5 +1,6 @@
 resume_id: null
 name: test_run
+debug_dataset_len: null
 
 val_check_interval: 1.0
 metric_reset_interval: 50

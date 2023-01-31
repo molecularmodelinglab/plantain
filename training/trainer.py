@@ -50,7 +50,7 @@ class Trainer(pl.LightningModule):
         else:
             key = f"{name}_metrics_{dataset_idx}"
         if key not in self.metrics:
-            self.metrics[key] = get_metrics(tasks).to(self.device)
+            self.metrics[key] = get_metrics(cfg, tasks).to(self.device)
         return self.metrics[key]
 
     def get_metrics(self, name):
