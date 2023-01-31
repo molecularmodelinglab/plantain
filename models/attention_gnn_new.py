@@ -89,9 +89,8 @@ class AttentionGNNNew(Module, ClassifyActivityModel):
 
         feats = self.make(WeightAndSum, lig_hid.size(-1))(x.lig_graph.dgl(), lig_hid)
         for size in self.cfg.out_sizes:
-            feats = self.make(LazyLinear, size)(feats)
-            if self.cfg.get("use_layer_norm", False):
-                feats = self.make(LazyLayerNorm)(F.leaky_relu(feats))
+            feats = self.make(LazyLinear, size)(F.leaky_relu(feats))
+            feats = self.make(LazyLayerNorm)(feats)
 
         out = self.make(LazyLinear, 1)(F.leaky_relu(feats))[:,0]
         descriptors = {}
