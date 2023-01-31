@@ -96,5 +96,6 @@ model:
   num_mpnn_layers: 10
 
   use_rec_out: true
+  use_outer_prod: true
   out_sizes: [ 128, 64 ]
 

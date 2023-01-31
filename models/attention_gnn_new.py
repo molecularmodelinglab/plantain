@@ -87,10 +87,15 @@ class AttentionGNNNew(Module, ClassifyActivityModel):
             prev_lig_hid.append(lig_hid)
             prev_rec_hid.append(rec_hid)
 
-        feats = self.make(WeightAndSum, lig_hid.size(-1))(x.lig_graph.dgl(), lig_hid)
-        if self.cfg.get("use_rec_out", False):
-            rec_feats = self.make(WeightAndSum, rec_hid.size(-1))(x.rec_graph.dgl(), rec_hid)
-            feats = torch.cat([feats, rec_feats], -1)
+        lig_feats = self.make(WeightAndSum, lig_hid.size(-1))(x.lig_graph.dgl(), lig_hid)
+        rec_feats = self.make(WeightAndSum, rec_hid.size(-1))(x.rec_graph.dgl(), rec_hid)
+        if self.cfg.get("use_outer_prod", False):
+            B = len(x)
+            feats = torch.einsum('bi,bj->bij', lig_feats, rec_feats).view((B, -1))
+        elif self.cfg.get("use_rec_out", False):
+            feats = torch.cat([lig_feats, rec_feats], -1)
+        else:
+            feats = lig_feats
 
         for size in self.cfg.out_sizes:
             feats = self.make(LazyLinear, size)(F.leaky_relu(feats))
