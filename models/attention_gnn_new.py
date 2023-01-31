@@ -57,11 +57,8 @@ class AttentionGNNNew(Module, ClassifyActivityModel):
 
         lig_hid = self.make(LazyLinear, lig_cfg.node_out_size)(F.leaky_relu(lig_node_feats))
         rec_hid = self.make(LazyLinear, rec_cfg.node_out_size)(F.leaky_relu(rec_node_feats))
-
-
-        if self.cfg.get("use_layer_norm", False):
-            rec_hid = self.make(LazyLayerNorm)(rec_hid)
-            lig_hid = self.make(LazyLayerNorm)(lig_hid)
+        rec_hid = self.make(LazyLayerNorm)(rec_hid)
+        lig_hid = self.make(LazyLayerNorm)(lig_hid)
 
         prev_lig_hid = []
         prev_rec_hid = []
@@ -69,17 +66,17 @@ class AttentionGNNNew(Module, ClassifyActivityModel):
         for layer in range(self.cfg.num_mpnn_layers):
             lig_hid = self.make(MPNN)(x.lig_graph, F.leaky_relu(lig_hid), lig_edge_feats)
             rec_hid = self.make(MPNN)(x.rec_graph, F.leaky_relu(rec_hid), rec_edge_feats)
+            rec_hid = self.make(LazyLayerNorm)(rec_hid)
+            lig_hid = self.make(LazyLayerNorm)(lig_hid)
 
-            if self.cfg.get("use_layer_norm", False):
-                rec_hid = self.make(LazyLayerNorm)(rec_hid)
-                lig_hid = self.make(LazyLayerNorm)(lig_hid)
+            rec_lig_hid = self.make(LazyMultiheadAttention, 1)(rec_hid, lig_hid, lig_hid)[0]
+            lig_rec_hid = self.make(LazyMultiheadAttention, 1)(lig_hid, rec_hid, rec_hid)[0]
 
-            if self.cfg.get("inner_attention", False):
-                rec_hid = (rec_hid + self.make(LazyMultiheadAttention, 1)(rec_hid, lig_hid, lig_hid)[0])
-                lig_hid = (lig_hid + self.make(LazyMultiheadAttention, 1)(lig_hid, rec_hid, rec_hid)[0])
-                if self.cfg.get("use_layer_norm", False):
-                    rec_hid = self.make(LazyLayerNorm)(rec_hid)
-                    lig_hid = self.make(LazyLayerNorm)(lig_hid)
+            rec_hid = self.make(LazyLinear, rec_hid.size(-1))(torch.cat((rec_hid, rec_lig_hid), -1))
+            lig_hid = self.make(LazyLinear, lig_hid.size(-1))(torch.cat((lig_hid, lig_rec_hid), -1))
+
+            rec_hid = self.make(LazyLayerNorm)(rec_hid)
+            lig_hid = self.make(LazyLayerNorm)(lig_hid)
 
             # make it residual!
             prev_layer = layer - 2
@@ -94,11 +91,12 @@ class AttentionGNNNew(Module, ClassifyActivityModel):
         for size in self.cfg.out_sizes:
             feats = self.make(LazyLinear, size)(feats)
             if self.cfg.get("use_layer_norm", False):
-                feats = self.make(LazyLayerNorm)(feats)
-        out = self.make(LazyLayerNorm, 1)(feats)[:,0]
+                feats = self.make(LazyLayerNorm)(F.leaky_relu(feats))
+
+        out = self.make(LazyLinear, 1)(F.leaky_relu(feats))[:,0]
         descriptors = {}
         for key in LigAndRecDescriptors.__annotations__.keys():
-            descriptors[key] = self.make(LazyLayerNorm, 1)(feats)[:,0]
+            descriptors[key] = self.make(LazyLinear, 1)(F.leaky_relu(feats))[:,0]
 
         return out, descriptors
 

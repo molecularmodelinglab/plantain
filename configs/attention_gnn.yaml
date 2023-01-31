@@ -94,8 +94,7 @@ model:
     node_out_size: 64
 
   num_mpnn_layers: 10
-  inner_attention: true
-  use_layer_norm: true
+  use_old_attention: false
 
   out_sizes: [ 128, 64 ]
 
