@@ -211,15 +211,15 @@ def get_single_task_metrics(task: Type[Task]):
         "predict_interaction_mat": nn.ModuleDict(),
     }[task.get_name()]
 
-def get_metrics(cfg, tasks: Set[Type[Task]]):
+def get_metrics(cfg, tasks: Set[Type[Task]], offline=False):
     ret = nn.ModuleDict({})
     for task in tasks:
         if task == RejectOption: continue
         ret.update(get_single_task_metrics(task))
     # pretty hacky way of integrating reject option
     # todo: put back. Took out because of OOMing
-    # if RejectOption in tasks:
-    #     ret["select"] = RejectOptionMetric(cfg, deepcopy(ret))
+    if RejectOption in tasks and offline:
+        ret["select"] = RejectOptionMetric(cfg, deepcopy(ret))
     return ret
 
 def reset_metrics(module):

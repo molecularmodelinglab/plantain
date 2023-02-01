@@ -44,7 +44,7 @@ def validate(cfg, model, dataset_name, split, num_batches=None):
 
     loader = make_dataloader(cfg, dataset_name, split, model.get_data_format())
     tasks = set(model.get_tasks()).intersection(loader.dataset.get_tasks())
-    metrics = get_metrics(cfg, tasks)
+    metrics = get_metrics(cfg, tasks, offline=True)
 
     x, y, pred = get_preds(cfg, model, dataset_name, split, num_batches)
     for metric in metrics.values():
