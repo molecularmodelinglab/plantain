@@ -2,7 +2,7 @@ project: null
 resume_id: null
 name: test_run
 
-val_check_interval: 1.0
+val_check_interval: 0.25
 metric_reset_interval: 50
 
 # train_dataset: 
@@ -15,8 +15,8 @@ metric_reset_interval: 50
 # train_dataset: bigbind_struct
 # val_datasets: [ bigbind_struct ]
 
-train_dataset: bigbind_act
-val_datasets: [ bigbind_act ]
+train_dataset: bigbind_vina
+val_datasets: [ bigbind_vina ]
 
 monitor_metric:
   name: val/bigbind_act/auroc_all
@@ -59,21 +59,24 @@ data:
     edge_feats: [ "dist"]
 
 losses:
-  # act_bce:
-  #   task: classify_activity
-  #   func: bce
-  #   pred: active_prob_unnorm
-  #   y: is_active
-  #   weight: 0.5
+  act_bce:
+    # task: classify_activity
+    func: bce
+    pred: active_prob_unnorm
+    y: is_active
+    weight: 0.9
 
+  docked_mse:
+    func: docked_mse
+    weight: 0.1
   # selective_net:
   #   bce_weight: 0.5
   #   selective_weight: 0.5
   #   coverage_weight: 0.5
   #   coverage: 0.1
 
-  selective_softmax_pos:
-    alpha: 0.0
+  # selective_softmax_pos:
+  #   alpha: 0.0
 
   # bce_mse:
   #   task: classify_activity
@@ -115,7 +118,8 @@ model:
   use_slope_intercept: false
   use_null_residue: true
   predict_bce: false
-  predict_select: true
+  predict_select: false
+  predict_docked_score: true
 
   out_size: 16
 

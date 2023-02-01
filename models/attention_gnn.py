@@ -12,6 +12,9 @@ from .graph_embedding import GraphEmbedding
 class PredBCE(Prediction):
     pred_bce: float
 
+class PredDocked(Prediction):
+    docked_score: float
+
 # class Select(Prediction):
 #     select_unnorm: float
 #     select_prob: float
@@ -171,10 +174,25 @@ class AttentionGNN(Module, ClassifyActivityModel):
         else:
             select_unnorm = None
 
-        return out, ops, bce_out, select_unnorm
+        if self.cfg.get("predict_docked_score", False):
+            rec_bce_hid = self.make(LazyLinear, rec_hid.shape[-1])(rec_hid)
+            lig_bce_hid = self.make(LazyLinear, lig_hid.shape[-1])(lig_hid)
+            
+            bce_ops = []
+            for lig_feat, rec_feat in batched_feats(x, lig_bce_hid, rec_bce_hid):
+                if self.cfg.get("use_null_residue", False):
+                    rec_feat = torch.cat((rec_feat, null), 0)
+                op = torch.einsum('lf,rf->lr', lig_feat, rec_feat)
+                bce_ops.append(op)
+
+            docked_score = torch.stack([ op[:, :-1].mean() for op in bce_ops ])
+        else:
+            docked_score = None
+
+        return out, ops, bce_out, select_unnorm, docked_score
 
     def predict(self, tasks, x):
-        score, mats, bce_pred, select_unnorm = self(x)
+        score, mats, bce_pred, select_unnorm, docked_score = self(x)
         p1 = super().make_prediction(score)
         p2 = Batch(InvDistMat, inv_dist_mat=mats)
         ret = [ p1, p2 ]
@@ -189,6 +207,9 @@ class AttentionGNN(Module, ClassifyActivityModel):
         if select_unnorm is None and bce_pred is None and hasattr(x, "pose_scores"):
             pose_bce = docked_pose_bce(x, p2)
             ret.append(Batch(RejectOption.Prediction, select_score=pose_bce))
+
+        if docked_score is not None:
+            ret.append(Batch(PredDocked, docked_score=docked_score))
         
         return Data.merge(ret)
 

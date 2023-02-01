@@ -43,6 +43,9 @@ def rec_interaction_bce(x, pred, y):
 
     return torch.stack(losses).mean()
 
+def docked_mse_loss(x, pred, y):
+    true_score = torch.stack([scores[0] for scores in x.docked_scores])
+    return F.mse_loss(pred.docked_score, true_score)
 
 def get_single_loss(loss_cfg, x, pred, y):
     loss_fn = {
@@ -52,6 +55,7 @@ def get_single_loss(loss_cfg, x, pred, y):
         "inv_dist_mean_std": inv_dist_mean_std,
         "bce_mse": bce_mse,
         "x_mse": x_mse_loss,
+        "docked_mse": docked_mse_loss,
     }[loss_cfg.func]
     if "x" in loss_cfg:
         x = getattr(x, loss_cfg["x"])
