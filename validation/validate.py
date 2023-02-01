@@ -2,6 +2,7 @@ import os
 import pickle
 import resource
 from terrace import collate
+from terrace.batch import DataLoader
 from validation.val_plots import make_plots
 
 rlimit = resource.getrlimit(resource.RLIMIT_NOFILE)
@@ -10,7 +11,7 @@ resource.setrlimit(resource.RLIMIT_NOFILE, (4096, rlimit[1]))
 import torch
 from tqdm import tqdm
 from common.cache import cache
-from datasets.make_dataset import make_dataloader
+from datasets.make_dataset import make_dataloader, seed_worker
 from validation.metrics import get_metrics
 from common.utils import flatten_dict
 
@@ -20,6 +21,15 @@ def pred_key(cfg, model, dataset_name, split, num_batches):
 # @cache(pred_key)
 def get_preds(cfg, model, dataset_name, split, num_batches):
     loader = make_dataloader(cfg, dataset_name, split, model.get_data_format())
+    if num_batches is not None:
+        # shuffle to get better sample
+        loader = DataLoader(loader.dataset,
+                            batch_size=cfg.batch_size,
+                            num_workers=loader.num_workers,
+                            pin_memory=True,
+                            shuffle=True,
+                            worker_init_fn=seed_worker)
+
     tasks = set(model.get_tasks()).intersection(loader.dataset.get_tasks())
 
     xs = []
