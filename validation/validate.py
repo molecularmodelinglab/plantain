@@ -19,6 +19,7 @@ def pred_key(cfg, model, dataset_name, split, num_batches):
     return (model.cache_key, dataset_name, split, num_batches)
 
 # @cache(pred_key)
+@torch.no_grad()
 def get_preds(cfg, model, dataset_name, split, num_batches):
     loader = make_dataloader(cfg, dataset_name, split, model.get_data_format())
     if num_batches is not None:
