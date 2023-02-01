@@ -217,8 +217,9 @@ def get_metrics(cfg, tasks: Set[Type[Task]]):
         if task == RejectOption: continue
         ret.update(get_single_task_metrics(task))
     # pretty hacky way of integrating reject option
-    if RejectOption in tasks:
-        ret["select"] = RejectOptionMetric(cfg, deepcopy(ret))
+    # todo: put back. Took out because of OOMing
+    # if RejectOption in tasks:
+    #     ret["select"] = RejectOptionMetric(cfg, deepcopy(ret))
     return ret
 
 def reset_metrics(module):
