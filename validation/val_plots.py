@@ -2,6 +2,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
+from sklearn.gaussian_process import GaussianProcessClassifier
 from sklearn.neighbors import KernelDensity
 from collections import defaultdict
 from common.utils import flatten_dict
@@ -78,6 +79,31 @@ def uncertainty_kde(cfg, x, y, pred, metrics, select_score=None):
 
     return fig
 
+def uncertainty_gaussian(cfg, x, y, pred, metrics, select_score=None):
+    if select_score is None:
+        select_score = pred.select_score
+    U = -select_score
+    S = pred.active_prob
+    US = torch.stack((U, S)).T
+    gpc = GaussianProcessClassifier().fit(US, y.is_active)
+
+    U = torch.linspace(0.0, 1.0, 100)
+    S = torch.linspace(0.0, 1.0, 100)
+    UU, SS = torch.meshgrid(U, S)
+    UUSS = torch.stack([UU.reshape(-1), SS.reshape(-1)]).T
+
+    prob = gpc.predict_proba(UUSS)[:,1].reshape((100, 100))
+
+    fig, ax = plt.subplots()#subplot_kw={"projection": "3d"})
+    cf = ax.contourf(UU, SS, prob, cmap='Blues')
+    ax.set_xlabel("Uncertainty")
+    ax.set_ylabel("Prediction")
+    ax.set_title("P(Active)")
+    # ax.plot_surface(UU, SS, P_val)
+    fig.colorbar(cf)
+
+    return fig
+
 def ideal_uncertainty_plot():
     SS, UU = np.mgrid[0.0:1.0:100j, 0.0:1.0:100j]
     P_val = (1-UU.ravel())*SS.ravel() + UU.ravel()*0.4
@@ -96,6 +122,7 @@ def make_plots(cfg, tasks, x, y, pred, metrics):
         reject_frac_plot: (RejectOption, ScoreActivityClass, ClassifyActivity),
         act_select_scatter: (RejectOption, ScoreActivityClass),
         uncertainty_kde: (RejectOption, ClassifyActivity),
+        uncertainty_gaussian: (RejectOption, ClassifyActivity)
     }
     plots = {}
     for func, plot_tasks in plot_funcs.items():
