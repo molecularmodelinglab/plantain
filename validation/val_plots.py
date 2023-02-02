@@ -44,8 +44,8 @@ def act_select_scatter(cfg, x, y, pred, metrics, select_score=None):
     if select_score is None:
         select_score = pred.select_score
     fig, ax = plt.subplots()
-    ax.scatter(select_score[y.is_active], pred.active_prob_unnorm[y.is_active], alpha=0.5, label="Actives")
     ax.scatter(select_score[~y.is_active], pred.active_prob_unnorm[~y.is_active], alpha=0.5, label="Inactives")
+    ax.scatter(select_score[y.is_active], pred.active_prob_unnorm[y.is_active], alpha=0.5, label="Actives")
     ax.set_xlabel("Select score")
     ax.set_ylabel("Activity score")
     ax.legend()
