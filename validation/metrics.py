@@ -1,5 +1,6 @@
 from collections import defaultdict
 from copy import deepcopy
+import random
 from terrace import Batch, collate
 from typing import Callable, Dict, Set, Type
 import torch
@@ -7,7 +8,7 @@ from torch import nn
 from torchmetrics import Metric, SpearmanCorrCoef, Accuracy, AUROC, ROC, Precision, R2Score, MeanSquaredError
 from data_formats.base_formats import Input, LigAndRec, Prediction, Label
 
-from data_formats.tasks import RejectOption, Task
+from data_formats.tasks import RejectOption, ScoreActivityClass, Task
 
 class FullMetric(Metric):
     """ Extension of torchmetrics metrics which also allows us
@@ -148,6 +149,50 @@ class PoseAcc(FullMetric):
             ret[f"top_{n}"] = correct/self.total_seen
         return ret
         
+class EnrichmentFactor(FullMetric):
+
+    def __init__(self):
+        super().__init__()
+        self.scores = []
+        self.yts = []
+
+    def update(self, x, pred, y):
+        for pred0, y0 in zip(pred, y):
+            self.yts.append(y0.is_active)
+            self.scores.append(pred0.is_active_score)
+
+    def reset(self):
+        super().reset()
+        self.yts = []
+        self.scores = []
+
+    def compute(self):
+        yt, scores = collate(self.yts), collate(self.scores)
+
+        one_percent = round(len(yt)*0.01)
+        if one_percent == 0: return {}
+
+        all_pred_and_act = list(zip(scores, yt))
+        random.shuffle(all_pred_and_act)
+        pred_and_act = sorted(all_pred_and_act, key=lambda x: -x[0])[:one_percent]
+        are_active = [ item[1] for item in pred_and_act ]
+        tot_actives = sum(yt)
+        max_actives = min(tot_actives, one_percent)
+        frac_act_chosen = sum(are_active)/len(are_active)
+        max_act_frac = max_actives/len(are_active)
+        frac_act_in_set = tot_actives/len(yt)
+        ef1 = frac_act_chosen/frac_act_in_set
+        max_ef1 = max_act_frac/frac_act_in_set
+        nef1 = ef1/max_ef1
+        return {
+            "ef1": ef1,
+            "nef1": nef1,
+            "total_in_set": len(yt),
+            "total_chosen": one_percent,
+            "total_actives_chosen": sum(are_active),
+            "total_actives_in_set": tot_actives,
+        }
+
 class RejectOptionMetric(FullMetric):
 
     def __init__(self, cfg, metrics):
@@ -216,10 +261,15 @@ def get_metrics(cfg, tasks: Set[Type[Task]], offline=False):
     for task in tasks:
         if task == RejectOption: continue
         ret.update(get_single_task_metrics(task))
+
+    if offline and ScoreActivityClass in tasks:
+        ret.update({"enrichment": EnrichmentFactor()})
+    
     # pretty hacky way of integrating reject option
     # todo: put back. Took out because of OOMing
     if RejectOption in tasks and offline:
         ret["select"] = RejectOptionMetric(cfg, deepcopy(ret))
+        
     return ret
 
 def reset_metrics(module):

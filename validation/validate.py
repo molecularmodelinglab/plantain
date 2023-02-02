@@ -77,7 +77,12 @@ def validate(cfg, model, dataset_name, split, num_batches=None):
 def save_validation(cfg, model, dataset_name, split, num_batches=None):
     metrics, plots = validate(cfg, model, dataset_name, split, num_batches)
     
-    out_folder =f"outputs/results/{model.cache_key}"
+    out_folder =f"outputs/results/{model.cache_key}/{dataset_name}_{split}"
+
+    for name, val in flatten_dict(metrics).items():
+        if isinstance(val, torch.Tensor):
+            val = val.item()
+        print(f"  {name}: {val:.2f}")
     print(f"Saving metrics and plots to {out_folder}")
 
     os.makedirs(out_folder, exist_ok=True)

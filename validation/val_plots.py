@@ -16,7 +16,9 @@ def reject_frac_plot(cfg, x, y, pred, metrics):
         frac = float(key)
         fracs.append(frac)
         for name, metric in flatten_dict(val).items():
-            frac_metrics[name].append(metric.item())
+            if isinstance(metric, torch.Tensor):
+                metric = metric.item()
+            frac_metrics[name].append(metric)
 
     fig, axs = plt.subplots(2, 2)
     graph_data = [
@@ -121,8 +123,8 @@ def make_plots(cfg, tasks, x, y, pred, metrics):
     plot_funcs = {
         reject_frac_plot: (RejectOption, ScoreActivityClass, ClassifyActivity),
         act_select_scatter: (RejectOption, ScoreActivityClass),
-        uncertainty_kde: (RejectOption, ClassifyActivity),
-        uncertainty_gaussian: (RejectOption, ClassifyActivity)
+        # uncertainty_kde: (RejectOption, ClassifyActivity),
+        # uncertainty_gaussian: (RejectOption, ClassifyActivity)
     }
     plots = {}
     for func, plot_tasks in plot_funcs.items():
