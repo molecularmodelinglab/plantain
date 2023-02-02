@@ -15,10 +15,10 @@ def main(cfg):
         u_model.fit("bigbind_act", "val", 500)
 
         out_folder =f"outputs/results/{u_model.cache_key}"
-        print(f"Saving svm plot to {out_folder}")
+        print(f"Saving lr plot to {out_folder}")
         os.makedirs(out_folder, exist_ok=True)
         fig = u_model.plot()
-        fig.savefig(f"{out_folder}/svm_plot.pdf")
+        fig.savefig(f"{out_folder}/lr_plot.pdf")
 
         dataset = "lit_pcba"
         for target in LitPcbaDataset.get_all_targets(cfg): 

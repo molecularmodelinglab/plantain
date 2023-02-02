@@ -112,6 +112,8 @@ class AttentionGNNNew(Module, ClassifyActivityModel):
         score, descriptors = self(x)
         p1 = super().make_prediction(score)
         p2 = Batch(LigAndRecDescriptors, **descriptors)
-        p3 = Batch(RejectOption.Prediction, select_score = -F.mse_loss(x.clogp_x_diam, p2.clogp_x_diam, reduction='none'))
+        mse = F.mse_loss(x.clogp_x_diam, p2.clogp_x_diam, reduction='none')
+        score = torch.tanh(torch.sqrt(mse)*0.005)
+        p3 = Batch(RejectOption.Prediction, select_score = score)
         ret = [ p1, p2, p3]
         return Data.merge(ret)

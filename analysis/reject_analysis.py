@@ -4,7 +4,7 @@ from common.wandb_utils import get_old_model
 from validation.validate import save_validation
 
 def main(cfg):
-    model_names = [ "bce_mse" ]
+    model_names = [ "rec_feats" ]
     # model_names = [ "lig_feats", "rec_feats" ]
     # model_names = [ "pos_softmax_0.5", "softmax_0.001", "select_correct", "bce_mse", "combo_1.5_0.5" ]
     for name in model_names:

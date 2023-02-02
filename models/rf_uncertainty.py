@@ -5,13 +5,16 @@ from .model import ClassifyActivityModel
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.discriminant_analysis import QuadraticDiscriminantAnalysis
 from sklearn.svm import SVC
+from sklearn.linear_model import LogisticRegression
+from sklearn.preprocessing import PolynomialFeatures
 
 class RFUncertainty(ClassifyActivityModel):
 
     def __init__(self, cfg, model, n_estimators=100):
         self.cfg = cfg
         self.model = model
-        self.rf = SVC(probability=True)
+        self.rf = LogisticRegression() # SVC(probability=True)
+        self.feats = PolynomialFeatures(degree=3, interaction_only=False, include_bias=False)
         if hasattr(self.model, "cache_key"):
             self.cache_key = "rf_" + self.model.cache_key
 
@@ -23,6 +26,7 @@ class RFUncertainty(ClassifyActivityModel):
         U = -pred.select_score
         S = pred.active_prob
         US = torch.stack((U, S)).T
+        US = self.feats.fit_transform(US)
         self.rf.fit(US, y.is_active)
 
     @torch.no_grad()
@@ -31,6 +35,7 @@ class RFUncertainty(ClassifyActivityModel):
         U = -pred.select_score
         S = pred.active_prob
         US = torch.stack((U, S)).T
+        US = self.feats.fit_transform(US)
         return torch.logit(torch.tensor(self.rf.predict_proba(US)[:,1]))
 
     def plot(self):
@@ -39,6 +44,8 @@ class RFUncertainty(ClassifyActivityModel):
         S = torch.linspace(0.0, 1.0, 100)
         UU, SS = torch.meshgrid(U, S)
         UUSS = torch.stack([UU.reshape(-1), SS.reshape(-1)]).T
+
+        UUSS = self.feats.fit_transform(UUSS)
 
         prob = self.rf.predict_proba(UUSS)[:,1].reshape((100, 100))
 
