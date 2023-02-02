@@ -31,12 +31,13 @@ class RFUncertainty(ClassifyActivityModel):
 
     @torch.no_grad()
     def __call__(self, x):
+        device = x.device
         pred = self.model.predict({ScoreActivityClass, RejectOption}, x)
         U = -pred.select_score
         S = pred.active_prob
         US = torch.stack((U, S)).T.cpu()
         US = self.feats.fit_transform(US)
-        return torch.logit(torch.tensor(self.rf.predict_proba(US)[:,1]))
+        return torch.logit(torch.tensor(self.rf.predict_proba(US)[:,1])).to(device)
 
     def plot(self):
         import matplotlib.pyplot as plt
