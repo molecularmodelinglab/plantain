@@ -15,11 +15,11 @@ metric_reset_interval: 50
 # train_dataset: bigbind_struct
 # val_datasets: [ bigbind_struct ]
 
-train_dataset: bigbind_vina
-val_datasets: [ bigbind_vina ]
+train_dataset: bigbind_gnina
+val_datasets: [ bigbind_gnina ]
 
 monitor_metric:
-  name: val/bigbind_vina/auroc_all
+  name: val/bigbind_gnina/auroc_all
   mode: max
   # name: val_loss
   # mode: min
@@ -67,8 +67,9 @@ losses:
     weight: 0.9
 
   docked_mse:
-    func: docked_mse
+    func: gnina_docked_mse
     weight: 0.1
+
   # selective_net:
   #   bce_weight: 0.5
   #   selective_weight: 0.5

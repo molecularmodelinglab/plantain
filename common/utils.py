@@ -111,7 +111,8 @@ def get_docked_scores_from_pdbqt(fname):
 
 score_re = re.compile(".*CNNscore\s+([\d|\.]+)")
 affinity_re = re.compile(".*CNNaffinity\s+([\d|\.]+)")
-def get_gnina_scores_from_pdbqt(fname):
+
+def get_gnina_scores_from_pdbqt_no_cache(fname):
     """ returns pose scores and affinities for all the poses in
     pdbqt file fname """
     scores = []
@@ -125,6 +126,27 @@ def get_gnina_scores_from_pdbqt(fname):
             if m is not None:
                 affinities.append(float(m.groups()[0]))
     return scores, affinities
+
+def get_gnina_scores_from_pdbqt(fname, cache=True):
+    if not cache:
+        return get_mol_from_file_no_cache(fname)
+    cache_fname = ".".join(fname.split(".")[:-1]) + "_gnina_scores.pkl"
+
+    if os.path.exists(cache_fname):
+        try:
+            with open(cache_fname, "rb") as fh:
+                ret = pickle.load(fh)
+                return ret
+        except KeyboardInterrupt:
+            raise
+        except:
+            pass
+
+    ret = get_gnina_scores_from_pdbqt_no_cache(fname)
+    with open(cache_fname, "wb") as f:
+        pickle.dump(ret, f)
+
+    return ret
 
 def flatten_dict(d):
     ret = {}

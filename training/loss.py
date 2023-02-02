@@ -47,6 +47,10 @@ def docked_mse_loss(x, pred, y):
     true_score = torch.stack([scores[0] for scores in x.docked_scores])
     return F.mse_loss(pred.docked_score, true_score)
 
+def gnina_docked_mse_loss(x, pred, y):
+    true_score = torch.stack([scores[0] for scores in x.affinities])
+    return F.mse_loss(pred.docked_score, true_score)
+
 def get_single_loss(loss_cfg, x, pred, y):
     loss_fn = {
         "bce": bce_loss,
@@ -56,6 +60,7 @@ def get_single_loss(loss_cfg, x, pred, y):
         "bce_mse": bce_mse,
         "x_mse": x_mse_loss,
         "docked_mse": docked_mse_loss,
+        "gnina_docked_mse": gnina_docked_mse_loss,
     }[loss_cfg.func]
     if "x" in loss_cfg:
         x = getattr(x, loss_cfg["x"])
