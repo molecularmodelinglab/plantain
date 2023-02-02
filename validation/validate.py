@@ -21,6 +21,10 @@ def pred_key(cfg, model, dataset_name, split, num_batches):
 # @cache(pred_key)
 @torch.no_grad()
 def get_preds(cfg, model, dataset_name, split, num_batches):
+
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    model = model.to(device)
+
     loader = make_dataloader(cfg, dataset_name, split, model.get_data_format())
     if num_batches is not None:
         # shuffle to get better sample
@@ -38,6 +42,8 @@ def get_preds(cfg, model, dataset_name, split, num_batches):
     preds = []
 
     for i, (x, y) in enumerate(tqdm(loader)):
+        x = x.to(device)
+        y = y.to(device)
         pred = model.predict(tasks, x)
         if num_batches is not None and i >= num_batches:
 
@@ -53,9 +59,12 @@ def get_preds(cfg, model, dataset_name, split, num_batches):
 @torch.no_grad()
 def validate(cfg, model, dataset_name, split, num_batches=None):
 
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    model = model.to(device)
+
     loader = make_dataloader(cfg, dataset_name, split, model.get_data_format())
     tasks = set(model.get_tasks()).intersection(loader.dataset.get_tasks())
-    metrics = get_metrics(cfg, tasks, offline=True)
+    metrics = get_metrics(cfg, tasks, offline=True).to(device)
 
     x, y, pred = get_preds(cfg, model, dataset_name, split, num_batches)
     for metric in metrics.values():

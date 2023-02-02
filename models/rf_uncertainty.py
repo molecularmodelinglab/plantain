@@ -25,16 +25,16 @@ class RFUncertainty(ClassifyActivityModel):
         x, y, pred = get_preds(self.cfg, self.model, dataset_name, split, num_batches)
         U = -pred.select_score
         S = pred.active_prob
-        US = torch.stack((U, S)).T
+        US = torch.stack((U, S)).T.cpu()
         US = self.feats.fit_transform(US)
-        self.rf.fit(US, y.is_active)
+        self.rf.fit(US, y.is_active.cpu())
 
     @torch.no_grad()
     def __call__(self, x):
         pred = self.model.predict({ScoreActivityClass, RejectOption}, x)
         U = -pred.select_score
         S = pred.active_prob
-        US = torch.stack((U, S)).T
+        US = torch.stack((U, S)).T.cpu()
         US = self.feats.fit_transform(US)
         return torch.logit(torch.tensor(self.rf.predict_proba(US)[:,1]))
 
@@ -43,7 +43,7 @@ class RFUncertainty(ClassifyActivityModel):
         U = torch.linspace(0.0, 1.0, 100)
         S = torch.linspace(0.0, 1.0, 100)
         UU, SS = torch.meshgrid(U, S)
-        UUSS = torch.stack([UU.reshape(-1), SS.reshape(-1)]).T
+        UUSS = torch.stack([UU.reshape(-1), SS.reshape(-1)]).T.cpu()
 
         UUSS = self.feats.fit_transform(UUSS)
 
@@ -58,3 +58,7 @@ class RFUncertainty(ClassifyActivityModel):
         fig.colorbar(cf)
 
         return fig
+
+    def to(self, device):
+        self.model = self.model.to(device)
+        return self
