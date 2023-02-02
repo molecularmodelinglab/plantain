@@ -78,9 +78,9 @@ def validate(cfg, model, dataset_name, split, num_batches=None):
     #         break
 
     comp_mets = {
-        key: val.compute() for key, val in metrics.items()
+        key: val.compute().cpu() for key, val in metrics.items()
     }
-    plots = make_plots(cfg, tasks, x, y, pred, comp_mets)
+    plots = make_plots(cfg, tasks, x.cpu(), y.cpu(), pred.cpu(), comp_mets)
     return comp_mets, plots # flatten_dict(ret)
 
 def save_validation(cfg, model, dataset_name, split, num_batches=None):
