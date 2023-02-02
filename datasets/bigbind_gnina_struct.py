@@ -23,7 +23,7 @@ class BigBindGninaStructDataset(Dataset):
     def get_name():
         return "bigbind_gnina_struct"
 
-    def __len__(self):
+    def len_impl(self):
         return len(self.structures)
 
     # smh a lot of this is brazenly copy-and-pasted from bigbind_act

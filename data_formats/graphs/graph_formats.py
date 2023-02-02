@@ -10,7 +10,9 @@ class LigAndRecGraph(Input):
 
     @staticmethod
     def make(cfg, data):
-        lig_graph = MolGraph(cfg, data.lig)
+        # this is very hacky
+        conf = 0 if data.lig.GetNumConformers() > 0 else None
+        lig_graph = MolGraph(cfg, data.lig, None)
         rec_graph = ProtGraph(cfg, data.rec)
         return LigAndRecGraph(lig_graph, rec_graph)
 

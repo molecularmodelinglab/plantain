@@ -24,7 +24,7 @@ class BigBindVinaDataset(Dataset):
     def get_name():
         return "bigbind_vina"
 
-    def __len__(self):
+    def len_impl(self):
         return len(self.activities)
 
     # smh a lot of this is brazenly copy-and-pasted from bigbind_act
