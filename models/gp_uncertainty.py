@@ -14,6 +14,9 @@ class GPUncertainty(ClassifyActivityModel):
         if hasattr(self.model, "cache_key"):
             self.cache_key = "gp_" + self.model.cache_key
 
+    def get_data_format(self):
+        return self.model.get_data_format()
+
     def fit(self, dataset_name, split, num_batches):
         x, y, pred = get_preds(self.cfg, self.model, dataset_name, split, num_batches)
         U = -pred.select_score
