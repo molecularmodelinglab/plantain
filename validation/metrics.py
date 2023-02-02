@@ -202,6 +202,7 @@ class RejectOptionMetric(FullMetric):
         self.xs = []
         self.ys = []
         self.preds = []
+        self.dummy_param = nn.Parameter(torch.empty(0))
 
     def update(self, x, pred, y):
         for x0, pred0, y0 in zip(x, pred, y):
@@ -216,8 +217,9 @@ class RejectOptionMetric(FullMetric):
         self.preds = []
 
     def compute(self):
+        device = self.dummy_param.device
         ret = {}
-        x, y, pred = collate(self.xs), collate(self.ys), collate(self.preds)
+        x, y, pred = collate(self.xs).to(device), collate(self.ys).to(device), collate(self.preds).to(device)
         select_score = -pred.select_score
         idx = torch.argsort(select_score, dim=0)
         prev_idx = 0
