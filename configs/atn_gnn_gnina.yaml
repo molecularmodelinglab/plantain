@@ -2,7 +2,7 @@ project: null
 resume_id: null
 name: test_run
 
-val_check_interval: 0.25
+val_check_interval: 1.0
 metric_reset_interval: 50
 
 # train_dataset: 
