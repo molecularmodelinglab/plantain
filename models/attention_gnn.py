@@ -204,12 +204,15 @@ class AttentionGNN(Module, ClassifyActivityModel):
             ret.append(Batch(RejectOption.Prediction, select_score=select_unnorm))
         
         # very hacky way to get gnina disagreement
-        if select_unnorm is None and bce_pred is None and hasattr(x, "pose_scores"):
+        if select_unnorm is None and bce_pred is None and docked_score is None and hasattr(x, "pose_scores"):
             pose_bce = docked_pose_bce(x, p2)
             ret.append(Batch(RejectOption.Prediction, select_score=pose_bce))
 
         if docked_score is not None:
+            true_score = torch.stack([s[0] for s in x.affinities])
+            U = torch.sqrt(F.mse_loss(docked_score, true_score, reduction='none'))
             ret.append(Batch(PredDocked, docked_score=docked_score))
+            ret.append(Batch(RejectOption.Prediction, select_score=-U))
         
         return Data.merge(ret)
 

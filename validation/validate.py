@@ -101,6 +101,6 @@ def save_validation(cfg, model, dataset_name, split, num_batches=None):
         pickle.dump(metrics, f)
 
     for name, fig in plots.items():
-        fig.savefig(f"{out_folder}/{name}.pdf")
+        fig.savefig(f"{out_folder}/{name}.png")
 
     return out_folder
