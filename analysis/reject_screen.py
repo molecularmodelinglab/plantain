@@ -8,7 +8,7 @@ from validation.validate import save_validation
 from datasets.lit_pcba import LitPcbaDataset
 
 def main(cfg):
-    model_names = [ "bce_mse" ]
+    model_names = [ "gnina_mse" ]
     for name in model_names:
         model = get_old_model(cfg, name, "latest")
         u_model = RFUncertainty(cfg, model)
@@ -18,7 +18,7 @@ def main(cfg):
         print(f"Saving lr plot to {out_folder}")
         os.makedirs(out_folder, exist_ok=True)
         fig = u_model.plot()
-        fig.savefig(f"{out_folder}/lr_plot.pdf")
+        fig.savefig(f"{out_folder}/lr_plot.png")
 
         dataset = "lit_pcba"
         for target in LitPcbaDataset.get_all_targets(cfg): 
