@@ -11,7 +11,7 @@ def main(cfg):
         print(f"Validating {name}")
         model = get_old_model(cfg, name, "latest")
         dataset = "bigbind_act" if name != "combo_1.5_0.5" else "bigbind_gnina"
-        save_validation(cfg, model, dataset, "val", 20)
+        save_validation(cfg, model, dataset, "val", 500)
 
 if __name__ == "__main__":
     cfg = get_config("attention_gnn")

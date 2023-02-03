@@ -8,7 +8,9 @@ from validation.validate import save_validation
 from datasets.lit_pcba import LitPcbaDataset
 
 def main(cfg):
+    # model_names = [ "rec_feats" ]
     model_names = [ "bce_mse" ]
+    stop_at = None
     for name in model_names:
         model = get_old_model(cfg, name, "latest")
         u_model = RFUncertainty(cfg, model)
@@ -23,8 +25,8 @@ def main(cfg):
         dataset = "lit_pcba"
         for target in LitPcbaDataset.get_all_targets(cfg): 
             print(f"Validating {name} on {dataset}_{target}")
-            save_validation(cfg, u_model, dataset, target, None)
-            save_validation(cfg, model, dataset, target, None)
+            save_validation(cfg, u_model, dataset, target, stop_at)
+            save_validation(cfg, model, dataset, target, stop_at)
 
 if __name__ == "__main__":
     cfg = get_config("attention_gnn")
