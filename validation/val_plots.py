@@ -2,6 +2,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
+from traceback import print_exc
 from sklearn.gaussian_process import GaussianProcessClassifier
 from sklearn.neighbors import KernelDensity
 from collections import defaultdict
@@ -129,5 +130,8 @@ def make_plots(cfg, tasks, x, y, pred, metrics):
     plots = {}
     for func, plot_tasks in plot_funcs.items():
         if set(plot_tasks).issubset(tasks):
-            plots[func.__name__] = func(cfg, x, y, pred, metrics)
+            try:
+                plots[func.__name__] = func(cfg, x, y, pred, metrics)
+            except:
+                print_exc()
     return plots
