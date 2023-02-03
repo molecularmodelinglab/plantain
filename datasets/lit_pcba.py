@@ -5,6 +5,7 @@ from glob import glob
 from data_formats.base_formats import IsActive, LigAndRec
 from datasets.base_datasets import Dataset
 from common.utils import get_mol_from_file, get_prot_from_file
+from datasets.bigbind_gnina import LigAndRecGnina
 
 class LitPcbaDataset(Dataset):
 
@@ -42,6 +43,16 @@ class LitPcbaDataset(Dataset):
         poc_file = glob(self.dir + "/*_pocket.pdb")[0]
         self.rec = get_prot_from_file(poc_file)
 
+        dense = False
+        self.gnina_scores = {}
+        score_file = "./prior_work/lit-pcba_dense-CNNaffinity-mean-then-max.summary" if dense else "./prior_work/newdefault_CNNaffinity-max.summary"
+        with open(score_file) as f:
+            for line in f.readlines():
+                _, score, target, idx, _ = line.split()
+                if target != self.target: continue
+                self.gnina_scores[int(idx)] = float(score)
+
+
     def len_impl(self):
         return len(self.items)
 
@@ -51,7 +62,10 @@ class LitPcbaDataset(Dataset):
         lig = Chem.MolFromSmiles(smiles)
         is_active = torch.tensor(is_active, dtype=bool)
 
-        x = LigAndRec(lig, self.rec, self.target)
+        pose_scores = [ torch.tensor(0.0, dtype=torch.float32) ]
+        affinities = [ torch.tensor(self.gnina_scores[pcba_idx], dtype=torch.float32) ]
+
+        x = LigAndRecGnina(lig, self.rec, self.target, pose_scores, affinities)
         y = IsActive(is_active)
 
         return x, y
