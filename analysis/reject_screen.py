@@ -8,6 +8,7 @@ from validation.validate import save_validation
 from datasets.lit_pcba import LitPcbaDataset
 
 def main(cfg):
+    stop_at = None
     model_names = [ "gnina_mse" ]
     for name in model_names:
         model = get_old_model(cfg, name, "latest")
@@ -23,8 +24,8 @@ def main(cfg):
         dataset = "lit_pcba"
         for target in LitPcbaDataset.get_all_targets(cfg): 
             print(f"Validating {name} on {dataset}_{target}")
-            save_validation(cfg, u_model, dataset, target, None)
-            save_validation(cfg, model, dataset, target, None)
+            save_validation(cfg, u_model, dataset, target, stop_at)
+            save_validation(cfg, model, dataset, target, stop_at)
 
 if __name__ == "__main__":
     cfg = get_config("attention_gnn")
