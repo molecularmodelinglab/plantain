@@ -63,7 +63,11 @@ class LitPcbaDataset(Dataset):
         is_active = torch.tensor(is_active, dtype=bool)
 
         pose_scores = [ torch.tensor(0.0, dtype=torch.float32) ]
-        affinities = [ torch.tensor(self.gnina_scores[pcba_idx], dtype=torch.float32) ]
+        if pcba_idx in self.gnina_scores:
+            score = self.gnina_scores[pcba_idx]
+        else:
+            score = 5.0
+        affinities = [ torch.tensor(score, dtype=torch.float32) ]
 
         x = LigAndRecGnina(lig, self.rec, self.target, pose_scores, affinities)
         y = IsActive(is_active)
