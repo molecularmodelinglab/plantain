@@ -15,11 +15,11 @@ metric_reset_interval: 50
 # train_dataset: bigbind_struct
 # val_datasets: [ bigbind_struct ]
 
-train_dataset: bigbind_vina
-val_datasets: [ bigbind_vina ]
+train_dataset: bigbind_act
+val_datasets: [ bigbind_act ]
 
 monitor_metric:
-  name: val/bigbind_vina/auroc_all
+  name: val/bigbind_act/auroc_all
   mode: max
   # name: val_loss
   # mode: min
