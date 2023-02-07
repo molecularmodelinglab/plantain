@@ -12,6 +12,10 @@ def bce_mse(x, pred, y):
     true_bce = F.binary_cross_entropy_with_logits(pred.active_prob_unnorm, y.is_active.float(), reduction='none').detach()
     return F.mse_loss(pred.pred_bce, true_bce)
 
+def act_ce_loss(x, pred, y):
+    y_ce = torch.cat((y.is_active.unsqueeze(-1), ~y.is_active.unsqueeze(-1)), -1)
+    return F.cross_entropy(pred.softmax_logits, y_ce.float())
+
 def inv_dist_mse(x, pred, y):
     losses = []
     for rec, lig_coords, pred_mat in zip(x.rec_graph, y.lig_coords, pred.inv_dist_mat):
@@ -61,6 +65,7 @@ def get_single_loss(loss_cfg, x, pred, y):
         "x_mse": x_mse_loss,
         "docked_mse": docked_mse_loss,
         "gnina_docked_mse": gnina_docked_mse_loss,
+        "act_ce": act_ce_loss,
     }[loss_cfg.func]
     if "x" in loss_cfg:
         x = getattr(x, loss_cfg["x"])

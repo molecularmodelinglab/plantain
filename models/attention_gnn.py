@@ -14,6 +14,9 @@ class PredBCE(Prediction):
 
 class PredDocked(Prediction):
     docked_score: float
+    
+class SoftmaxLogits(Prediction):
+    softmax_logits: torch.Tensor
 
 # class Select(Prediction):
 #     select_unnorm: float
@@ -189,13 +192,35 @@ class AttentionGNN(Module, ClassifyActivityModel):
         else:
             docked_score = None
 
-        return out, ops, bce_out, select_unnorm, docked_score
+        if self.cfg.get("use_softmax", False):
+            rec_bce_hid = self.make(LazyLinear, rec_hid.shape[-1])(rec_hid)
+            lig_bce_hid = self.make(LazyLinear, lig_hid.shape[-1])(lig_hid)
+            
+            bce_ops = []
+            for lig_feat, rec_feat in batched_feats(x, lig_bce_hid, rec_bce_hid):
+                if self.cfg.get("use_null_residue", False):
+                    rec_feat = torch.cat((rec_feat, null), 0)
+                op = torch.einsum('lf,rf->lr', lig_feat, rec_feat)
+                bce_ops.append(op)
+
+            out_neg = torch.stack([ op[:, :-1].mean() for op in bce_ops ])
+        else:
+            out_neg = None
+
+        return out, ops, bce_out, select_unnorm, docked_score, out_neg
 
     def predict(self, tasks, x):
-        score, mats, bce_pred, select_unnorm, docked_score = self(x)
-        p1 = super().make_prediction(score)
+        ret = []
+        score, mats, bce_pred, select_unnorm, docked_score, out_neg = self(x)
+
+        if out_neg is not None:
+            softmax_logits = torch.cat((score.unsqueeze(-1), out_neg.unsqueeze(-1)), -1)
+            score = torch.logit(torch.softmax(softmax_logits, -1)[:,0])
+            ret.append(Batch(SoftmaxLogits, softmax_logits=softmax_logits))
+
+        ret.append(super().make_prediction(score))
         p2 = Batch(InvDistMat, inv_dist_mat=mats)
-        ret = [ p1, p2 ]
+        ret.append(p2)
         if bce_pred is not None:
             ret.append(Batch(PredBCE, pred_bce=bce_pred))
             if select_unnorm is None:

@@ -59,16 +59,21 @@ data:
     edge_feats: [ "dist"]
 
 losses:
-  act_bce:
-    # task: classify_activity
-    func: bce
-    pred: active_prob_unnorm
-    y: is_active
-    weight: 0.9
+  # act_bce:
+  #   # task: classify_activity
+  #   func: bce
+  #   pred: active_prob_unnorm
+  #   y: is_active
+  #   weight: 0.9
 
-  docked_mse:
-    func: docked_mse
-    weight: 0.1
+  act_ce:
+    func: act_ce
+    weight: 1.0
+
+  # docked_mse:
+  #   func: docked_mse
+  #   weight: 0.1
+
   # selective_net:
   #   bce_weight: 0.5
   #   selective_weight: 0.5
@@ -119,7 +124,8 @@ model:
   use_null_residue: true
   predict_bce: false
   predict_select: false
-  predict_docked_score: true
+  predict_docked_score: false
+  use_softmax: true
 
   out_size: 16
 
