@@ -4,9 +4,12 @@ import torch
 from typing import Set, Type
 import pandas as pd
 from common.utils import get_mol_from_file, get_prot_from_file
-from data_formats.base_formats import Activity, IsActive, LigAndRec
+from data_formats.base_formats import Activity, Data, Input, IsActive, LigAndRec
 from data_formats.tasks import Task
 from datasets.base_datasets import Dataset
+
+class ProbisSim(Input):
+    train_probis_similarity: float
 
 class BigBindActDataset(Dataset):
 
@@ -89,5 +92,9 @@ class BigBindActDataset(Dataset):
             y = Activity(torch.tensor(self.activities.pchembl_value[index], dtype=torch.float32))
         else:
             y = IsActive(self.activities.active[index])
+
+        if self.split == "val":
+            x_probis = ProbisSim(self.activities.train_probis_similarity[index])
+            x = Data.merge([x, x_probis])
 
         return x, y

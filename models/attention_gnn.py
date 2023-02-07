@@ -217,6 +217,8 @@ class AttentionGNN(Module, ClassifyActivityModel):
             softmax_logits = torch.cat((score.unsqueeze(-1), out_neg.unsqueeze(-1)), -1)
             score = torch.logit(torch.softmax(softmax_logits, -1)[:,0])
             ret.append(Batch(SoftmaxLogits, softmax_logits=softmax_logits))
+            select_score = torch.exp(softmax_logits).sum(-1)
+            ret.append(Batch(RejectOption.Prediction, select_score=select_score))
 
         ret.append(super().make_prediction(score))
         p2 = Batch(InvDistMat, inv_dist_mat=mats)
@@ -233,12 +235,12 @@ class AttentionGNN(Module, ClassifyActivityModel):
             pose_bce = docked_pose_bce(x, p2)
             ret.append(Batch(RejectOption.Prediction, select_score=pose_bce))
 
-        if docked_score is not None:
+        if docked_score is not None and hasattr(x, 'affinities'):
             true_score = torch.stack([s[0] for s in x.affinities])
             U = torch.sqrt(F.mse_loss(docked_score, true_score, reduction='none'))
             ret.append(Batch(PredDocked, docked_score=docked_score))
             ret.append(Batch(RejectOption.Prediction, select_score=-U))
-        
+
         return Data.merge(ret)
 
 def docked_pose_bce(x, pred):

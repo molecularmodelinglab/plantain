@@ -83,7 +83,7 @@ class ClassifyActivityModel(ScoreActivityClassModel):
 
     def make_prediction(self, unnorm):
         prob = torch.sigmoid(unnorm)
-        type_ = self.get_pred_type()
+        type_ = Data.create_type([ScoreActivityClass, ClassifyActivity]) # self.get_pred_type()
         return Batch(type_, active_prob_unnorm=unnorm, active_prob=prob, is_active_score=unnorm)
 
 class RandomPoseScore(Model):
