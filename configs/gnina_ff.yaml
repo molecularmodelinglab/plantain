@@ -52,8 +52,12 @@ losses:
     y: is_active
     weight: 0.5
   
-  worse_pose_bce:
-    func: worse_pose_bce
+  # worse_pose_bce:
+  #   func: worse_pose_bce
+  #   weight: 0.5
+
+  opposite_pose_bce:
+    func: opposite_pose_bce
     weight: 0.5
 
 optimizer: adamw
