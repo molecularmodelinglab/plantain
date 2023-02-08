@@ -10,7 +10,7 @@ from terrace import CategoricalTensor
 
 from terrace.batch import Batch
 from .graph3d import Graph3d, Node3d, Edge3d
-from .knn import make_knn_edgelist
+from .knn import make_knn_edgelist, make_res_knn_edgelist
 from .dist_edge import DistEdge
 from datasets.utils import safe_index
 
@@ -43,6 +43,9 @@ possible_atom_feats = {
     "atom_type": [None, 'C', 'CA', 'CB', 'CD', 'CD1', 'CD2', 'CE', 'CE1', 'CE2', 'CE3', 'CG', 'CG1', 'CG2', 'CH2',
                   'CZ', 'CZ2', 'CZ3', 'N', 'ND1', 'ND2', 'NE', 'NE1', 'NE2', 'NH1', 'NH2', 'NZ', 'O', 'OD1',
                   'OD2', 'OE1', 'OE2', 'OG', 'OG1', 'OH', 'OXT', 'SD', 'SG', 'misc'],
+    "atom_residue_type": [None, 'ALA', 'ARG', 'ASN', 'ASP', 'CYS', 'GLN', 'GLU', 'GLY', 'HIS', 'ILE', 'LEU', 'LYS', 'MET',
+                     'PHE', 'PRO', 'SER', 'THR', 'TRP', 'TYR', 'VAL', 'HIP', 'HIE', 'TPO', 'HID', 'LEV', 'MEU',
+                     'PTR', 'GLV', 'CYT', 'SEP', 'HIZ', 'CYM', 'GLM', 'ASQ', 'TYS', 'CYX', 'GLZ', 'misc'],
 }
 
 possible_residue_feats = {
@@ -56,6 +59,9 @@ def get_atom_type(atom, rec):
 
 def get_residue_type(residue, rec):
     return residue.get_resname()
+
+def get_atom_residue_type(atom, rec):
+    return atom.get_parent().get_resname()
 
 class ProtAtomNode(Node3d):
 
@@ -113,42 +119,80 @@ def get_nodes_and_edges_from_model(cfg: DictConfig, prot: Model):
     #             for atom in residue:
     #                 nodes.append(ProtAtomNode(prot_cfg, atom, prot))
 
-    residues = []
-    for chain in prot:
-        for residue in chain:
-            if residue.get_resname() not in possible_residue_feats["residue_type"]: continue
-            residues.append(residue)
+    if prot_cfg.node_type == "residue":
+        residues = []
+        for chain in prot:
+            for residue in chain:
+                if residue.get_resname() not in possible_residue_feats["residue_type"]: continue
+                residues.append(residue)
 
-    
-    cat_feat = torch.zeros((len(residues), len(prot_cfg.residue_feats)), dtype=torch.long)
-    num_classes = [ len(possible_residue_feats[feat_name]) for feat_name in prot_cfg.residue_feats]
-    coord = torch.zeros((len(residues), 3), dtype=torch.float32)
+        
+        cat_feat = torch.zeros((len(residues), len(prot_cfg.residue_feats)), dtype=torch.long)
+        num_classes = [ len(possible_residue_feats[feat_name]) for feat_name in prot_cfg.residue_feats]
+        coord = torch.zeros((len(residues), 3), dtype=torch.float32)
 
-    assert prot_cfg.node_type == "residue"
-    for i, feat_name in enumerate(prot_cfg.residue_feats):
-        get_feat = globals()["get_" + feat_name]
-        possible = possible_residue_feats[feat_name]
+        for i, feat_name in enumerate(prot_cfg.residue_feats):
+            get_feat = globals()["get_" + feat_name]
+            possible = possible_residue_feats[feat_name]
+            for j, residue in enumerate(residues):
+                cat_feat[j, i] = safe_index(possible, get_feat(residue, prot))
+
         for j, residue in enumerate(residues):
-            cat_feat[j, i] = safe_index(possible, get_feat(residue, prot))
+            for atom in residue:
+                if atom.name == "CA":
+                    coord[j] = torch.tensor(list(atom.get_vector()), dtype=torch.float32)
+                    break
+            else:
+                raise AssertionError("Failed to find alpha carbon in residue")
 
-    for j, residue in enumerate(residues):
-        for atom in residue:
-            if atom.name == "CA":
-                coord[j] = torch.tensor(list(atom.get_vector()), dtype=torch.float32)
-                break
-        else:
-            raise AssertionError("Failed to find alpha carbon in residue")
-    
-    cat_feat = CategoricalTensor(cat_feat, num_classes=num_classes)
-    nodes = Batch(ProtResidueNode,
-                  coord = coord,
-                  cat_feat = cat_feat,
-                  scal_feat = torch.zeros((len(residues), 0)))
+        cat_feat = CategoricalTensor(cat_feat, num_classes=num_classes)
+        nodes = Batch(ProtResidueNode,
+                    coord = coord,
+                    cat_feat = cat_feat,
+                    scal_feat = torch.zeros((len(residues), 0)))
+
+    elif prot_cfg.node_type == "atom":
+        atoms = []
+        res_indexes = []
+        for chain in prot:
+            for i, residue in enumerate(chain):
+                if residue.get_resname() not in possible_residue_feats["residue_type"]: continue
+                for atom in residue:
+                    atoms.append(atom)
+                    res_indexes.append(i)
+
+        cat_feat = torch.zeros((len(atoms), len(prot_cfg.atom_feats)), dtype=torch.long)
+        num_classes = [ len(possible_atom_feats[feat_name]) for feat_name in prot_cfg.atom_feats]
+        coord = torch.zeros((len(atoms), 3), dtype=torch.float32)
+
+        for i, feat_name in enumerate(prot_cfg.atom_feats):
+            get_feat = globals()["get_" + feat_name]
+            possible = possible_atom_feats[feat_name]
+            for j, atom in enumerate(atoms):
+                cat_feat[j, i] = safe_index(possible, get_feat(atom, prot))
+
+
+        for j, atom in enumerate(atoms):
+            coord[j] = torch.tensor(list(atom.get_vector()), dtype=torch.float32)
+
+        cat_feat = CategoricalTensor(cat_feat, num_classes=num_classes)
+        nodes = Batch(ProtAtomNode,
+                    coord = coord,
+                    cat_feat = cat_feat,
+                    scal_feat = torch.zeros((len(atoms), 0)))
+
+    else:
+        raise ValueError("rec cfg node_type must be either residue or atom")
 
     if prot_cfg.edge_method.type == "knn":
         edges, dists = make_knn_edgelist(nodes, 
                                          prot_cfg.edge_method.knn_rad,
                                          prot_cfg.edge_method.max_neighbors)
+    elif prot_cfg.edge_method.type == "residue_knn":
+        edges, dists = make_res_knn_edgelist(nodes,
+                                             res_indexes,
+                                             prot_cfg.edge_method.atom_knn_rad,
+                                             prot_cfg.edge_method.residue_knn_rad)
     else:
         raise AssertionError()
 

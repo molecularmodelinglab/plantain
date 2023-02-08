@@ -29,12 +29,13 @@ data:
 
   rec_graph:
     only_pocket: true
-    node_type: "residue"
-    atom_feats: [ "atom_type" ]
+    node_type: "atom"
+    atom_feats: [ "atom_type", "atom_residue_type" ]
     residue_feats: [ "residue_type" ]
     edge_method:
-      type: "knn"
-      knn_rad: 10
+      type: "residue_knn"
+      atom_knn_rad: 5
+      residue_knn_rad: 10
       max_neighbors: null
     edge_feats: [ "dist"]
     include_h: False
@@ -84,7 +85,7 @@ model:
     edge_embed_size: 64
     node_out_size: 64
 
-  num_mpnn_layers: 1
+  num_mpnn_layers: 3
   inner_attention: false
   use_layer_norm: true
 
