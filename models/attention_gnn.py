@@ -217,7 +217,8 @@ class AttentionGNN(Module, ClassifyActivityModel):
             softmax_logits = torch.cat((score.unsqueeze(-1), out_neg.unsqueeze(-1)), -1)
             score = torch.logit(torch.softmax(softmax_logits, -1)[:,0])
             ret.append(Batch(SoftmaxLogits, softmax_logits=softmax_logits))
-            select_score = torch.exp(softmax_logits).sum(-1)
+            # select_score = torch.exp(softmax_logits).sum(-1)
+            select_score = torch.logsumexp(softmax_logits, -1)
             ret.append(Batch(RejectOption.Prediction, select_score=select_score))
 
         ret.append(super().make_prediction(score))
