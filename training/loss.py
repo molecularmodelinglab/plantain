@@ -65,6 +65,15 @@ def opposite_pose_bce_loss(x, pred, y):
     y = ~y.is_active
     return F.binary_cross_entropy_with_logits(pred, y.float())
 
+def pose_class_bce_loss(x, pred, y):
+    p0 = pred.pose_scores[:,0]
+    p1 = pred.pose_scores[:,1]
+    y0 = torch.ones_like(y.is_active)
+    y1 = torch.zeros_like(y.is_active)
+    l1 = F.binary_cross_entropy_with_logits(p0, y0.float())
+    l2 = F.binary_cross_entropy_with_logits(p1, y1.float())
+    return 0.5*l1 + 0.5*l2
+
 def get_single_loss(loss_cfg, x, pred, y):
     loss_fn = {
         "bce": bce_loss,
@@ -78,6 +87,7 @@ def get_single_loss(loss_cfg, x, pred, y):
         "act_ce": act_ce_loss,
         "worse_pose_bce": worse_pose_bce_loss,
         "opposite_pose_bce": opposite_pose_bce_loss,
+        "pose_class_bce": pose_class_bce_loss,
     }[loss_cfg.func]
     if "x" in loss_cfg:
         x = getattr(x, loss_cfg["x"])
