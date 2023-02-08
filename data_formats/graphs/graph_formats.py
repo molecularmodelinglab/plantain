@@ -18,15 +18,26 @@ class LigAndRecGraph(Input):
 
 class LigAndRecGraphMultiPose(Input):
 
-    lig_graphs: List[MolGraph]
+    lig_graphs: Tuple[MolGraph, ...]
     rec_graph: ProtGraph
 
     @staticmethod
     def make(cfg, data):
-        lig_graphs = [ MolGraph(cfg, data.lig, c) for c in range(data.lig.GetNumConformers())]
+        lig_graphs = tuple([ MolGraph(cfg, data.lig, c) for c in LigAndRecGraphMultiPose.get_conformers(cfg, data.lig)])
         rec_graph = ProtGraph(cfg, data.rec)
         return LigAndRecGraphMultiPose(lig_graphs, rec_graph)
 
+    # @staticmethod
+    # def collate_lig_graphs(x):
+    #     return x
+
     @staticmethod
-    def collate_lig_graphs(x):
-        return x
+    def get_conformers(cfg, lig):
+        sample = cfg.data.pose_sample
+        n_confs = lig.GetNumConformers()
+        if sample == 'all':
+            return range(n_confs)
+        elif sample == 'best_and_worst':
+            return [0, n_confs - 1]
+        elif sample == 'worst_and_best':
+            return [n_confs - 1, 0]
