@@ -35,7 +35,6 @@ class ForceField(Module, ClassifyActivityModel):
         return LigAndRecGraphMultiPose.make
 
     def get_hidden_feat(self, x, conf_id):
-        self.start_forward()
 
         lig_cfg = self.cfg.lig_encoder
         rec_cfg = self.cfg.rec_encoder
@@ -130,16 +129,27 @@ class ForceField(Module, ClassifyActivityModel):
         return torch.stack(all_Us)
 
     def forward(self, batch):
+        self.start_forward()
+
         batch_rec_feat, batch_lig_feat = self.get_hidden_feat(batch, 0)
         ret = []
         for conf_id in range(len(batch.lig_graphs)):
             ret.append(self.get_energy(batch, batch_rec_feat, batch_lig_feat, conf_id))
-        pose_scores = torch.stack(ret).T
-        return pose_scores
+        U = torch.stack(ret).T
+
+        if self.cfg.get("multi_pose_attention", False):
+            lin_out = self.make(LazyLinear, 2)(U.unsqueeze(-1))
+            pose_scores = lin_out[...,0]
+            atn = lin_out[...,1]
+            atn = torch.softmax(atn[:,:-1], -1)
+            score = (pose_scores[:,:-1]*atn).sum(-1)
+        else:
+            score = U[:,0]
+
+        return score, pose_scores
 
     def predict(self, tasks, x):
-        pose_scores = self(x)
-        score = pose_scores[:,0]
+        score, pose_scores = self(x)
         p1 = super().make_prediction(score)
         p2 = Batch(PoseScores, pose_scores=pose_scores)
         return Data.merge((p1,p2))

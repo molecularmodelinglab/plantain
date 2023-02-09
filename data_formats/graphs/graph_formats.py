@@ -23,7 +23,8 @@ class LigAndRecGraphMultiPose(Input):
 
     @staticmethod
     def make(cfg, data):
-        lig_graphs = tuple([ MolGraph(cfg, data.lig, c) for c in LigAndRecGraphMultiPose.get_conformers(cfg, data.lig)])
+        confs = LigAndRecGraphMultiPose.get_conformers(cfg, data.lig)
+        lig_graphs = tuple([ MolGraph(cfg, data.lig, c) for c in confs])
         rec_graph = ProtGraph(cfg, data.rec)
         return LigAndRecGraphMultiPose(lig_graphs, rec_graph)
 
@@ -35,9 +36,16 @@ class LigAndRecGraphMultiPose(Input):
     def get_conformers(cfg, lig):
         sample = cfg.data.pose_sample
         n_confs = lig.GetNumConformers()
+        num_poses = cfg.data.get("num_poses", None)
         if sample == 'all':
+            assert num_poses is None
             return range(n_confs)
         elif sample == 'best_and_worst':
-            return [0, n_confs - 1]
+            n_poses = 2 if num_poses is None else num_poses
+            ret = []
+            for n in range(n_poses-1):
+                ret.append(min(n,n_confs))
+            return ret + [n_confs - 1]
         elif sample == 'worst_and_best':
+            assert num_poses is None
             return [n_confs - 1, 0]

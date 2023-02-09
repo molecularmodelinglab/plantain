@@ -21,6 +21,7 @@ data:
   only_ki_kd: false
 
   pose_sample: best_and_worst
+  num_poses: 3
   
   lig_graph:
     atom_feats: [ "element", "formal_charge", "hybridization", "is_aromatic", "numH"]
@@ -88,6 +89,7 @@ model:
   num_mpnn_layers: 3
   inner_attention: false
   use_layer_norm: true
+  multi_pose_attention: true
 
   out_size: 16
 
