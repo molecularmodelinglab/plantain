@@ -9,11 +9,12 @@ from datasets.lit_pcba import LitPcbaDataset
 
 def main(cfg):
     stop_at = None
-    model_names = [ "gnina_mse" ]
+    model_names = [ "gnina_mse" ] # [ "gnina_mse" ]
     for name in model_names:
         model = get_old_model(cfg, name, "latest")
         u_model = RFUncertainty(cfg, model)
-        u_model.fit("bigbind_act", "val", 500)
+        dataset = "bigbind_gnina" if name == "gnina_mse" else "bigbind_act"
+        u_model.fit(dataset, "val", 500)
 
         out_folder =f"outputs/results/{u_model.cache_key}"
         print(f"Saving lr plot to {out_folder}")
