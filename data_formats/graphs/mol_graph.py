@@ -178,5 +178,14 @@ class MolGraph(Graph3d):
 
         return mol
 
+def get_mol_coords(mol, conf_id):
+    conformer = mol.GetConformer(conf_id)
+    ret = []
+    for idx in range(mol.GetNumAtoms()):
+        point = conformer.GetAtomPosition(idx)
+        coord = [ point.x, point.y, point.z ]
+        ret.append(coord)
+    return torch.tensor(ret, dtype=torch.float32)
+
 def mol_graph_from_sdf(cfg, sdf_file):
     return MolGraph(cfg, next(Chem.SDMolSupplier(sdf_file, sanitize=True)))
