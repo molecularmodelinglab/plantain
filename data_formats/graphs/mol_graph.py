@@ -4,8 +4,9 @@ from rdkit.Geometry import Point3D
 from rdkit import Chem
 import torch
 from terrace import CategoricalTensor, collate
+from terrace.batch import Batchable
 
-from .graph3d import Graph3d, Node3d, Edge3d
+from .graph3d import Graph3d, Node, Node3d, Edge3d
 from datasets.utils import safe_index
 
 ATOM_RADII_DICT = {
@@ -66,7 +67,7 @@ possible_bond_feats = {
     "bond_order": [ None, Chem.BondType.SINGLE, Chem.BondType.DOUBLE, Chem.BondType.TRIPLE, Chem.BondType.AROMATIC ],
 }
 
-class AtomNode(Node3d):
+class AtomNode(Node):
 
     def __init__(self, atom_feats, atom: Chem.Atom, mol: Chem.Mol, conformer: Optional[int]):
         cat_feats = []
@@ -79,18 +80,18 @@ class AtomNode(Node3d):
             num_classes.append(len(possible))
             cat_feats.append(feat)
         
-        if conformer is not None:
-            point = mol.GetConformer(conformer).GetAtomPosition(atom.GetIdx())
-            coord = [ point.x, point.y, point.z ]
-        else:
-            coord = [0.0, 0.0, 0.0]
+        # if conformer is not None:
+        #     point = mol.GetConformer(conformer).GetAtomPosition(atom.GetIdx())
+        #     coord = [ point.x, point.y, point.z ]
+        # else:
+        #     coord = [0.0, 0.0, 0.0]
 
-        coord = torch.tensor(coord, dtype=torch.float32)
+        # coord = torch.tensor(coord, dtype=torch.float32)
         cat_feats = torch.tensor(cat_feats, dtype=torch.long)
         cat_feats = CategoricalTensor(cat_feats, num_classes=num_classes)
         scal_feats = torch.tensor(scal_feats, dtype=torch.float32)
 
-        super(AtomNode, self).__init__(coord, cat_feats, scal_feats)
+        super().__init__(cat_feats, scal_feats)
 
     def get_element(self) -> str:
         return possible_atom_feats["element"][int(self.cat_feat[0])]
@@ -123,7 +124,6 @@ class BondEdge(Edge3d):
 class MolGraph(Graph3d):
 
     def __init__(self, cfg: DictConfig, mol: Chem.Mol, conformer: Optional[int] = 0):
-        mol = Chem.RemoveHs(mol)
         mol_cfg = cfg.data.lig_graph
         atom_feats = list(mol_cfg.atom_feats)
         bond_feats = list(mol_cfg.bond_feats)

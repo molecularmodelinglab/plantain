@@ -1,30 +1,21 @@
-from data_formats.base_formats import Data
-from data_formats.tasks import ScoreActivityClass, ScoreActivityRegr, ScorePose
-from datasets.bigbind_gnina import LigAndRecGnina
 from models.model import ScoreActivityModel
 from terrace.batch import Batch
+from terrace.dataframe import DFRow
 
 class Gnina(ScoreActivityModel):
 
     def __init__(self, conf_id: int):
         self.conf_id = conf_id
 
-    def call_single(self, x: LigAndRecGnina):
-        return x.affinities[self.conf_id], x.pose_scores[self.conf_id]
+    def call_single(self, x: DFRow):
+        return DFRow(score=x.gnina_affinities[self.conf_id], pose_scores=x.gnina_pose_scores[self.conf_id])
 
-    def get_data_format(self):
-        return None
+    def get_input_feats(self):
+        return ["gnina_affinities", "gnina_pose_scores"]
 
     @staticmethod
     def get_name() -> str:
         return "gnina"
 
     def get_tasks(self):
-        return [ ScoreActivityRegr, ScoreActivityClass, ScorePose ]
-
-    def predict(self, tasks, x):
-        affinity, pose = self(x)
-        all_pose_scores = x.pose_scores
-        p1 = super().make_prediction(affinity)
-        p2 = Batch(ScorePose.Prediction, pose_scores=all_pose_scores)
-        return Data.merge([p1, p2])
+        return [ "score_activity_regr", "score_activity_class", "score_pose" ]

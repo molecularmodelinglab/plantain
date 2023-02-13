@@ -1,5 +1,4 @@
 import torch
-from data_formats.tasks import RejectOption, ScoreActivityClass
 from validation.validate import get_preds
 from .model import ClassifyActivityModel
 from sklearn.ensemble import RandomForestClassifier

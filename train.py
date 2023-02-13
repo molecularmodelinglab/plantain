@@ -23,6 +23,8 @@ def train(cfg):
     callbacks = []
     if cfg.project is not None:
         project = cfg.project
+        if "project_postfix" in cfg:
+            project = project + "_" + cfg.project_postfix
 
         logger = WandbLogger(project=project, name=cfg.name, log_model="all")
         logger.log_hyperparams(cfg)

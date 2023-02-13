@@ -1,15 +1,13 @@
 from glob import glob
 import random
 import torch
+from rdkit import Chem
 from typing import Set, Type
 import pandas as pd
+from terrace import DFRow
 from common.utils import get_mol_from_file, get_prot_from_file
-from data_formats.base_formats import Activity, Data, Input, IsActive, LigAndRec
 from data_formats.tasks import Task
 from datasets.base_datasets import Dataset
-
-class ProbisSim(Input):
-    train_probis_similarity: float
 
 class BigBindActDataset(Dataset):
 
@@ -73,10 +71,10 @@ class BigBindActDataset(Dataset):
         else:
             return rec_file
 
-    def get_label_classes(self) -> Set[Type[Task]]:
+    def get_label_feats(self):
         if self.sna_frac is None:
-            return { Activity }
-        return { IsActive }
+            return { "activity"}
+        return { "is_active" }
 
     def getitem_impl(self, index):
 
@@ -84,17 +82,18 @@ class BigBindActDataset(Dataset):
         rec_file = self.get_rec_file(index)
 
         lig = get_mol_from_file(lig_file)
+        lig = Chem.RemoveHs(lig)
+
         rec = get_prot_from_file(rec_file)
         poc_id = self.activities.pocket[index]
 
-        x = LigAndRec(lig, rec, poc_id)
+        x = DFRow(lig=lig, rec=rec, pocket_id=poc_id)
         if self.sna_frac is None:
-            y = Activity(torch.tensor(self.activities.pchembl_value[index], dtype=torch.float32))
+            y = DFRow(activity=torch.tensor(self.activities.pchembl_value[index], dtype=torch.float32))
         else:
-            y = IsActive(self.activities.active[index])
+            y = DFRow(is_active=self.activities.active[index])
 
-        if self.split == "val":
-            x_probis = ProbisSim(self.activities.train_probis_similarity[index])
-            x = Data.merge([x, x_probis])
+        # if self.split == "val":
+        #     x["train_probis_similarity"] = self.activities.train_probis_similarity[index]
 
         return x, y

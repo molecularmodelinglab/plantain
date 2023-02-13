@@ -1,10 +1,12 @@
 import torch
 from typing import Set, Type
 import pandas as pd
+from rdkit import Chem
+from data_formats.transforms import lig_crystal_pose
 from common.utils import get_mol_from_file, get_prot_from_file
-from data_formats.base_formats import Activity, InvDistMat, IsActive, LigAndRec, Pose
 from data_formats.tasks import Task
 from datasets.base_datasets import Dataset
+from terrace.dataframe import DFRow
 
 class BigBindStructDataset(Dataset):
 
@@ -42,8 +44,8 @@ class BigBindStructDataset(Dataset):
         else:
             return self.dir + "/" + rec_file
 
-    def get_label_classes(self) -> Set[Type[Task]]:
-        return { Pose, InvDistMat }
+    def get_label_feats(self) -> Set[Type[Task]]:
+        return ["lig_crystal_pose"]
 
     def getitem_impl(self, index):
 
@@ -51,18 +53,13 @@ class BigBindStructDataset(Dataset):
         rec_file = self.get_rec_file(index)
 
         lig = get_mol_from_file(lig_file)
+        lig = Chem.RemoveHs(lig)
+
         rec = get_prot_from_file(rec_file)
         poc_id = self.structures.pocket[index]
 
-        x = LigAndRec(lig, rec, poc_id)
+        x = DFRow(lig=lig, rec=rec, pocket_id=poc_id)
         
-        lig_coords = []
-        conformer = lig.GetConformer(0)
-        for atom in lig.GetAtoms():
-            point = conformer.GetAtomPosition(atom.GetIdx())
-            coord = [ point.x, point.y, point.z ]
-            lig_coords.append(coord)
-        
-        y = Pose(torch.tensor(lig_coords, dtype=torch.float32))
+        y = DFRow(lig_crystal_pose=lig_crystal_pose(self.cfg, x))
 
         return x, y

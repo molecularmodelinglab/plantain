@@ -2,32 +2,29 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from rdkit.Chem import Descriptors
-from data_formats.base_formats import Data, Input, InvDistMat, LigAndRec, Prediction
-from data_formats.graphs.graph_formats import LigAndRecGraph
 from terrace import Module, LazyLinear, LazyMultiheadAttention, LazyLayerNorm, Batch
 from dgl.nn.pytorch import NNConv, WeightAndSum
-from data_formats.tasks import ClassifyActivity, PredictInteractionMat, RejectOption, ScoreActivityClass
 from .model import ClassifyActivityModel
 from .attention_gnn import MPNN
 from .graph_embedding import GraphEmbedding
 
-class LigAndRecDescriptors(Input):
-    rec_diam: float
-    lig_clogp: float
-    clogp_x_diam: float
+# class LigAndRecDescriptors(Input):
+#     rec_diam: float
+#     lig_clogp: float
+#     clogp_x_diam: float
     
-    @staticmethod
-    def make(cfg, data: LigAndRecGraph):
-        rec_diam = torch.cdist(data.lig_graph.ndata.coord, data.rec_graph.ndata.coord).max()
-        lig_clogp = torch.tensor(Descriptors.MolLogP(data.lig), dtype=torch.float32)
-        clogp_x_diam = rec_diam*lig_clogp
-        return LigAndRecDescriptors(rec_diam, lig_clogp, clogp_x_diam)
+#     @staticmethod
+#     def make(cfg, data: LigAndRecGraph):
+#         rec_diam = torch.cdist(data.lig_graph.ndata.coord, data.rec_graph.ndata.coord).max()
+#         lig_clogp = torch.tensor(Descriptors.MolLogP(data.lig), dtype=torch.float32)
+#         clogp_x_diam = rec_diam*lig_clogp
+#         return LigAndRecDescriptors(rec_diam, lig_clogp, clogp_x_diam)
 
-    @staticmethod
-    def make_full(cfg, data: LigAndRec):
-        graph_data = LigAndRecGraph.make(cfg, data)
-        arg = Data.merge([data, graph_data])
-        return Data.merge([graph_data, LigAndRecDescriptors.make(cfg, arg)])
+#     @staticmethod
+#     def make_full(cfg, data: LigAndRec):
+#         graph_data = LigAndRecGraph.make(cfg, data)
+#         arg = Data.merge([data, graph_data])
+#         return Data.merge([graph_data, LigAndRecDescriptors.make(cfg, arg)])
 
 class AttentionGNNNew(Module, ClassifyActivityModel):
 

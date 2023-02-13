@@ -29,7 +29,7 @@ class Trainer(pl.LightningModule):
         self.metrics = nn.ModuleDict()
 
         for name in self.cfg.val_datasets:
-            val_loader = make_dataloader(self.cfg, name, "val", self.model.get_data_format())
+            val_loader = make_dataloader(self.cfg, name, "val", self.model.get_input_feats())
 
             # give the model an initial batch before training to initialize
             # its (lazily created) parameters
@@ -88,7 +88,7 @@ class Trainer(pl.LightningModule):
         tasks = self.get_tasks(prefix, dataset_idx)
         metrics = self.make_metrics(prefix, tasks, dataset_idx)
 
-        pred = self.model.predict(tasks, x)
+        pred = self.model.predict_train(x, y, tasks)
         loss, loss_dict = get_losses(self.cfg, tasks, x, pred, y)
 
         if dataset_idx is not None:
@@ -155,11 +155,11 @@ class Trainer(pl.LightningModule):
 
     def fit(self, logger, callbacks):
 
-        train_loader = make_train_dataloader(self.cfg, self.model.get_data_format())
-        # train_loader = make_dataloader(self.cfg, self.cfg.train_dataset, "train", self.model.get_data_format())
+        train_loader = make_train_dataloader(self.cfg, self.model.get_input_feats())
+        # train_loader = make_dataloader(self.cfg, self.cfg.train_dataset, "train", self.model.get_input_feats())
         val_loaders = []
         for name in self.cfg.val_datasets:
-            val_loader = make_dataloader(self.cfg, name, "val", self.model.get_data_format())
+            val_loader = make_dataloader(self.cfg, name, "val", self.model.get_input_feats())
             val_loaders.append(val_loader)
 
         gpus = int(torch.cuda.is_available())

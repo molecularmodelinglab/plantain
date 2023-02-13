@@ -4,6 +4,10 @@ import torch
 from terrace.graph import Graph
 from terrace.batch import Batchable
 
+class Node(Batchable):
+    cat_feat: torch.Tensor # ((num_nodes, node_cat_feat), dtype=torch.long)
+    scal_feat: torch.Tensor # ((num_nodes, node_scal_feat))
+
 class Node3d(Batchable):
     coord: torch.Tensor # ((num_nodes, 3))
     cat_feat: torch.Tensor # ((num_nodes, node_cat_feat), dtype=torch.long)

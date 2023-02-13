@@ -3,10 +3,10 @@ from rdkit.Chem import rdMolAlign
 from typing import Set, Type
 import pandas as pd
 from common.utils import get_mol_from_file, get_prot_from_file, get_gnina_scores_from_pdbqt
-from data_formats.base_formats import Activity, IsActive, LigAndRec, PoseRMSDs
 from data_formats.tasks import Task
 from datasets.base_datasets import Dataset
-from datasets.bigbind_gnina import LigAndRecGnina
+from terrace.batch import NoStackTensor
+from terrace.dataframe import DFRow
 
 class BigBindGninaStructDataset(Dataset):
 
@@ -52,8 +52,8 @@ class BigBindGninaStructDataset(Dataset):
         else:
             return self.dir + "/" + rec_file
 
-    def get_label_classes(self) -> Set[Type[Task]]:
-        return { PoseRMSDs }
+    def get_label_feats(self) -> Set[Type[Task]]:
+        return { "pose_rmsds" }
 
     def getitem_impl(self, index):
 
@@ -70,12 +70,12 @@ class BigBindGninaStructDataset(Dataset):
         pose_scores = torch.tensor(pose_scores, dtype=torch.float32)
         affinities = torch.tensor(affinities, dtype=torch.float32)
 
-        x = LigAndRecGnina(docked_lig, rec, poc_id, pose_scores, affinities)
+        x = DFRow(docked_lig, rec, poc_id, pose_scores, affinities)
         
         rmsds = []
         for conformer in range(docked_lig.GetNumConformers()):
             rmsds.append(rdMolAlign.CalcRMS(true_lig, docked_lig, 0, conformer))
-        rmsds = torch.tensor(rmsds, dtype=torch.float32)
-        y = PoseRMSDs(rmsds)
+        rmsds = NoStackTensor(torch.tensor(rmsds, dtype=torch.float32))
+        y = DFRow(pose_rmsds=rmsds)
 
         return x, y

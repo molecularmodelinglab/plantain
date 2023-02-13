@@ -74,6 +74,14 @@ def pose_class_bce_loss(x, pred, y):
     l2 = F.binary_cross_entropy_with_logits(p1, y1.float())
     return 0.5*l1 + 0.5*l2
 
+def rot_mse(x, pred, y):
+    yt = torch.zeros_like(pred.diffused_transforms.rot)
+    return F.mse_loss(pred.diffused_transforms.rot, yt)
+
+def trans_mse(x, pred, y):
+    yt = torch.zeros_like(pred.diffused_transforms.trans)
+    return F.mse_loss(pred.diffused_transforms.trans, yt)
+
 def get_single_loss(loss_cfg, x, pred, y):
     loss_fn = {
         "bce": bce_loss,
@@ -88,6 +96,8 @@ def get_single_loss(loss_cfg, x, pred, y):
         "worse_pose_bce": worse_pose_bce_loss,
         "opposite_pose_bce": opposite_pose_bce_loss,
         "pose_class_bce": pose_class_bce_loss,
+        "rot_mse": rot_mse,
+        "trans_mse": trans_mse,
     }[loss_cfg.func]
     if "x" in loss_cfg:
         x = getattr(x, loss_cfg["x"])
@@ -136,7 +146,7 @@ def selective_softmax_pos_loss(loss_cfg, x, pred, y):
         "selective_bce": selective_bce,
     }
 
-def get_losses(cfg, tasks, x, pred, y):
+def get_losses(cfg, task_names, x, pred, y):
 
     if "selective_net" in cfg.losses:
         return selective_net_loss(cfg.losses.selective_net, x, pred, y)
@@ -145,7 +155,6 @@ def get_losses(cfg, tasks, x, pred, y):
     elif "selective_softmax_pos" in cfg.losses:
         return selective_softmax_pos_loss(cfg.losses.selective_softmax_pos, x, pred, y)
 
-    task_names = [ task.get_name() for task in tasks ]
     total_loss = 0.0
     ret = {}
     for loss_name, loss_cfg in cfg.losses.items():

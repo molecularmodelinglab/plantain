@@ -21,7 +21,7 @@ data:
   only_ki_kd: false
 
   pose_sample: best_and_worst
-  num_poses: 3
+  num_poses: 7
   
   lig_graph:
     atom_feats: [ "element", "formal_charge", "hybridization", "is_aromatic", "numH"]

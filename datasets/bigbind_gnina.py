@@ -1,23 +1,12 @@
 import torch
 from typing import Set, Type
 import pandas as pd
+from rdkit import Chem
 from common.utils import get_mol_from_file, get_prot_from_file, get_gnina_scores_from_pdbqt
-from data_formats.base_formats import Activity, IsActive, LigAndRec
 from data_formats.tasks import Task
 from datasets.base_datasets import Dataset
-
-class LigAndRecGnina(LigAndRec):
-
-    pose_scores: torch.Tensor
-    affinities: torch.Tensor
-
-    @staticmethod
-    def collate_pose_scores(x):
-        return x
-
-    @staticmethod
-    def collate_affinities(x):
-        return x
+from terrace.batch import NoStackTensor
+from terrace.dataframe import DFRow
 
 class BigBindGninaDataset(Dataset):
 
@@ -61,10 +50,10 @@ class BigBindGninaDataset(Dataset):
         else:
             return self.dir + "/" + rec_file
 
-    def get_label_classes(self) -> Set[Type[Task]]:
+    def get_label_feats(self) -> Set[Type[Task]]:
         if self.sna_frac is None:
-            return { Activity }
-        return { IsActive }
+            return { "activity" }
+        return { "is_active" }
 
     def getitem_impl(self, index):
 
@@ -72,17 +61,18 @@ class BigBindGninaDataset(Dataset):
         rec_file = self.get_rec_file(index)
 
         lig = get_mol_from_file(lig_file)
+        lig = Chem.RemoveHs(lig)
         rec = get_prot_from_file(rec_file)
         poc_id = self.activities.pocket[index]
 
         pose_scores, affinities = get_gnina_scores_from_pdbqt(lig_file)
-        pose_scores = torch.tensor(pose_scores, dtype=torch.float32)
-        affinities = torch.tensor(affinities, dtype=torch.float32)
+        pose_scores = NoStackTensor(torch.tensor(pose_scores, dtype=torch.float32))
+        affinities = NoStackTensor(torch.tensor(affinities, dtype=torch.float32))
 
-        x = LigAndRecGnina(lig, rec, poc_id, pose_scores, affinities)
+        x = DFRow(lig=lig, rec=rec, pocket_id=poc_id, gnina_pose_scores=pose_scores, gnina_affinities=affinities)
         if self.sna_frac is None:
-            y = Activity(torch.tensor(self.activities.pchembl_value[index], dtype=torch.float32))
+            y = DFRow(activity=torch.tensor(self.activities.pchembl_value[index], dtype=torch.float32))
         else:
-            y = IsActive(self.activities.active[index])
+            y = DFRow(is_active=self.activities.active[index])
 
         return x, y

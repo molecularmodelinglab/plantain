@@ -1,9 +1,6 @@
-from data_formats.base_formats import Data, LigAndRec
-from data_formats.graphs.graph_formats import LigAndRecGraphMultiPose
 import torch.nn as nn
 import torch
 import torch.nn.functional as F
-from data_formats.tasks import ScorePose
 from terrace import Batch, collate
 from .model import Model
 from .attention_gnn import AttentionGNN

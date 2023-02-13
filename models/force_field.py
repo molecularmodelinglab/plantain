@@ -1,17 +1,14 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from data_formats.base_formats import Data, Prediction
-from data_formats.graphs.graph_formats import LigAndRecGraphMultiPose
+from common.pose_transform import Pose
 from models.attention_gnn import MPNN
 from terrace import Module
 from terrace.batch import Batch
+from terrace.dataframe import DFRow
 from terrace.module import LazyLayerNorm, LazyLinear, LazyMultiheadAttention
 from .model import ClassifyActivityModel
 from .graph_embedding import GraphEmbedding
-
-class PoseScores(Prediction):
-    pose_scores: torch.Tensor
 
 def rbf_encode(dists, start, end, steps):
     mu = torch.linspace(start, end, steps, device=dists.device)
@@ -21,25 +18,19 @@ def rbf_encode(dists, start, end, steps):
     diff = ((dists_expanded - mu_expanded)/sigma)**2
     return torch.exp(-diff)
 
-class ForceField(Module, ClassifyActivityModel):
+class ForceField(Module):
 
     def __init__(self, cfg):
         super().__init__()
         self.cfg = cfg.model
 
-    @staticmethod
-    def get_name() -> str:
-        return "force_field"
-
-    def get_data_format(self):
-        return LigAndRecGraphMultiPose.make
-
-    def get_hidden_feat(self, x, conf_id):
+    def get_hidden_feat(self, x):
+        self.start_forward()
 
         lig_cfg = self.cfg.lig_encoder
         rec_cfg = self.cfg.rec_encoder
 
-        lig_node_feats, lig_edge_feats = self.make(GraphEmbedding, self.cfg.lig_encoder)(x.lig_graphs[conf_id])
+        lig_node_feats, lig_edge_feats = self.make(GraphEmbedding, self.cfg.lig_encoder)(x.lig_graph)
         rec_node_feats, rec_edge_feats = self.make(GraphEmbedding, self.cfg.rec_encoder)(x.rec_graph)
 
         lig_hid = self.make(LazyLinear, lig_cfg.node_out_size)(F.leaky_relu(lig_node_feats))
@@ -53,7 +44,7 @@ class ForceField(Module, ClassifyActivityModel):
         prev_rec_hid = []
 
         for layer in range(self.cfg.num_mpnn_layers):
-            lig_hid = self.make(MPNN)(x.lig_graphs[conf_id], F.leaky_relu(lig_hid), lig_edge_feats)
+            lig_hid = self.make(MPNN)(x.lig_graph, F.leaky_relu(lig_hid), lig_edge_feats)
             rec_hid = self.make(MPNN)(x.rec_graph, F.leaky_relu(rec_hid), rec_edge_feats)
 
             if self.cfg.get("use_layer_norm", False):
@@ -92,12 +83,12 @@ class ForceField(Module, ClassifyActivityModel):
                    batch,
                    batch_rec_feat,
                    batch_lig_feat,
-                   conf_id):
+                   batch_lig_poses):
         
         all_Us = []
 
         rec_graph = batch.rec_graph.dgl()
-        lig_graph = batch.lig_graphs[conf_id].dgl()
+        lig_graph = batch.lig_graph.dgl()
 
         tot_rec = 0
         tot_lig = 0
@@ -106,7 +97,6 @@ class ForceField(Module, ClassifyActivityModel):
             lig_feat = batch_lig_feat[tot_lig:tot_lig+l]
             rec_feat = batch_rec_feat[tot_rec:tot_rec+r]
 
-            lig_coord =  batch.lig_graphs[conf_id].ndata.coord[tot_lig:tot_lig+l]
             rec_coord =  batch.rec_graph.ndata.coord[tot_rec:tot_rec+r]
 
             tot_rec += r
@@ -114,27 +104,55 @@ class ForceField(Module, ClassifyActivityModel):
 
             atn_coefs = torch.einsum('lef,ref->lre', lig_feat, rec_feat)
 
-            # cdist is the simplest way to compute dist matrix
-            # dists = torch.cdist(new_lig_coord, rec_coord)
-            
-            # non-cdist vectorized way
-            lc_ex = lig_coord.unsqueeze(1).expand(-1,rec_coord.size(0),-1)
-            rc_ex = rec_coord.unsqueeze(0).expand(lig_coord.size(0),-1,-1)
-            dists = torch.sqrt(((lc_ex - rc_ex)**2).sum(-1))
-            rbfs = rbf_encode(dists, self.cfg.rbf_start,self.cfg.rbf_end,self.cfg.rbf_steps)
+            # very hacky way of allowing diffusion model to pass multiple transforms
+            # to the energy function
+            if len(batch_lig_poses[i].coord.shape) == 3:
+                Us = []
+                for lig_coord in batch_lig_poses.coord[i]:
+                    lc_ex = lig_coord.unsqueeze(1).expand(-1,rec_coord.size(0),-1)
+                    rc_ex = rec_coord.unsqueeze(0).expand(lig_coord.size(0),-1,-1)
+                    dists = torch.sqrt(((lc_ex - rc_ex)**2).sum(-1))
+                    rbfs = rbf_encode(dists, self.cfg.rbf_start,self.cfg.rbf_end,self.cfg.rbf_steps)
 
-            U = (atn_coefs*rbfs*self.cfg.energy_scale).sum()
-            all_Us.append(U)
+                    U = (atn_coefs*rbfs*self.cfg.energy_scale).sum()
+                    Us.append(U)
+                all_Us.append(torch.stack(Us))
+            else:
+                assert len(batch_lig_poses[i].coord.shape) == 2
+                lig_coord =  batch_lig_poses[i].coord
+
+                lc_ex = lig_coord.unsqueeze(1).expand(-1,rec_coord.size(0),-1)
+                rc_ex = rec_coord.unsqueeze(0).expand(lig_coord.size(0),-1,-1)
+                dists = torch.sqrt(((lc_ex - rc_ex)**2).sum(-1))
+                rbfs = rbf_encode(dists, self.cfg.rbf_start,self.cfg.rbf_end,self.cfg.rbf_steps)
+
+                U = (atn_coefs*rbfs*self.cfg.energy_scale).sum()
+                all_Us.append(U)
 
         return torch.stack(all_Us)
+
+class ForceFieldClassifier(Module, ClassifyActivityModel):
+    
+    def __init__(self, cfg):
+        super().__init__()
+        self.cfg = cfg.model
+        self.force_field = ForceField(cfg)
+
+    @staticmethod
+    def get_name() -> str:
+        return "force_field"
+
+    def get_input_feats(self):
+        return ["lig_graph", "rec_graph", "lig_docked_poses"]
 
     def forward(self, batch):
         self.start_forward()
 
-        batch_rec_feat, batch_lig_feat = self.get_hidden_feat(batch, 0)
+        batch_rec_feat, batch_lig_feat = self.force_field.get_hidden_feat(batch)
         ret = []
-        for conf_id in range(len(batch.lig_graphs)):
-            ret.append(self.get_energy(batch, batch_rec_feat, batch_lig_feat, conf_id))
+        for conf_id in range(len(batch.lig_docked_poses.coord[0])):
+            pose = Batch(Pose, coord=[coord[conf_id] for coord in batch.lig_docked_poses.coord])
+            ret.append(self.force_field.get_energy(batch, batch_rec_feat, batch_lig_feat, pose))
         U = torch.stack(ret).T
 
         if self.cfg.get("multi_pose_attention", False):
@@ -145,11 +163,6 @@ class ForceField(Module, ClassifyActivityModel):
             score = (pose_scores[:,:-1]*atn).sum(-1)
         else:
             score = U[:,0]
+            pose_scores = U
 
-        return score, pose_scores
-
-    def predict(self, tasks, x):
-        score, pose_scores = self(x)
-        p1 = super().make_prediction(score)
-        p2 = Batch(PoseScores, pose_scores=pose_scores)
-        return Data.merge((p1,p2))
+        return Batch(DFRow, score=score, pose_scores=pose_scores)

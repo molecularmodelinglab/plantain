@@ -2,10 +2,8 @@ import os
 from rdkit import Chem
 import torch
 from glob import glob
-from data_formats.base_formats import IsActive, LigAndRec
 from datasets.base_datasets import Dataset
 from common.utils import get_mol_from_file, get_prot_from_file
-from datasets.bigbind_gnina import LigAndRecGnina
 
 class LitPcbaDataset(Dataset):
 

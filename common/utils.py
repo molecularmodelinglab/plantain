@@ -9,6 +9,8 @@ from Bio.PDB.mmtf import MMTFIO, MMTFParser
 from rdkit import Chem
 from Bio.PDB.PDBExceptions import PDBConstructionWarning
 from Bio.PDB import PDBParser
+from Bio.PDB.PDBIO import PDBIO
+import tempfile
 
 def get_activity(batch):
     """ For ease, we also want to support data coming in X, Y tuples """
@@ -158,4 +160,10 @@ def flatten_dict(d):
             ret[key] = val
     return ret
 
+def get_pdb_str(rec):
+    with tempfile.NamedTemporaryFile() as f:
+        io = PDBIO()
+        io.set_structure(rec)
+        io.save(f.name)
+        return f.read().decode('ascii')
             

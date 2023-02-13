@@ -18,3 +18,4 @@ roma
 omegaconf
 torchmetrics
 rdkit
+py3Dmol

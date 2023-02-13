@@ -1,21 +1,25 @@
 project: null
+project_postfix: "pose"
 resume_id: null
 name: test_run
 
 val_check_interval: 1.0
+metric_reset_interval: 50
 
-dataset: bigbind_struct
+train_dataset: bigbind_struct
+val_datasets: [ bigbind_struct ]
+
+monitor_metric:
+  name: val/bigbind_struct/auroc_all
+  mode: max
+
 data:
-  cache: false
-  use_tar: true
   
   use_rec: true
   use_lig: true
 
   sna_frac: 1
   only_ki_kd: false
-
-  num_conformers: 1
   
   lig_graph:
     atom_feats: [ "element", "formal_charge", "hybridization", "is_aromatic", "numH"]
@@ -24,22 +28,30 @@ data:
 
   rec_graph:
     only_pocket: true
-    node_type: "residue"
-    atom_feats: [ "atom_type" ]
+    node_type: "atom"
+    atom_feats: [ "atom_type", "atom_residue_type" ]
     residue_feats: [ "residue_type" ]
     edge_method:
-      type: "knn"
-      knn_rad: 10
+      type: "residue_knn"
+      atom_knn_rad: 5
+      residue_knn_rad: 10
       max_neighbors: null
     edge_feats: [ "dist"]
     include_h: False
 
-task: "pose"
+  use_interaction_graph: false
+  interaction_graph:
+    dist_cutoff: 10
+    max_neighbors: null
+    edge_feats: [ "dist"]
 
 losses:
-  # rot_mse_lambda: 0.8
-  # trans_mse_lambda: 0.2
-  coord_mse_lambda: 1.0
+  rot_mse:
+    func: rot_mse
+    weight: 0.8
+  trans_mse:
+    func: trans_mse
+    weight: 0.2
 
 optimizer: adamw
 learn_rate: 1e-4
@@ -60,21 +72,26 @@ model:
   rec_encoder:
     node_embed_size: 64
     edge_embed_size: 64
-    num_mpnn_layers: 2
-    edge_hidden_size: 32
+    node_out_size: 64
 
   lig_encoder:
     node_embed_size: 16
     edge_embed_size: 64
-    num_mpnn_layers: 2
-    edge_hidden_size: 32
+    node_out_size: 64
+
+  num_mpnn_layers: 3
+  inner_attention: false
+  use_layer_norm: true
+  multi_pose_attention: true
 
   out_size: 16
 
   diffusion:
     timesteps: 32
-    max_trans_sigma: 0.0
-    max_rot_frac: 1.0
+    max_trans_sigma: 4.0
+    max_rot_sigma: 1.0
+    use_rot: true
+    use_trans: true
 
   rbf_start: 0
   rbf_end: 16

@@ -7,7 +7,6 @@ from sklearn.gaussian_process import GaussianProcessClassifier
 from sklearn.neighbors import KernelDensity
 from collections import defaultdict
 from common.utils import flatten_dict
-from data_formats.tasks import RejectOption, ScoreActivityClass, ClassifyActivity
 
 def reject_frac_plot(cfg, x, y, pred, metrics):
 
@@ -122,8 +121,8 @@ def ideal_uncertainty_plot():
 
 def make_plots(cfg, tasks, x, y, pred, metrics):
     plot_funcs = {
-        reject_frac_plot: (RejectOption, ScoreActivityClass, ClassifyActivity),
-        act_select_scatter: (RejectOption, ScoreActivityClass),
+        reject_frac_plot: ("reject_option", "score_activity_class", "classify_activity"),
+        act_select_scatter: ("reject_option", "score_activity_class"),
         # uncertainty_kde: (RejectOption, ClassifyActivity),
         # uncertainty_gaussian: (RejectOption, ClassifyActivity)
     }

@@ -1,22 +1,10 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from data_formats.base_formats import Data, InvDistMat, Prediction
-from data_formats.graphs.graph_formats import LigAndRecGraph
 from terrace import Module, LazyLinear, LazyMultiheadAttention, LazyLayerNorm, Batch
 from dgl.nn.pytorch import NNConv
-from data_formats.tasks import ClassifyActivity, PredictInteractionMat, RejectOption, ScoreActivityClass
 from .model import ClassifyActivityModel
 from .graph_embedding import GraphEmbedding
-
-class PredBCE(Prediction):
-    pred_bce: float
-
-class PredDocked(Prediction):
-    docked_score: float
-    
-class SoftmaxLogits(Prediction):
-    softmax_logits: torch.Tensor
 
 # class Select(Prediction):
 #     select_unnorm: float

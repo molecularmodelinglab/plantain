@@ -1,20 +1,20 @@
 from collections import defaultdict
 from copy import deepcopy
+from rdkit.Chem.rdMolAlign import CalcRMS
 import random
 from terrace import Batch, collate
-from typing import Callable, Dict, Set, Type
+from typing import Callable, Dict, List, Set, Type
 import torch
 from torch import nn
 from torchmetrics import Metric, SpearmanCorrCoef, Accuracy, AUROC, ROC, Precision, R2Score, MeanSquaredError
-from data_formats.base_formats import Input, LigAndRec, Prediction, Label
-
-from data_formats.tasks import RejectOption, ScoreActivityClass, Task
+from terrace.dataframe import DFRow
+from common.pose_transform import add_pose_to_mol
 
 class FullMetric(Metric):
     """ Extension of torchmetrics metrics which also allows us
     to update based on input batches """
 
-    def update(self, x: Batch[Input], pred: Batch[Prediction], label: Batch[Label]):
+    def update(self, x: Batch[DFRow], pred: Batch[DFRow], label: Batch[DFRow]):
         raise NotImplementedError()
 
     def compute(self):
@@ -28,7 +28,7 @@ class MetricWrapper(FullMetric):
         self.get_y_p = get_y_p
         self.get_y_t = get_y_t
 
-    def update(self, x: Batch[Input], pred: Batch[Prediction], label: Batch[Label]):
+    def update(self, x: Batch[DFRow], pred: Batch[DFRow], label: Batch[DFRow]):
         y_pred = self.get_y_p(pred)
         y_true = self.get_y_t(label)
         return self.metric.update(y_pred, y_true)
@@ -48,7 +48,7 @@ class PerPocketMetric(FullMetric):
         self.metric = self.metric_maker()
         self.pocket_metrics = nn.ModuleDict()
 
-    def update(self, x_b: Batch[LigAndRec], pred_b: Batch[Prediction], label_b: Batch[Label]):
+    def update(self, x_b: Batch[DFRow], pred_b: Batch[DFRow], label_b: Batch[DFRow]):
         self.metric.update(x_b, pred_b, label_b)
         for x, pred, label in zip(x_b, pred_b, label_b):
             poc_id = x.pocket_id
@@ -122,7 +122,7 @@ class ActivitySpearman(MetricWrapper):
     def __init__(self):
         super().__init__(SpearmanCorrCoef, get_activity_score, get_activity)
 
-class PoseAcc(FullMetric):
+class PoseRankAcc(FullMetric):
 
     def __init__(self, rmsd_cutoff=2.0):
         super().__init__()
@@ -130,6 +130,10 @@ class PoseAcc(FullMetric):
         self.top_n_correct = defaultdict(int)
         self.total_seen = 0
 
+    def reset(self) -> None:
+        self.top_n_correct = defaultdict(int)
+        self.total_seen = 0
+        
     def update(self, x, pred, y):
         for pred0, y0 in zip(pred, y):
             # if torch.amax(pred0.pose_scores) < -0.25:
@@ -148,7 +152,47 @@ class PoseAcc(FullMetric):
         for n, correct in self.top_n_correct.items():
             ret[f"top_{n}"] = correct/self.total_seen
         return ret
-        
+
+def get_rmsds(ligs, pred_pose, true_pose):
+    ret = []
+    for lig, pred, yt in zip(ligs, pred_pose, true_pose):
+        mol1 = deepcopy(lig)
+        mol2 = deepcopy(lig)
+        add_pose_to_mol(mol1, pred)
+        add_pose_to_mol(mol2, yt)
+        ret.append(CalcRMS(mol1, mol2))
+    return torch.tensor(ret, dtype=torch.float32, device=pred_pose.coord[0].device)
+
+class PoseRMSD(FullMetric):
+
+    def __init__(self):
+        super().__init__()
+        self.add_state("rmsd_sum", default=torch.tensor(0.0))
+        self.add_state("total", default=torch.tensor(0))
+
+    def update(self, x, pred, y):
+        self.rmsd_sum += get_rmsds(x.lig, pred.lig_pose, y.lig_crystal_pose).sum()
+        self.total += len(x)
+
+    def compute(self):
+        return self.rmsd_sum / self.total
+
+class PoseAcc(FullMetric):
+
+    def __init__(self, rmsd_cutoff):
+        super().__init__()
+        self.rmsd_cutoff = rmsd_cutoff
+        self.add_state("correct", default=torch.tensor(0))
+        self.add_state("total", default=torch.tensor(0))
+
+    def update(self, x, pred, y):
+        rmsds = get_rmsds(x.lig, pred.lig_pose, y.lig_crystal_pose)
+        self.correct += (rmsds < self.rmsd_cutoff).sum()
+        self.total += len(x)
+
+    def compute(self):
+        return self.correct.float()/self.total
+
 class EnrichmentFactor(FullMetric):
 
     def __init__(self):
@@ -239,7 +283,7 @@ class RejectOptionMetric(FullMetric):
             }
         return ret
 
-def get_single_task_metrics(task: Type[Task]):
+def get_single_task_metrics(task: str):
     return {
         "score_activity_class": nn.ModuleDict({
             "auroc": PerPocketAUC()
@@ -252,24 +296,28 @@ def get_single_task_metrics(task: Type[Task]):
             "precision": MetricWrapper(Precision, get_active_prob, get_is_active, 'binary')
         }),
         "score_pose": nn.ModuleDict({
-            "acc_2": PoseAcc(2.0),
-            "acc_5": PoseAcc(5.0)
+            "acc_2": PoseRankAcc(2.0),
+            "acc_5": PoseRankAcc(5.0)
         }),
-        "predict_interaction_mat": nn.ModuleDict(),
-    }[task.get_name()]
+        "predict_lig_pose": nn.ModuleDict({
+            "rmsd": PerPocketMetric(PoseRMSD),
+            "acc_2": PerPocketMetric(PoseAcc, 2.0),
+            "acc_5": PerPocketMetric(PoseAcc, 5.0)
+        })
+    }[task]
 
-def get_metrics(cfg, tasks: Set[Type[Task]], offline=False):
+def get_metrics(cfg, tasks: List[str], offline=False):
     ret = nn.ModuleDict({})
     for task in tasks:
-        if task == RejectOption: continue
+        if task == "reject_option": continue
         ret.update(get_single_task_metrics(task))
 
-    if offline and ScoreActivityClass in tasks:
+    if offline and "score_activity_class" in tasks:
         ret.update({"enrichment": EnrichmentFactor()})
     
     # pretty hacky way of integrating reject option
     # todo: put back. Took out because of OOMing
-    if RejectOption in tasks and offline:
+    if "reject_option" in tasks and offline:
         ret["select"] = RejectOptionMetric(cfg, deepcopy(ret))
         
     return ret

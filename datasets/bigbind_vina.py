@@ -2,7 +2,6 @@ import torch
 from typing import Set, Type
 import pandas as pd
 from common.utils import get_mol_from_file, get_prot_from_file, get_docked_scores_from_pdbqt
-from data_formats.base_formats import Activity, IsActive, LigAndRecDocked
 from data_formats.tasks import Task
 from datasets.base_datasets import Dataset
 

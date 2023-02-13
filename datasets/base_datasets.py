@@ -1,30 +1,31 @@
-from typing import Set, Tuple, Type
+from typing import List, Set, Tuple, Type
 from torch.utils import data
-from data_formats.base_formats import Data, Input, Label
 from data_formats.tasks import Task
+from data_formats.transforms import Transform
+from terrace.dataframe import DFRow
 
 class Dataset(data.Dataset):
 
-    def __init__(self, cfg, transform=None):
+    def __init__(self, cfg, x_transforms=[]):
         super().__init__()
         self.cfg = cfg
-        self.transform = transform
+        self.x_transforms = x_transforms
         
     @staticmethod
     def get_name() -> str:
         raise NotImplementedError()
 
-    def get_label_classes(self) -> Set[Type[Task]]:
-        raise NotImplementedError()
+    def get_label_feats(self) -> List[str]:
+        raise NotImplementedError
 
-    def get_tasks(self) -> Set[Task]:
+    def get_tasks(self) -> List[str]:
         """ Find all tasks this dataset can be used for. Looks for all
         tasks whose Label class cooresponds to one of our label types"""
-        ret = set()
-        label_classes = self.get_label_classes()
-        for task in Task.__subclasses__():
-            if task.Label in label_classes or task.Label is None:
-                ret.add(task)
+        ret = []
+        label_feats = self.get_label_feats()
+        for name, task in Task.all_tasks.items():
+            if set(task.label_feats).issubset(set(label_feats)):
+                ret.append(name)
         return ret
 
     def len_impl(self):
@@ -35,23 +36,17 @@ class Dataset(data.Dataset):
             return self.cfg.debug_dataset_len
         return self.len_impl()
 
-    def getitem_impl(self, index: int) -> Tuple[Input, Label]:
+    def getitem_impl(self, index: int) -> Tuple[DFRow, DFRow]:
         raise NotImplementedError
 
-    def __getitem__(self, index: int) -> Tuple[Input, Label]:
+    def __getitem__(self, index: int) -> Tuple[DFRow, DFRow]:
 
         if index >= len(self):
             raise IndexError()
 
         try:
-            ret = self.getitem_impl(index)
-            if self.transform is not None:
-                x, y = ret
-                # we want all the attributes of the og data + the processed data
-                x_trans = self.transform(self.cfg, x)
-                return Data.merge([x, x_trans]), y
-            else:
-                return ret
+            x, y = self.getitem_impl(index)
+            return Transform.apply_many(self.cfg, self.x_transforms, x), y
         except KeyboardInterrupt:
             raise
         except:
