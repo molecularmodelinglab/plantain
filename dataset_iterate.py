@@ -1,12 +1,11 @@
 import sys
 from tqdm import tqdm
 from common.cfg_utils import get_config
-from data_formats.graphs.graph_formats import LigAndRecGraph
 from datasets.make_dataset import make_dataloader
 
 
 def dataset_iterate(cfg):
-    train_dataloader = make_dataloader(cfg, cfg.train_dataset, "train", LigAndRecGraph)
+    train_dataloader = make_dataloader(cfg, cfg.train_dataset, "train", ["lig_graph", "rec_graph"])
     for i, data in enumerate(tqdm(train_dataloader)):
         # if i > 100:
         #     break

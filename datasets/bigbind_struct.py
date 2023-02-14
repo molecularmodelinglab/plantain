@@ -52,6 +52,8 @@ class BigBindStructDataset(Dataset):
         lig_file = self.get_lig_file(index)
         rec_file = self.get_rec_file(index)
 
+        # print("Getting", index, lig_file, rec_file)
+
         lig = get_mol_from_file(lig_file)
         lig = Chem.RemoveHs(lig)
 

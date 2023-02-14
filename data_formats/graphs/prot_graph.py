@@ -8,7 +8,9 @@ from Bio.PDB.PDBExceptions import PDBConstructionWarning
 from Bio.PDB import PDBParser
 from terrace import CategoricalTensor
 
-from terrace.batch import Batch
+from terrace.batch import Batch, Batchable, NoStackTensor
+from terrace.dataframe import DFRow
+from terrace import NoStackCatTensor
 from .graph3d import Graph3d, Node3d, Edge3d
 from .knn import make_knn_edgelist, make_res_knn_edgelist
 from .dist_edge import DistEdge
@@ -231,3 +233,64 @@ def get_node_and_edge_nums_from_pdb(cfg, pdb_file):
         rec = structure[0]
     nodes, edges, edata = get_nodes_and_edges_from_model(cfg, rec)
     return len(nodes), len(edges)
+
+
+class FullRecData(Batchable):
+    coord: torch.Tensor
+    cat_feat: CategoricalTensor
+    scal_feat: torch.Tensor
+    res_index: torch.Tensor
+
+    def collate_coord(x):
+        return x
+
+    def collate_cat_feat(x):
+        return x
+
+    def collate_scal_feat(x):
+        return x
+
+    def collate_res_index(x):
+        return x
+
+def get_full_rec_data(cfg, rec):
+    prot_cfg = cfg.data.rec_graph
+
+    atoms = []
+    res_indexes = []
+    graph_res_indexes = []
+    for chain in rec:
+        graph_res_index = 0
+        for i, residue in enumerate(chain):
+            if residue.get_resname() not in possible_residue_feats["residue_type"]: continue
+            for atom in residue:
+                atoms.append(atom)
+                res_indexes.append(i)
+                graph_res_indexes.append(graph_res_index)
+            graph_res_index += 1
+
+    cat_feat = torch.zeros((len(atoms), len(prot_cfg.atom_feats)), dtype=torch.long)
+    num_classes = [ len(possible_atom_feats[feat_name]) for feat_name in prot_cfg.atom_feats]
+    coord = torch.zeros((len(atoms), 3), dtype=torch.float32)
+
+    for i, feat_name in enumerate(prot_cfg.atom_feats):
+        get_feat = globals()["get_" + feat_name]
+        possible = possible_atom_feats[feat_name]
+        for j, atom in enumerate(atoms):
+            cat_feat[j, i] = safe_index(possible, get_feat(atom, rec))
+
+
+    for j, atom in enumerate(atoms):
+        coord[j] = torch.tensor(list(atom.get_vector()), dtype=torch.float32)
+
+    cat_feat = CategoricalTensor(cat_feat, num_classes=num_classes)
+    return FullRecData(coord, 
+                       cat_feat,
+                       torch.zeros((len(atoms), 0)),
+                       torch.tensor(graph_res_indexes, dtype=torch.long))
+    # cat_feat = NoStackCatTensor(cat_feat, num_classes=num_classes)
+    # return DFRow(
+    #             coord = NoStackTensor(coord),
+    #             cat_feat = cat_feat,
+    #             scal_feat = NoStackTensor(torch.zeros((len(atoms), 0))),
+    #             res_index = NoStackTensor(torch.tensor(graph_res_indexes, dtype=torch.long)))

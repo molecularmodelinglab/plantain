@@ -58,7 +58,7 @@ class PoseTransform(Batchable):
         return Pose(coord=torch.einsum('nij,bj->nbi', rot_mat, pose.coord - centroid) + self.trans.unsqueeze(1) + centroid)
 
     def batch_apply(self, lig_poses):
-        return collate([ t.apply(c) for t, c in zip(self, lig_poses) ])
+        return collate([ PoseTransform.apply(t,c) for t, c in zip(self, lig_poses) ])
 
     def grad(self, U):
         rot_grad, trans_grad = torch.autograd.grad(U, [self.rot, self.trans], create_graph=True)
@@ -79,6 +79,7 @@ class PoseTransform(Batchable):
     def batch_update_from_grad(self, grad):
         trans_sigma_sq = (self.trans_sigma**2)
         rot_sigma_sq = (self.rot_sigma**2)
-        rot = self.rot - grad.rot*rot_sigma_sq
-        trans = self.trans - grad.trans*trans_sigma_sq
+        rot = self.rot - grad.rot # *rot_sigma_sq
+        trans = self.trans - grad.trans # *trans_sigma_sq
+        # print(grad.trans.mean(), grad.rot.mean())
         return Batch(PoseTransform, rot=rot, trans=trans)

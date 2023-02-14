@@ -82,6 +82,13 @@ def trans_mse(x, pred, y):
     yt = torch.zeros_like(pred.diffused_transforms.trans)
     return F.mse_loss(pred.diffused_transforms.trans, yt)
 
+def diffused_pose_mse(x, pred, y):
+    ret = []
+    for ppose, tpose in zip(pred.diffused_poses, y.lig_crystal_pose):
+        yt = tpose.coord.repeat(ppose.coord.size(0),1,1)
+        ret.append(F.mse_loss(ppose.coord, yt))
+    return torch.stack(ret).mean()
+
 def get_single_loss(loss_cfg, x, pred, y):
     loss_fn = {
         "bce": bce_loss,
@@ -98,6 +105,7 @@ def get_single_loss(loss_cfg, x, pred, y):
         "pose_class_bce": pose_class_bce_loss,
         "rot_mse": rot_mse,
         "trans_mse": trans_mse,
+        "diffused_pose_mse": diffused_pose_mse,
     }[loss_cfg.func]
     if "x" in loss_cfg:
         x = getattr(x, loss_cfg["x"])

@@ -27,7 +27,10 @@ def get_config(cfg_name, folder="./configs"):
     base_conf = OmegaConf.load(folder + f"/{cfg_name}.yaml")
     platform_conf = OmegaConf.load(folder + "/local.yaml")
     cli_conf = OmegaConf.from_cli()
-    return OmegaConf.merge(base_conf, platform_conf, cli_conf)
+    cfg = OmegaConf.merge(base_conf, platform_conf, cli_conf)
+    if cfg.project is not None and "project_postfix" in cfg:
+        cfg.project = cfg.project + "_" + cfg.project_postfix
+    return cfg
 
 def get_all_tasks(cfg):
     """ Returns all the config tasks (if there is only one, creates

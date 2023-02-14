@@ -8,6 +8,7 @@ from terrace.batch import Batch
 from terrace.dataframe import DFRow
 from terrace.module import LazyLayerNorm, LazyLinear, LazyMultiheadAttention
 from .model import ClassifyActivityModel
+from .cat_scal_embedding import CatScalEmbedding
 from .graph_embedding import GraphEmbedding
 
 def rbf_encode(dists, start, end, steps):
@@ -23,6 +24,12 @@ class ForceField(Module):
     def __init__(self, cfg):
         super().__init__()
         self.cfg = cfg.model
+
+    def get_input_feats(self):
+        ret = [ "lig_graph", "rec_graph" ]
+        if self.cfg.get("project_full_atom", False):
+            ret.append("full_rec_data")
+        return ret
 
     def get_hidden_feat(self, x):
         self.start_forward()
@@ -68,14 +75,32 @@ class ForceField(Module):
             prev_rec_hid.append(rec_hid)
 
         lig_hid = self.make(LazyLinear, self.cfg.out_size*self.cfg.rbf_steps)(F.leaky_relu(lig_hid))
-        rec_hid = self.make(LazyLinear, self.cfg.out_size*self.cfg.rbf_steps)(F.leaky_relu(rec_hid))
+        lig_hid = lig_hid.view(-1, self.cfg.rbf_steps, self.cfg.out_size)
 
         if self.cfg.get("use_layer_norm", False):
             rec_hid = self.make(LazyLayerNorm)(rec_hid)
             lig_hid = self.make(LazyLayerNorm)(lig_hid)
 
-        lig_hid = lig_hid.view(-1, self.cfg.rbf_steps, self.cfg.out_size)
-        rec_hid = rec_hid.view(-1, self.cfg.rbf_steps, self.cfg.out_size)
+        if self.cfg.get("project_full_atom", False):
+            full_cat_scal = self.make(CatScalEmbedding, self.cfg.full_atom_embed_size)
+            if self.cfg.get("use_layer_norm", False):
+                full_ln = self.make(LazyLayerNorm)
+            full_linear_out = self.make(LazyLinear, self.cfg.out_size*self.cfg.rbf_steps)
+
+            full_rec_hid = []
+            for full_rec_data in x.full_rec_data:
+                h1 = rec_hid[full_rec_data.res_index]
+                h2 = full_cat_scal(full_rec_data)
+                hid = torch.cat((h1, h2), -1)
+                if self.cfg.get("use_layer_norm", False):
+                    hid = full_ln(hid)
+                hid = full_linear_out(F.leaky_relu(hid))
+                hid = hid.view(-1, self.cfg.rbf_steps, self.cfg.out_size)
+                full_rec_hid.append(hid)
+            rec_hid = full_rec_hid
+        else:
+            rec_hid = self.make(LazyLinear, self.cfg.out_size*self.cfg.rbf_steps)(F.leaky_relu(rec_hid))
+            rec_hid = rec_hid.view(-1, self.cfg.rbf_steps, self.cfg.out_size)
 
         return rec_hid, lig_hid
         
@@ -95,9 +120,12 @@ class ForceField(Module):
         for i, (r, l) in enumerate(zip(rec_graph.batch_num_nodes(), lig_graph.batch_num_nodes())):
             
             lig_feat = batch_lig_feat[tot_lig:tot_lig+l]
-            rec_feat = batch_rec_feat[tot_rec:tot_rec+r]
-
-            rec_coord =  batch.rec_graph.ndata.coord[tot_rec:tot_rec+r]
+            if self.cfg.get("project_full_atom", False):
+                rec_feat = batch_rec_feat[i]
+                rec_coord = batch.full_rec_data.coord[i]
+            else:
+                rec_feat = batch_rec_feat[tot_rec:tot_rec+r]
+                rec_coord =  batch.rec_graph.ndata.coord[tot_rec:tot_rec+r]
 
             tot_rec += r
             tot_lig += l
@@ -143,7 +171,7 @@ class ForceFieldClassifier(Module, ClassifyActivityModel):
         return "force_field"
 
     def get_input_feats(self):
-        return ["lig_graph", "rec_graph", "lig_docked_poses"]
+        return ["lig_docked_poses"] + self.force_field.get_input_feats()
 
     def forward(self, batch):
         self.start_forward()

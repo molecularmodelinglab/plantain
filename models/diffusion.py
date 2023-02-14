@@ -18,7 +18,7 @@ class Diffusion(nn.Module, Model):
         return "diffusion"
 
     def get_input_feats(self):
-        return ["lig_graph", "rec_graph", "lig_embed_pose"]
+        return ["lig_embed_pose"] + self.force_field.get_input_feats()
 
     def get_tasks(self):
         return ["predict_lig_pose"]
@@ -84,7 +84,7 @@ class Diffusion(nn.Module, Model):
             batch_rec_feat, batch_lig_feat = self.get_hidden_feat(batch)
         else:
             batch_rec_feat, batch_lig_feat = hid_feat
-        device = batch_rec_feat.device
+        device = batch_lig_feat.device
 
         transform = self.get_diffused_transforms(len(batch), device)
 
@@ -101,7 +101,7 @@ class Diffusion(nn.Module, Model):
             batch_rec_feat, batch_lig_feat = self.get_hidden_feat(batch)
         else:
             batch_rec_feat, batch_lig_feat = hid_feat
-        device = batch_rec_feat.device
+        device = batch_lig_feat.device
 
         transform = PoseTransform.make_initial(self.cfg, len(batch), device)
         init_pose = batch.lig_embed_pose
@@ -128,7 +128,9 @@ class Diffusion(nn.Module, Model):
 
     def predict_train(self, x, y, task_names):
         hid_feat = self.get_hidden_feat(x)
-        ret_dif = Batch(DFRow, diffused_transforms=self.diffuse(x, y, hid_feat))
+        diff = self.diffuse(x, y, hid_feat)
+        diff_pose = diff.apply(y.lig_crystal_pose)
+        ret_dif = Batch(DFRow, diffused_transforms=diff, diffused_poses=diff_pose)
         with torch.no_grad():
             ret_pred = self(x, hid_feat)
         return merge([ret_dif, ret_pred])

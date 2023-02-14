@@ -48,6 +48,10 @@ class PerPocketMetric(FullMetric):
         self.metric = self.metric_maker()
         self.pocket_metrics = nn.ModuleDict()
 
+    def reset(self):
+        self.metric.reset()
+        self.pocket_metrics = nn.ModuleDict()
+
     def update(self, x_b: Batch[DFRow], pred_b: Batch[DFRow], label_b: Batch[DFRow]):
         self.metric.update(x_b, pred_b, label_b)
         for x, pred, label in zip(x_b, pred_b, label_b):
@@ -56,7 +60,7 @@ class PerPocketMetric(FullMetric):
             predi = collate([pred])
             labeli = collate([label])
             if poc_id not in self.pocket_metrics:
-                self.pocket_metrics[poc_id] = self.metric_maker()
+                self.pocket_metrics[poc_id] = self.metric_maker().to(self.device)
             self.pocket_metrics[poc_id].update(xi, predi, labeli)
 
     def pre_compute(self):
@@ -160,7 +164,9 @@ def get_rmsds(ligs, pred_pose, true_pose):
         mol2 = deepcopy(lig)
         add_pose_to_mol(mol1, pred)
         add_pose_to_mol(mol2, yt)
-        ret.append(CalcRMS(mol1, mol2))
+        # made maxMatches very low for now because it's freezing training
+        # with the default value. Perhaps raise later
+        ret.append(CalcRMS(mol1, mol2, maxMatches=1000))
     return torch.tensor(ret, dtype=torch.float32, device=pred_pose.coord[0].device)
 
 class PoseRMSD(FullMetric):
@@ -175,6 +181,7 @@ class PoseRMSD(FullMetric):
         self.total += len(x)
 
     def compute(self):
+        assert self.total > 0
         return self.rmsd_sum / self.total
 
 class PoseAcc(FullMetric):
@@ -300,9 +307,9 @@ def get_single_task_metrics(task: str):
             "acc_5": PoseRankAcc(5.0)
         }),
         "predict_lig_pose": nn.ModuleDict({
-            "rmsd": PerPocketMetric(PoseRMSD),
-            "acc_2": PerPocketMetric(PoseAcc, 2.0),
-            "acc_5": PerPocketMetric(PoseAcc, 5.0)
+            "rmsd": PoseRMSD(),
+            "acc_2": PoseAcc(2.0),
+            "acc_5": PoseAcc(5.0),
         })
     }[task]
 

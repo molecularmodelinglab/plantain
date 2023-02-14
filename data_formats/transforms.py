@@ -4,7 +4,7 @@ import torch
 from typing import Any, Callable, List
 from common.pose_transform import Pose
 from data_formats.graphs.mol_graph import MolGraph, get_mol_coords
-from data_formats.graphs.prot_graph import ProtGraph
+from data_formats.graphs.prot_graph import ProtGraph, get_full_rec_data
 
 from terrace import Batch, DFRow
 from terrace.batch import Batchable
@@ -72,5 +72,9 @@ def lig_docked_poses(cfg, x):
     confs = get_docked_conformers(cfg, x.lig)
     coords = [ get_mol_coords(x.lig, c) for c in confs ]
     return Pose(torch.stack(coords))
+
+@transform(["rec"])
+def full_rec_data(cfg, x):
+    return get_full_rec_data(cfg, x.rec)
 
 
