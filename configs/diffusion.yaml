@@ -56,7 +56,7 @@ optimizer: adamw
 learn_rate: 1e-4
 max_epochs: 500
 
-batch_size: 8
+batch_size: 16
 
 sampler:
   max_rec_edges: 10000
@@ -89,7 +89,7 @@ model:
   out_size: 16
 
   diffusion:
-    timesteps: 8
+    timesteps: 16
     max_trans_sigma: 4.0
     max_rot_sigma: 1.0
     use_rot: true

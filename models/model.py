@@ -25,7 +25,7 @@ class Model():
                         raise AttributeError(f"To perform {task_name}, model must have the {method_name} method (or the __call__ method should return a batch with {feat}")
         return merge(ret)
 
-    def predict_train(self, x, y, task_names):
+    def predict_train(self, x, y, task_names, batch_idx):
         return self.predict(x, task_names)
 
     @staticmethod

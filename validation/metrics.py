@@ -177,6 +177,7 @@ class PoseRMSD(FullMetric):
         self.add_state("total", default=torch.tensor(0))
 
     def update(self, x, pred, y):
+        if not hasattr(pred, "lig_pose"): return
         self.rmsd_sum += get_rmsds(x.lig, pred.lig_pose, y.lig_crystal_pose).sum()
         self.total += len(x)
 
@@ -193,6 +194,7 @@ class PoseAcc(FullMetric):
         self.add_state("total", default=torch.tensor(0))
 
     def update(self, x, pred, y):
+        if not hasattr(pred, "lig_pose"): return
         rmsds = get_rmsds(x.lig, pred.lig_pose, y.lig_crystal_pose)
         self.correct += (rmsds < self.rmsd_cutoff).sum()
         self.total += len(x)

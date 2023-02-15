@@ -88,8 +88,10 @@ class ForceField(Module):
             full_linear_out = self.make(LazyLinear, self.cfg.out_size*self.cfg.rbf_steps)
 
             full_rec_hid = []
-            for full_rec_data in x.full_rec_data:
-                h1 = rec_hid[full_rec_data.res_index]
+            tot_rec = 0
+            rec_graph = x.rec_graph.dgl()
+            for r, full_rec_data in zip(rec_graph.batch_num_nodes(), x.full_rec_data):
+                h1 = rec_hid[tot_rec + full_rec_data.res_index]
                 h2 = full_cat_scal(full_rec_data)
                 hid = torch.cat((h1, h2), -1)
                 if self.cfg.get("use_layer_norm", False):
@@ -97,6 +99,7 @@ class ForceField(Module):
                 hid = full_linear_out(F.leaky_relu(hid))
                 hid = hid.view(-1, self.cfg.rbf_steps, self.cfg.out_size)
                 full_rec_hid.append(hid)
+                tot_rec += r
             rec_hid = full_rec_hid
         else:
             rec_hid = self.make(LazyLinear, self.cfg.out_size*self.cfg.rbf_steps)(F.leaky_relu(rec_hid))

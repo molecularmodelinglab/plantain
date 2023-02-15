@@ -6,6 +6,13 @@ from models.force_field import ForceField
 from terrace.batch import Batch, collate
 from terrace.dataframe import DFRow, merge
 from .model import Model
+from validation.metrics import get_rmsds
+
+# def get_transform_rmsds(x, y, transform):
+#     trans_poses = transform.apply(y.lig_crystal_pose)
+#     ret = []
+#     for lig, tps, true_pose in zip(x.lig, trans_poses, y.lig_crystal_pose):
+
 
 class Diffusion(nn.Module, Model):
     def __init__(self, cfg):
@@ -94,6 +101,22 @@ class Diffusion(nn.Module, Model):
                               y.lig_crystal_pose,
                               transform)
 
+    def diffuse_energy(self, batch, y, hid_feat=None):
+        
+        if hid_feat is None:
+            batch_rec_feat, batch_lig_feat = self.get_hidden_feat(batch)
+        else:
+            batch_rec_feat, batch_lig_feat = hid_feat
+        device = batch_lig_feat.device
+
+        transform = self.get_diffused_transforms(len(batch), device)
+
+        return self.get_energy(batch, 
+                              batch_rec_feat,
+                              batch_lig_feat,
+                              y.lig_crystal_pose,
+                              transform)
+
     def infer(self, batch, hid_feat=None):
         """ Final inference -- predict lig_coords directly after randomizing """
 
@@ -126,11 +149,14 @@ class Diffusion(nn.Module, Model):
         lig_pose = collate([poses[-1] for poses in self.infer(batch, hid_feat)])
         return Batch(DFRow, lig_pose=lig_pose)
 
-    def predict_train(self, x, y, task_names):
+    def predict_train(self, x, y, task_names, batch_idx):
         hid_feat = self.get_hidden_feat(x)
         diff = self.diffuse(x, y, hid_feat)
         diff_pose = diff.apply(y.lig_crystal_pose)
         ret_dif = Batch(DFRow, diffused_transforms=diff, diffused_poses=diff_pose)
-        with torch.no_grad():
-            ret_pred = self(x, hid_feat)
-        return merge([ret_dif, ret_pred])
+        if batch_idx % 50 == 0:
+            with torch.no_grad():
+                ret_pred = self(x, hid_feat)
+            return merge([ret_dif, ret_pred])
+        else:
+            return ret_dif
