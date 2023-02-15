@@ -78,7 +78,7 @@ model:
     edge_embed_size: 64
     node_out_size: 128
 
-  num_mpnn_layers: 6
+  num_mpnn_layers: 10
   inner_attention: false
   use_layer_norm: true
   multi_pose_attention: true
