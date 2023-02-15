@@ -6,7 +6,7 @@ from terrace.batch import DataLoader
 from validation.val_plots import make_plots
 
 rlimit = resource.getrlimit(resource.RLIMIT_NOFILE)
-resource.setrlimit(resource.RLIMIT_NOFILE, (4096, rlimit[1]))
+resource.setrlimit(resource.RLIMIT_NOFILE, (32768, rlimit[1]))
 
 import torch
 from tqdm import tqdm

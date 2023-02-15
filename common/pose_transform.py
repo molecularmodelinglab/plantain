@@ -34,10 +34,11 @@ class PoseTransform(Batchable):
 
     @staticmethod
     def make_diffused(diff_cfg, timesteps, batch_size, device):
-        trans_sigma = torch.linspace(0.0, diff_cfg.max_trans_sigma, timesteps, device=device).view((1,-1,1))
+        schedule = torch.linspace(0.0, 1.0, timesteps, device=device).view((1,-1,1))**(diff_cfg.get("exponent", 1.0))
+        trans_sigma = schedule*diff_cfg.max_trans_sigma
         trans = torch.randn((batch_size,timesteps,3), device=device)*trans_sigma
         
-        rot_sigma = torch.linspace(0.0, diff_cfg.max_rot_sigma, timesteps, device=device).view((1,-1,1))
+        rot_sigma = schedule*diff_cfg.max_rot_sigma
         rand_rot = torch.stack([torch.stack([roma.random_rotvec(device=device) for t in range(timesteps)]) for b in range(batch_size)])
         rot = rand_rot*rot_sigma
         return Batch(PoseTransform, rot=rot, trans=trans, trans_sigma=trans, rot_sigma=rot_sigma)
@@ -77,9 +78,10 @@ class PoseTransform(Batchable):
         self.trans.requires_grad_()
 
     def batch_update_from_grad(self, grad):
+        mul = 1.0
         trans_sigma_sq = (self.trans_sigma**2)
         rot_sigma_sq = (self.rot_sigma**2)
-        rot = self.rot - grad.rot # *rot_sigma_sq
-        trans = self.trans - grad.trans # *trans_sigma_sq
+        rot = self.rot - mul*grad.rot # *rot_sigma_sq
+        trans = self.trans - mul*grad.trans # *trans_sigma_sq
         # print(grad.trans.mean(), grad.rot.mean())
         return Batch(PoseTransform, rot=rot, trans=trans)

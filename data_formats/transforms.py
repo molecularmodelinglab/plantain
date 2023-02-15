@@ -64,7 +64,7 @@ def get_docked_conformers(cfg, lig):
             ret.append(min(n,n_confs-1))
         return ret + [n_confs - 1]
     elif sample == 'worst_and_best':
-        assert num_poses is None
+        # assert num_poses is None
         return [n_confs - 1, 0]
 
 @transform(["lig"])
