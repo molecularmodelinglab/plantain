@@ -8,11 +8,15 @@ from terrace.dataframe import DFRow, merge
 from .model import Model
 from validation.metrics import get_rmsds
 
-# def get_transform_rmsds(x, y, transform):
-#     trans_poses = transform.apply(y.lig_crystal_pose)
-#     ret = []
-#     for lig, tps, true_pose in zip(x.lig, trans_poses, y.lig_crystal_pose):
-
+def get_transform_rmsds(x, y, transform):
+    trans_poses = transform.apply(y.lig_crystal_pose)
+    ret = []
+    for lig, tps, true_pose in zip(x.lig, trans_poses, y.lig_crystal_pose):
+        rmsds = []
+        for coord in tps.coord:
+            rmsds.append(get_rmsds([lig], collate([Pose(coord)]), [true_pose])[0])
+        ret.append(torch.stack(rmsds))
+    return torch.stack(ret)
 
 class Diffusion(nn.Module, Model):
     def __init__(self, cfg):
@@ -44,6 +48,18 @@ class Diffusion(nn.Module, Model):
                                            batch_rec_feat,
                                            batch_lig_feat,
                                            lig_poses)
+    def get_energy_raw(self,
+                       batch,
+                       batch_rec_feat,
+                       batch_lig_feat,
+                       batch_lig_pose,
+                       batch_transform):
+        lig_poses = batch_transform.apply(batch_lig_pose)
+        return self.force_field.get_energy(batch,
+                                           batch_rec_feat,
+                                           batch_lig_feat,
+                                           lig_poses)
+                                    
 
     def energy_grad(self,
                     batch,
@@ -115,7 +131,7 @@ class Diffusion(nn.Module, Model):
                               batch_rec_feat,
                               batch_lig_feat,
                               y.lig_crystal_pose,
-                              transform)
+                              transform), get_transform_rmsds(batch, y, transform)
 
     def infer(self, batch, hid_feat=None):
         """ Final inference -- predict lig_coords directly after randomizing """
@@ -151,9 +167,13 @@ class Diffusion(nn.Module, Model):
 
     def predict_train(self, x, y, task_names, batch_idx):
         hid_feat = self.get_hidden_feat(x)
-        diff = self.diffuse(x, y, hid_feat)
-        diff_pose = diff.apply(y.lig_crystal_pose)
-        ret_dif = Batch(DFRow, diffused_transforms=diff, diffused_poses=diff_pose)
+        if self.cfg.get("energy_rmsd", False):
+            diff_energy, diff_rmsds = self.diffuse_energy(x, y, hid_feat)
+            ret_dif = Batch(DFRow, diffused_energy=diff_energy, diffused_rmsds=diff_rmsds)   
+        else:
+            diff = self.diffuse(x, y, hid_feat)
+            diff_pose = diff.apply(y.lig_crystal_pose)
+            ret_dif = Batch(DFRow, diffused_transforms=diff, diffused_poses=diff_pose)
         if batch_idx % 50 == 0:
             with torch.no_grad():
                 ret_pred = self(x, hid_feat)

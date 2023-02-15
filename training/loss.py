@@ -89,6 +89,9 @@ def diffused_pose_mse(x, pred, y):
         ret.append(F.mse_loss(ppose.coord, yt))
     return torch.stack(ret).mean()
 
+def diffused_rmsd_mse(x, pred, y):
+    return F.mse_loss(pred.diffused_energy, pred.diffused_rmsds)
+
 def get_single_loss(loss_cfg, x, pred, y):
     loss_fn = {
         "bce": bce_loss,
@@ -106,6 +109,7 @@ def get_single_loss(loss_cfg, x, pred, y):
         "rot_mse": rot_mse,
         "trans_mse": trans_mse,
         "diffused_pose_mse": diffused_pose_mse,
+        "diffused_rmsd_mse": diffused_rmsd_mse,
     }[loss_cfg.func]
     if "x" in loss_cfg:
         x = getattr(x, loss_cfg["x"])

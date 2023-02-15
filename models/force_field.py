@@ -11,6 +11,16 @@ from .model import ClassifyActivityModel
 from .cat_scal_embedding import CatScalEmbedding
 from .graph_embedding import GraphEmbedding
 
+class ScaleOutput(nn.Module):
+
+    def __init__(self, init_bias):
+        super().__init__()
+        self.bias = nn.Parameter(torch.tensor(init_bias, dtype=torch.float32))
+        self.weight = nn.Parameter(torch.tensor(0.0, dtype=torch.float32))
+
+    def forward(self, x):
+        return x*self.weight + self.bias
+
 def rbf_encode(dists, start, end, steps):
     mu = torch.linspace(start, end, steps, device=dists.device)
     sigma = (start - end)/steps
@@ -105,6 +115,7 @@ class ForceField(Module):
             rec_hid = self.make(LazyLinear, self.cfg.out_size*self.cfg.rbf_steps)(F.leaky_relu(rec_hid))
             rec_hid = rec_hid.view(-1, self.cfg.rbf_steps, self.cfg.out_size)
 
+        self.scale_output = self.make(ScaleOutput, self.cfg.energy_bias)
         return rec_hid, lig_hid
         
     def get_energy(self,
@@ -138,14 +149,17 @@ class ForceField(Module):
             # very hacky way of allowing diffusion model to pass multiple transforms
             # to the energy function
             if len(batch_lig_poses[i].coord.shape) == 3:
+                # print(batch_lig_poses[i].coord.shape)
                 Us = []
                 for lig_coord in batch_lig_poses.coord[i]:
+
                     lc_ex = lig_coord.unsqueeze(1).expand(-1,rec_coord.size(0),-1)
                     rc_ex = rec_coord.unsqueeze(0).expand(lig_coord.size(0),-1,-1)
                     dists = torch.sqrt(((lc_ex - rc_ex)**2).sum(-1))
                     rbfs = rbf_encode(dists, self.cfg.rbf_start,self.cfg.rbf_end,self.cfg.rbf_steps)
 
                     U = (atn_coefs*rbfs*self.cfg.energy_scale).sum()
+                    # print(i, lig_coord[0], U, "!")
                     Us.append(U)
                 all_Us.append(torch.stack(Us))
             else:
@@ -160,7 +174,10 @@ class ForceField(Module):
                 U = (atn_coefs*rbfs*self.cfg.energy_scale).sum()
                 all_Us.append(U)
 
-        return torch.stack(all_Us)
+        ret = torch.stack(all_Us)
+        if "energy_bias" in self.cfg:
+            ret = self.scale_output(ret)
+        return ret
 
 class ForceFieldClassifier(Module, ClassifyActivityModel):
     
