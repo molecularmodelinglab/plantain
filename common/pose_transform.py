@@ -33,6 +33,17 @@ class PoseTransform(Batchable):
     trans: torch.Tensor
 
     @staticmethod
+    def to_raw(t):
+        return torch.cat((t.trans, t.rot), -1).reshape(-1)
+
+    @staticmethod
+    def from_raw(raw):
+        raw = torch.reshape(raw, (-1, 1, 6))
+        trans = raw[...,:3]
+        rot = raw[...,3:]
+        return Batch(PoseTransform, trans=trans, rot=rot)
+
+    @staticmethod
     def make_diffused(diff_cfg, timesteps, batch_size, device):
         schedule = torch.linspace(0.0, 1.0, timesteps, device=device).view((1,-1,1))**(diff_cfg.get("exponent", 1.0))
         trans_sigma = schedule*diff_cfg.max_trans_sigma

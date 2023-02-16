@@ -97,6 +97,7 @@ model:
     use_trans: true
     exponent: 2.0
     energy_rmsd: true
+    optim: bfgs
 
   rbf_start: 0
   rbf_end: 16

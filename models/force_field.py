@@ -115,7 +115,8 @@ class ForceField(Module):
             rec_hid = self.make(LazyLinear, self.cfg.out_size*self.cfg.rbf_steps)(F.leaky_relu(rec_hid))
             rec_hid = rec_hid.view(-1, self.cfg.rbf_steps, self.cfg.out_size)
 
-        self.scale_output = self.make(ScaleOutput, self.cfg.energy_bias)
+        if "energy_bias" in self.cfg:
+            self.scale_output = self.make(ScaleOutput, self.cfg.energy_bias)
         return rec_hid, lig_hid
         
     def get_energy(self,

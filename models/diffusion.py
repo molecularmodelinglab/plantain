@@ -8,6 +8,8 @@ from terrace.dataframe import DFRow, merge
 from .model import Model
 from validation.metrics import get_rmsds
 
+from scipy.optimize import minimize
+
 def get_transform_rmsds(x, y, transform):
     trans_poses = transform.apply(y.lig_crystal_pose)
     ret = []
@@ -48,18 +50,24 @@ class Diffusion(nn.Module, Model):
                                            batch_rec_feat,
                                            batch_lig_feat,
                                            lig_poses)
-    def get_energy_raw(self,
+    def energy_jac_raw(self,
+                       t_raw,
                        batch,
                        batch_rec_feat,
                        batch_lig_feat,
-                       batch_lig_pose,
-                       batch_transform):
-        lig_poses = batch_transform.apply(batch_lig_pose)
-        return self.force_field.get_energy(batch,
-                                           batch_rec_feat,
-                                           batch_lig_feat,
-                                           lig_poses)
-                                    
+                       batch_lig_pose):
+        with torch.set_grad_enabled(True):
+            t_raw = torch.tensor(t_raw, dtype=torch.float32)
+            t_raw.requires_grad_()
+            transform = PoseTransform.from_raw(t_raw)
+            U = self.get_energy(batch,
+                                batch_rec_feat,
+                                batch_lig_feat,
+                                batch_lig_pose,
+                                transform)
+            U_sum = U.sum()
+            grad = torch.autograd.grad(U_sum, t_raw, create_graph=True)[0]
+        return U_sum.numpy(), grad.numpy()       
 
     def energy_grad(self,
                     batch,
@@ -161,8 +169,11 @@ class Diffusion(nn.Module, Model):
 
         return [ collate([all_poses[i][j] for i in range(len(all_poses))]) for j in range(len(all_poses[0]))]
 
-    def forward(self, batch, hid_feat=None):
-        lig_pose = collate([poses[-1] for poses in self.infer(batch, hid_feat)])
+    def forward(self, batch, task_names, hid_feat=None):
+        if self.cfg.optim == "sgd":
+            lig_pose = collate([poses[-1] for poses in self.infer(batch, hid_feat)])
+        elif self.cfg.optim == "bfgs":
+            raise NotImplementedError
         return Batch(DFRow, lig_pose=lig_pose)
 
     def predict_train(self, x, y, task_names, batch_idx):
@@ -180,3 +191,16 @@ class Diffusion(nn.Module, Model):
             return merge([ret_dif, ret_pred])
         else:
             return ret_dif
+
+    def infer_bfgs(self, x, hid_feat = None):
+        if hid_feat is None:
+            batch_rec_feat, batch_lig_feat = self.get_hidden_feat(x)
+        else:
+            batch_rec_feat, batch_lig_feat = hid_feat
+
+        t = PoseTransform.make_initial(self.cfg, len(x), batch_lig_feat.device)
+        raw = PoseTransform.to_raw(t)
+        init_pose = x.lig_embed_pose
+        # print(model.energy_jac_raw(np.array(raw), x, batch_rec_feat, batch_lig_feat, init_pose))
+        res = minimize(self.energy_jac_raw, raw, (x, batch_rec_feat, batch_lig_feat, init_pose), method='SLSQP', jac=True)
+        raw_opt = res.x

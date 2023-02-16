@@ -84,6 +84,7 @@ class Trainer(pl.LightningModule):
         return dataset
 
     def shared_eval(self, prefix, batch, batch_idx, dataset_idx=None):
+
         x, y = batch
         tasks = self.get_tasks(prefix, dataset_idx)
         metrics = self.make_metrics(prefix, tasks, dataset_idx)
@@ -105,11 +106,15 @@ class Trainer(pl.LightningModule):
                 computed_metrics[key] = val.compute()
                 val.apply(reset_metrics)
 
-        dataset_name = self.get_dataset(prefix, dataset_idx).get_name()
+        dataset = self.get_dataset(prefix, dataset_idx)
+        tot_batches = len(dataset)//self.cfg.batch_size
+        is_last_batch = (tot_batches == batch_idx + 1)
+
+        dataset_name = dataset.get_name()
         for key, val in flatten_dict(computed_metrics).items():
             self.log(f"{prefix}/{dataset_name}/{key}", val, prog_bar=False, on_step=on_step, on_epoch=on_epoch, batch_size=len(x), add_dataloader_idx=False)
         
-        if self.trainer.is_last_batch and prefix != "train":
+        if is_last_batch and prefix != "train":
             self.log_all_metrics(prefix, dataset_idx)
 
         if "profile_max_batches" in self.cfg and batch_idx >= self.cfg.profile_max_batches:
