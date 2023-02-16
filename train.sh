@@ -3,13 +3,13 @@
 #SBATCH -t 10-00:00:00
 #SBATCH --partition=gpu
 #SBATCH --cpus-per-task=16
-#SBATCH --mem=16G
+#SBATCH --mem=32G
 #SBATCH --gres=gpu:1
 #SBATCH --output=jobs/R-%x.%j.out
 #SBATCH --error=jobs/R-%x.%j.err
 #SBATCH --gres=gpu:1
 #SBATCH --qos=gpu_access
-#SBATCH --exclude=g0601
+#SBATCH --exclude=g0605
 # ^^^ until they fix that node
 
 __conda_setup="$('/nas/longleaf/home/mixarcid/miniconda3/bin/conda' 'shell.bash' 'hook' 2> /dev/null)"
@@ -30,4 +30,9 @@ conda activate chem-py3.9
 
 cd /nas/longleaf/home/mixarcid/plantain
 
+rm -rf plantain
+rm -rf plantain_pose
+rm -rf wandb
+
+pip install --upgrade terrace
 python train.py $@
