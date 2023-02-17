@@ -118,19 +118,25 @@ class PoseTransform(Batchable):
         return PoseTransform(rot=rot_grad, trans=trans_grad)
 
     def batch_grad(self, U):
-        rot_grad, trans_grad = torch.autograd.grad(U, [self.rot, self.trans], create_graph=True)
-        return Batch(PoseTransform, rot=rot_grad, trans=trans_grad)
+        rot_grad, trans_grad, *tor_grad = torch.autograd.grad(U, [self.rot, self.trans, *self.tor_angles], create_graph=True)
+        return Batch(PoseTransform, rot=rot_grad, trans=trans_grad, tor_angles=tor_grad)
 
     def batch_requires_grad(self):
         self.rot.requires_grad_()
         self.trans.requires_grad_()
+        for angle in self.tor_angles:
+            angle.requires_grad_()
 
     def requires_grad(self):
         self.rot.requires_grad_()
         self.trans.requires_grad_()
+        self.tor_angles.requires_grad_()
 
     def batch_update_from_grad(self, grad):
         mul = 1.0
         rot = self.rot - mul*grad.rot
         trans = self.trans - mul*grad.trans
-        return Batch(PoseTransform, rot=rot, trans=trans)
+        tor = []
+        for angle, grad_angle in zip(self.tor_angles, grad.tor_angles):
+            tor.append(angle - mul*grad_angle)
+        return Batch(PoseTransform, rot=rot, trans=trans, tor_angles=tor)
