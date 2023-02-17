@@ -11,7 +11,7 @@ from validation.metrics import get_rmsds
 from scipy.optimize import minimize
 
 def get_transform_rmsds(x, y, transform):
-    trans_poses = transform.apply(y.lig_crystal_pose)
+    trans_poses = transform.apply(y.lig_crystal_pose, x.lig_torsion_data)
     ret = []
     for lig, tps, true_pose in zip(x.lig, trans_poses, y.lig_crystal_pose):
         rmsds = []
@@ -31,7 +31,7 @@ class Diffusion(nn.Module, Model):
         return "diffusion"
 
     def get_input_feats(self):
-        return ["lig_embed_pose"] + self.force_field.get_input_feats()
+        return ["lig_embed_pose", "lig_torsion_data"] + self.force_field.get_input_feats()
 
     def get_tasks(self):
         return ["predict_lig_pose"]
@@ -45,21 +45,23 @@ class Diffusion(nn.Module, Model):
                    batch_lig_feat,
                    batch_lig_pose,
                    batch_transform):
-        lig_poses = batch_transform.apply(batch_lig_pose)
+        lig_poses = batch_transform.apply(batch_lig_pose, batch.lig_torsion_data)
         return self.force_field.get_energy(batch,
                                            batch_rec_feat,
                                            batch_lig_feat,
                                            lig_poses)
     def energy_jac_raw(self,
                        t_raw,
+                       t_template,
                        batch,
                        batch_rec_feat,
                        batch_lig_feat,
                        batch_lig_pose):
         with torch.set_grad_enabled(True):
-            t_raw = torch.tensor(t_raw, dtype=torch.float32)
+            device = batch_lig_feat.device
+            t_raw = torch.tensor(t_raw, dtype=torch.float32, device=device)
             t_raw.requires_grad_()
-            transform = PoseTransform.from_raw(t_raw)
+            transform = PoseTransform.from_raw(t_raw, t_template)
             U = self.get_energy(batch,
                                 batch_rec_feat,
                                 batch_lig_feat,
@@ -67,7 +69,7 @@ class Diffusion(nn.Module, Model):
                                 transform)
             U_sum = U.sum()
             grad = torch.autograd.grad(U_sum, t_raw, create_graph=True)[0]
-        return U_sum.numpy(), grad.numpy()       
+        return U_sum.cpu().numpy(), grad.cpu().numpy()       
 
     def energy_grad(self,
                     batch,
@@ -84,16 +86,15 @@ class Diffusion(nn.Module, Model):
                                 batch_lig_pose,
                                 transform)
             U_sum = U.sum()
-            # print(U_sum)
 
             return transform.grad(U_sum) 
 
-    def get_diffused_transforms(self, batch_size, device, timesteps=None):
+    def get_diffused_transforms(self, batch, device, timesteps=None):
         diff_cfg = self.cfg
         if timesteps is None:
             timesteps = diff_cfg.timesteps
 
-        return PoseTransform.make_diffused(diff_cfg, timesteps, batch_size, device)
+        return PoseTransform.make_diffused(diff_cfg, timesteps, batch, device)
 
     def pred_pose(self,
                   batch,
@@ -117,7 +118,7 @@ class Diffusion(nn.Module, Model):
             batch_rec_feat, batch_lig_feat = hid_feat
         device = batch_lig_feat.device
 
-        transform = self.get_diffused_transforms(len(batch), device)
+        transform = self.get_diffused_transforms(batch, device)
 
         return self.pred_pose(batch, 
                               batch_rec_feat,
@@ -133,7 +134,7 @@ class Diffusion(nn.Module, Model):
             batch_rec_feat, batch_lig_feat = hid_feat
         device = batch_lig_feat.device
 
-        transform = self.get_diffused_transforms(len(batch), device)
+        transform = self.get_diffused_transforms(batch, device)
 
         return self.get_energy(batch, 
                               batch_rec_feat,
@@ -141,7 +142,7 @@ class Diffusion(nn.Module, Model):
                               y.lig_crystal_pose,
                               transform), get_transform_rmsds(batch, y, transform)
 
-    def infer(self, batch, hid_feat=None):
+    def infer_sgd(self, batch, hid_feat=None):
         """ Final inference -- predict lig_coords directly after randomizing """
 
         if hid_feat is None:
@@ -150,7 +151,7 @@ class Diffusion(nn.Module, Model):
             batch_rec_feat, batch_lig_feat = hid_feat
         device = batch_lig_feat.device
 
-        transform = PoseTransform.make_initial(self.cfg, len(batch), device)
+        transform = PoseTransform.make_initial(self.cfg, batch, device)
         init_pose = batch.lig_embed_pose
 
         trans_sigma = torch.linspace(0.0, self.cfg.max_trans_sigma, self.cfg.timesteps, device=device).view((1,-1,1))
@@ -165,15 +166,17 @@ class Diffusion(nn.Module, Model):
                                        batch_lig_feat,
                                        init_pose,
                                        transform)
-            all_poses.append(Batch(Pose, coord=[p.coord[0] for p in transform.apply(init_pose)]))
+            all_poses.append(Batch(Pose, coord=[p.coord[0] for p in transform.apply(init_pose, batch.lig_torsion_data)]))
 
         return [ collate([all_poses[i][j] for i in range(len(all_poses))]) for j in range(len(all_poses[0]))]
 
-    def forward(self, batch, task_names, hid_feat=None):
-        if self.cfg.optim == "sgd":
-            lig_pose = collate([poses[-1] for poses in self.infer(batch, hid_feat)])
-        elif self.cfg.optim == "bfgs":
-            raise NotImplementedError
+    def forward(self, batch, hid_feat=None):
+        optim = self.cfg.get("optim", "bfgs")
+        if optim == "sgd":
+            lig_pose = collate([poses[-1] for poses in self.infer_sgd(batch, hid_feat)])
+        elif optim == "bfgs":
+            lig_pose, energy = self.infer_bfgs(batch, hid_feat)
+            # return Batch(DFRow, lig_pose=lig_pose, energy=energy)
         return Batch(DFRow, lig_pose=lig_pose)
 
     def predict_train(self, x, y, task_names, batch_idx):
@@ -183,7 +186,7 @@ class Diffusion(nn.Module, Model):
             ret_dif = Batch(DFRow, diffused_energy=diff_energy, diffused_rmsds=diff_rmsds)   
         else:
             diff = self.diffuse(x, y, hid_feat)
-            diff_pose = diff.apply(y.lig_crystal_pose)
+            diff_pose = diff.apply(y.lig_crystal_pose, x.lig_torsion_data)
             ret_dif = Batch(DFRow, diffused_transforms=diff, diffused_poses=diff_pose)
         if batch_idx % 50 == 0:
             with torch.no_grad():
@@ -192,15 +195,33 @@ class Diffusion(nn.Module, Model):
         else:
             return ret_dif
 
-    def infer_bfgs(self, x, hid_feat = None):
+    @torch.no_grad()
+    def infer_bfgs(self, x, hid_feat = None, train=False):
         if hid_feat is None:
             batch_rec_feat, batch_lig_feat = self.get_hidden_feat(x)
         else:
             batch_rec_feat, batch_lig_feat = hid_feat
 
-        t = PoseTransform.make_initial(self.cfg, len(x), batch_lig_feat.device)
-        raw = PoseTransform.to_raw(t)
-        init_pose = x.lig_embed_pose
-        # print(model.energy_jac_raw(np.array(raw), x, batch_rec_feat, batch_lig_feat, init_pose))
-        res = minimize(self.energy_jac_raw, raw, (x, batch_rec_feat, batch_lig_feat, init_pose), method='SLSQP', jac=True)
-        raw_opt = res.x
+        device = batch_lig_feat.device
+        best_energy = 1e10
+        best_pose = None
+        n_tries = 1 if train else self.cfg.get("optim_tries", 3)
+        method = "BFGS"
+        options = {
+            # "disp": True,
+            "maxiter": 20 if train else 30,
+        }
+        for i in range(n_tries):
+            t = PoseTransform.make_initial(self.cfg, x, device)
+            raw = PoseTransform.to_raw(t).cpu().numpy()
+            init_pose = x.lig_embed_pose
+            # print(model.energy_jac_raw(np.array(raw), x, batch_rec_feat, batch_lig_feat, init_pose))
+            res = minimize(self.energy_jac_raw, raw, (t, x, batch_rec_feat, batch_lig_feat, init_pose), method=method, jac=True, options=options)
+            opt_raw = torch.tensor(res.x, dtype=torch.float32, device=device)
+            t_opt = PoseTransform.from_raw(opt_raw, t)
+            pose = Batch(Pose, coord=[p.coord[0] for p in t_opt.apply(init_pose, x.lig_torsion_data)])
+            if res.fun < best_energy:
+                best_energy = res.fun
+                best_pose = pose
+
+        return best_pose, torch.tensor(best_energy, dtype=torch.float32, device=device)

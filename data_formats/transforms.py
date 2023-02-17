@@ -3,6 +3,7 @@ from dataclassy import dataclass
 import torch
 from typing import Any, Callable, List
 from common.pose_transform import Pose
+from common.torsion import TorsionData
 from data_formats.graphs.mol_graph import MolGraph, get_mol_coords
 from data_formats.graphs.prot_graph import ProtGraph, get_full_rec_data
 
@@ -76,5 +77,9 @@ def lig_docked_poses(cfg, x):
 @transform(["rec"])
 def full_rec_data(cfg, x):
     return get_full_rec_data(cfg, x.rec)
+
+@transform(["lig"])
+def lig_torsion_data(cfg, x):
+    return TorsionData.from_mol(x.lig)
 
 

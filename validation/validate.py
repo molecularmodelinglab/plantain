@@ -25,7 +25,7 @@ def get_preds(cfg, model, dataset_name, split, num_batches):
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model = model.to(device)
 
-    loader = make_dataloader(cfg, dataset_name, split, model.get_data_format())
+    loader = make_dataloader(cfg, dataset_name, split, model.get_input_feats())
     if num_batches is not None:
         # shuffle to get better sample
         loader = DataLoader(loader.dataset,
@@ -44,7 +44,7 @@ def get_preds(cfg, model, dataset_name, split, num_batches):
     for i, (x, y) in enumerate(tqdm(loader)):
         x = x.to(device)
         y = y.to(device)
-        pred = model.predict(tasks, x)
+        pred = model.predict(x, tasks)
         if num_batches is not None and i >= num_batches:
 
             break
@@ -62,20 +62,13 @@ def validate(cfg, model, dataset_name, split, num_batches=None):
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model = model.to(device)
 
-    loader = make_dataloader(cfg, dataset_name, split, model.get_data_format())
+    loader = make_dataloader(cfg, dataset_name, split, model.get_input_feats())
     tasks = set(model.get_tasks()).intersection(loader.dataset.get_tasks())
     metrics = get_metrics(cfg, tasks, offline=True).to(device)
 
     x, y, pred = get_preds(cfg, model, dataset_name, split, num_batches)
     for metric in metrics.values():
         metric.update(x, pred, y)
-    
-    # for i, (x, y) in enumerate(tqdm(loader)):
-    #     pred = model.predict(tasks, x)
-    #     for metric in metrics.values():
-    #         metric.update(x, pred, y)
-    #     if num_batches is not None and i >= num_batches:
-    #         break
 
     comp_mets = {
         key: val.cpu().compute() for key, val in metrics.items()
