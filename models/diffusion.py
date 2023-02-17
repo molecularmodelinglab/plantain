@@ -153,14 +153,9 @@ class Diffusion(nn.Module, Model):
 
         transform = PoseTransform.make_initial(self.cfg, batch, device)
         init_pose = batch.lig_embed_pose
-
-        trans_sigma = torch.linspace(0.0, self.cfg.max_trans_sigma, self.cfg.timesteps, device=device).view((1,-1,1))
-        rot_sigma = torch.linspace(0.0, self.cfg.max_rot_sigma, self.cfg.timesteps, device=device).view((1,-1,1))
-
+        
         all_poses = []
         for t in range(self.cfg.timesteps):
-            transform.trans_sigma = trans_sigma[:,-1-t]
-            transform.rot_sigma = rot_sigma[:,-1-t]
             transform = self.pred_pose(batch, 
                                        batch_rec_feat,
                                        batch_lig_feat,
