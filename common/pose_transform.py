@@ -118,7 +118,8 @@ class PoseTransform(Batchable):
         return PoseTransform(rot=rot_grad, trans=trans_grad)
 
     def batch_grad(self, U):
-        rot_grad, trans_grad, *tor_grad = torch.autograd.grad(U, [self.rot, self.trans, *self.tor_angles], create_graph=True)
+        # todo: why allow unused?
+        rot_grad, trans_grad, *tor_grad = torch.autograd.grad(U, [self.rot, self.trans, *self.tor_angles], create_graph=True, allow_unused=True)
         return Batch(PoseTransform, rot=rot_grad, trans=trans_grad, tor_angles=tor_grad)
 
     def batch_requires_grad(self):
