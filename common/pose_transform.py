@@ -139,5 +139,7 @@ class PoseTransform(Batchable):
         trans = self.trans - mul*grad.trans
         tor = []
         for angle, grad_angle in zip(self.tor_angles, grad.tor_angles):
+            if grad_angle is None:
+                tor.append(angle)
             tor.append(angle - mul*grad_angle)
         return Batch(PoseTransform, rot=rot, trans=trans, tor_angles=tor)
