@@ -165,12 +165,12 @@ class Diffusion(nn.Module, Model):
 
         return [ collate([all_poses[i][j] for i in range(len(all_poses))]) for j in range(len(all_poses[0]))]
 
-    def forward(self, batch, hid_feat=None):
-        optim = "sgd" # self.cfg.get("optim", "bfgs")
+    def forward(self, batch, hid_feat=None, train=False):
+        optim = "sgd" if train else self.cfg.get("optim", "bfgs")
         if optim == "sgd":
             lig_pose = collate([poses[-1] for poses in self.infer_sgd(batch, hid_feat)])
         elif optim == "bfgs":
-            lig_pose, energy = self.infer_bfgs(batch, hid_feat)
+            lig_pose, energy = self.infer_bfgs(batch, hid_feat, train)
             # return Batch(DFRow, lig_pose=lig_pose, energy=energy)
         return Batch(DFRow, lig_pose=lig_pose)
 

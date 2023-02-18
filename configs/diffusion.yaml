@@ -82,6 +82,7 @@ model:
   inner_attention: false
   use_layer_norm: true
   multi_pose_attention: true
+  intra_lig_energy: true
   energy_bias: 3.7
 
   project_full_atom: true
@@ -92,8 +93,8 @@ model:
   diffusion:
     timesteps: 16
     max_trans_sigma: 4.0
-    # max_rot_sigma: 1.0
-    max_tor_sigma: 1.0
+    max_rot_sigma: 1.5
+    max_tor_sigma: 1.5
     use_rot: true
     use_trans: true
     exponent: 2.0

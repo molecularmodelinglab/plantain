@@ -70,11 +70,13 @@ class PoseTransform(Batchable):
         schedule = torch.linspace(0.0, 1.0, timesteps, device=device).view((1,-1,1))**(diff_cfg.get("exponent", 1.0))
         trans_sigma = schedule*diff_cfg.max_trans_sigma
         trans = torch.randn((batch_size,timesteps,3), device=device)*trans_sigma
-        # print(trans)
 
-        # todo: make proper normal distrution?
         rand_rot = torch.stack([torch.stack([roma.random_rotvec(device=device) for t in range(timesteps)]) for b in range(batch_size)])
-        rot = rand_rot*schedule
+        if hasattr(diff_cfg, "max_rot_sigma"):
+            rot_sigma = schedule*diff_cfg.max_rot_sigma
+            rot = rand_rot*torch.randn((batch_size, timesteps, 1))*rot_sigma
+        else:
+            rot = rand_rot*schedule
 
         tor_sigma = schedule.view(-1,1)*diff_cfg.max_tor_sigma
         angles = []
@@ -89,8 +91,9 @@ class PoseTransform(Batchable):
         trans_sigma = diff_cfg.max_trans_sigma
         trans = torch.randn((batch_size,1,3), device=device)*trans_sigma
     
-        rand_rot = torch.stack([torch.stack([roma.random_rotvec(device=device)]) for b in range(batch_size)])
-        rot = rand_rot
+        rot = torch.stack([torch.stack([roma.random_rotvec(device=device)]) for b in range(batch_size)])
+        if hasattr(diff_cfg, "max_rot_sigma") and diff_cfg.max_rot_sigma == 0:
+            rot = torch.zeros_like(rot)
 
         angles = []
         for tor_data in batch.lig_torsion_data:
@@ -143,4 +146,5 @@ class PoseTransform(Batchable):
                 tor.append(angle)
             else:
                 tor.append(angle - mul*grad_angle)
+        print(grad.rot, grad.tor_angles)
         return Batch(PoseTransform, rot=rot, trans=trans, tor_angles=tor)
