@@ -54,7 +54,7 @@ class ForceField(Module):
         if kill_diag:
             interact = interact.clone()
             interact.diagonal(dim1=0, dim2=1).zero_()
-        return (interact).sum()
+        return interact.sum()
 
     def get_hidden_feat(self, x):
         self.start_forward()

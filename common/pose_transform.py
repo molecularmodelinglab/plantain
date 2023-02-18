@@ -74,7 +74,7 @@ class PoseTransform(Batchable):
         rand_rot = torch.stack([torch.stack([roma.random_rotvec(device=device) for t in range(timesteps)]) for b in range(batch_size)])
         if hasattr(diff_cfg, "max_rot_sigma"):
             rot_sigma = schedule*diff_cfg.max_rot_sigma
-            rot = rand_rot*torch.randn((batch_size, timesteps, 1))*rot_sigma
+            rot = rand_rot*torch.randn((batch_size, timesteps, 1), device=device)*rot_sigma
         else:
             rot = rand_rot*schedule
 
