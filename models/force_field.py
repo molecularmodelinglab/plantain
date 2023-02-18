@@ -47,10 +47,14 @@ class ForceField(Module):
             ret.append("full_rec_data")
         return ret
 
-    def energy_from_atn_coef(self, atn_coefs, coord1, coord2):
+    def energy_from_atn_coef(self, atn_coefs, coord1, coord2, kill_diag = False):
         dists = cdist_diff(coord1, coord2)
         rbfs = rbf_encode(dists, self.cfg.rbf_start,self.cfg.rbf_end,self.cfg.rbf_steps)
-        return (atn_coefs*rbfs*self.cfg.energy_scale).sum()
+        interact = atn_coefs*rbfs*self.cfg.energy_scale
+        if kill_diag:
+            interact = interact.clone()
+            interact.diagonal(dim1=0, dim2=1).zero_()
+        return (interact).sum()
 
     def get_hidden_feat(self, x):
         self.start_forward()
@@ -171,7 +175,7 @@ class ForceField(Module):
             def get_U(lig_coord):
                 U = self.energy_from_atn_coef(atn_coefs, lig_coord, rec_coord)
                 if use_intra_lig:
-                    U += self.energy_from_atn_coef(ll_atn, lig_coord, lig_coord)
+                    U += self.energy_from_atn_coef(ll_atn, lig_coord, lig_coord, kill_diag=True)
                 return U
 
             # very hacky way of allowing diffusion model to pass multiple transforms
