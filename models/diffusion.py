@@ -166,7 +166,7 @@ class Diffusion(nn.Module, Model):
         return [ collate([all_poses[i][j] for i in range(len(all_poses))]) for j in range(len(all_poses[0]))]
 
     def forward(self, batch, hid_feat=None, train=False):
-        optim = "sgd" if train else self.cfg.get("optim", "bfgs")
+        optim = "sgd"#  if train else self.cfg.get("optim", "bfgs")
         if optim == "sgd":
             lig_pose = collate([poses[-1] for poses in self.infer_sgd(batch, hid_feat)])
         elif optim == "bfgs":
@@ -185,7 +185,7 @@ class Diffusion(nn.Module, Model):
             ret_dif = Batch(DFRow, diffused_transforms=diff, diffused_poses=diff_pose)
         if batch_idx % 50 == 0:
             with torch.no_grad():
-                ret_pred = self(x, hid_feat)
+                ret_pred = self(x, hid_feat, train=True)
             return merge([ret_dif, ret_pred])
         else:
             return ret_dif

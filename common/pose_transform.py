@@ -146,5 +146,5 @@ class PoseTransform(Batchable):
                 tor.append(angle)
             else:
                 tor.append(angle - mul*grad_angle)
-        print(grad.rot, grad.tor_angles)
+        # print(grad.rot, grad.tor_angles)
         return Batch(PoseTransform, rot=rot, trans=trans, tor_angles=tor)

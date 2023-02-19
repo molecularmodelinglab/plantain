@@ -48,7 +48,10 @@ class ForceField(Module):
         return ret
 
     def energy_from_atn_coef(self, atn_coefs, coord1, coord2, kill_diag = False):
-        dists = cdist_diff(coord1, coord2)
+        # whaaa
+        # for some reason it _ ised cdist_diff when coord1 == coord2
+        # we get a bunch of NaNs
+        dists = torch.cdist(coord1, coord2) # cdist_diff(coord1, coord2)
         rbfs = rbf_encode(dists, self.cfg.rbf_start,self.cfg.rbf_end,self.cfg.rbf_steps)
         interact = atn_coefs*rbfs*self.cfg.energy_scale
         if kill_diag:
