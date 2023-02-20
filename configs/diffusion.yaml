@@ -83,6 +83,7 @@ model:
   use_layer_norm: true
   multi_pose_attention: true
   intra_lig_energy: true
+  asym_lig_energy: true
   energy_bias: 3.7
 
   project_full_atom: true

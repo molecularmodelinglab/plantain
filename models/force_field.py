@@ -171,7 +171,10 @@ class ForceField(Module):
             use_intra_lig = self.cfg.get("intra_lig_energy", False)
             if use_intra_lig:
                 atn_coefs = torch.einsum('lef,ref->lre', lig_feat[:,0], rec_feat)
-                ll_atn = torch.einsum("lef,ref->lre", lig_feat[:,1], lig_feat[:,1])
+                if self.cfg.get("asym_lig_energy", False):
+                    ll_atn = torch.einsum("lef,ref->lre", lig_feat[:,0], lig_feat[:,1])
+                else:
+                    ll_atn = torch.einsum("lef,ref->lre", lig_feat[:,1], lig_feat[:,1])
             else:
                 atn_coefs = torch.einsum('lef,ref->lre', lig_feat, rec_feat)
 
