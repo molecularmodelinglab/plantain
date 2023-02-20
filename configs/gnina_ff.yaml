@@ -53,11 +53,11 @@ losses:
     func: bce
     pred: active_prob_unnorm
     y: is_active
-    weight: 0.5
+    weight: 1.0
   
   worse_pose_bce:
     func: worse_pose_bce
-    weight: 0.5
+    weight: 0.0
 
   # opposite_pose_bce:
   #   func: opposite_pose_bce
