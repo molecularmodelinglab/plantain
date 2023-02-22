@@ -19,5 +19,5 @@ omegaconf
 torchmetrics
 rdkit
 py3Dmol
-# jax
-# jaxlib
+jax
+jaxlib
