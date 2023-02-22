@@ -1,7 +1,10 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import jax
 from common.pose_transform import PoseTransform, Pose
+from common.torsion import TorsionData
+from common.jorch import to_jax
 from models.force_field import ForceField
 from terrace.batch import Batch, collate
 from terrace.dataframe import DFRow, merge
@@ -9,6 +12,10 @@ from .model import Model
 from validation.metrics import get_rmsds
 
 from scipy.optimize import minimize
+
+class Wrapper:
+    def __init__(self, obj):
+        self.obj = obj
 
 def get_transform_rmsds(x, y, transform):
     trans_poses = transform.apply(y.lig_crystal_pose, x.lig_torsion_data)
@@ -69,7 +76,26 @@ class Diffusion(nn.Module, Model):
                                 transform)
             U_sum = U.sum()
             grad = torch.autograd.grad(U_sum, t_raw, create_graph=True)[0]
-        return U_sum.cpu().numpy(), grad.cpu().numpy()       
+        return U_sum.cpu().numpy(), grad.cpu().numpy()
+
+    def energy_raw(self,
+                   t_raw,
+                   # tor_data_wrap,
+                   rot_edges,
+                   rot_masks,
+                   lig_feat,
+                   rec_feat,
+                   init_lig_coord,
+                   rec_coord):
+        # tor_data = tor_data_wrap.obj
+        transform = PoseTransform.from_raw(t_raw)
+        tor_data = TorsionData(rot_edges, rot_masks)
+        lig_pose = transform.apply(Pose(coord=init_lig_coord), tor_data)
+        U = self.force_field.get_energy_single(rec_feat,
+                                   lig_feat,
+                                   rec_coord,
+                                   lig_pose.coord)
+        return U
 
     def energy_grad(self,
                     batch,
@@ -166,7 +192,7 @@ class Diffusion(nn.Module, Model):
         return [ collate([all_poses[i][j] for i in range(len(all_poses))]) for j in range(len(all_poses[0]))]
 
     def forward(self, batch, hid_feat=None, train=False):
-        optim = "sgd"#  if train else self.cfg.get("optim", "bfgs")
+        optim = "bfgs"#  if train else self.cfg.get("optim", "bfgs")
         if optim == "sgd":
             lig_pose = collate([poses[-1] for poses in self.infer_sgd(batch, hid_feat)])
         elif optim == "bfgs":
@@ -197,10 +223,68 @@ class Diffusion(nn.Module, Model):
         else:
             batch_rec_feat, batch_lig_feat = hid_feat
 
+        ret = []
+
+        tot_lig = 0
+        for i, l in enumerate(x.lig_graph.dgl().batch_num_nodes()):
+
+            lig_feat = batch_lig_feat[tot_lig:tot_lig+l]
+            rec_feat = batch_rec_feat[i]
+            tot_lig += l
+
+            ret.append(self.infer_bfgs_single(x[i], rec_feat, lig_feat, train))
+
+        return collate(ret)
+
+    def infer_bfgs_single(self, x, rec_feat, lig_feat, train):
+        if hasattr(self, "cached_f"):
+            f = self.cached_f
+        else:
+            f = jax.jit(jax.value_and_grad(to_jax(self.energy_raw)))
+            self.cached_f = f
+            
+        method = "BFGS"
+        options = {
+            # "disp": True,
+            "maxiter": 20 if train else 30,
+        }
+        
+        device = lig_feat.device
+        t = PoseTransform.make_initial(self.cfg, collate([x]), 'cpu')[0]
+        raw = PoseTransform.to_raw(t).numpy()
+
+        extra_args = (
+            x.lig_torsion_data.rot_edges.detach().cpu().numpy(),
+            x.lig_torsion_data.rot_masks.detach().cpu().numpy(),
+            lig_feat.detach().cpu().numpy(),
+            rec_feat.detach().cpu().numpy(),
+            x.lig_embed_pose.coord.detach().cpu().numpy(),
+            x.full_rec_data.coord.detach().cpu().numpy()
+        )
+        best_energy = 1e10
+        n_tries = 1 if train else self.cfg.get("optim_tries", 10)
+        for i in range(n_tries):
+            res = minimize(f, raw, extra_args, method=method, jac=True, options=options)
+            opt_raw = torch.tensor(res.x, dtype=torch.float32, device=device)
+            t_opt = PoseTransform.from_raw(opt_raw)
+            pose = t_opt.apply(x.lig_embed_pose, x.lig_torsion_data)
+            if res.fun < best_energy:
+                best_energy = res.fun
+                best_pose = pose
+        
+        return best_pose, best_energy
+
+    @torch.no_grad()
+    def infer_bfgs_old(self, x, hid_feat = None, train=False):
+        if hid_feat is None:
+            batch_rec_feat, batch_lig_feat = self.get_hidden_feat(x)
+        else:
+            batch_rec_feat, batch_lig_feat = hid_feat
+
         device = batch_lig_feat.device
         best_energy = 1e10
         best_pose = None
-        n_tries = 1 if train else self.cfg.get("optim_tries", 3)
+        n_tries = 1 if train else self.cfg.get("optim_tries", 10)
         method = "BFGS"
         options = {
             # "disp": True,

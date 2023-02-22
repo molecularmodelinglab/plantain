@@ -3,7 +3,9 @@ import torch
 import roma
 import math
 import networkx as nx
+import jax
 from rdkit import Chem
+from common.jorch import JorchTensor, jorch_unwrap, jorch_wrap
 from terrace import Batchable
 
 # many of these functions are takem/modified from:
@@ -11,43 +13,49 @@ from terrace import Batchable
 # and https://github.com/gcorso/torsional-diffusion/blob/master/utils/torsion.py
 
 def rigid_transform_Kabsch_3D_torch(A, B):
-    assert A.shape[1] == B.shape[1]
-    num_rows, num_cols = A.shape
-    if num_rows != 3:
-        raise Exception(f"matrix A is not 3xN, it is {num_rows}x{num_cols}")
-    num_rows, num_cols = B.shape
-    if num_rows != 3:
-        raise Exception(f"matrix B is not 3xN, it is {num_rows}x{num_cols}")
+    # assert A.shape[1] == B.shape[1]
+    # num_rows, num_cols = A.shape
+    # if num_rows != 3:
+    #     raise Exception(f"matrix A is not 3xN, it is {num_rows}x{num_cols}")
+    # num_rows, num_cols = B.shape
+    # if num_rows != 3:
+    #     raise Exception(f"matrix B is not 3xN, it is {num_rows}x{num_cols}")
 
 
     # find mean column wise: 3 x 1
-    centroid_A = torch.mean(A, axis=1, keepdims=True)
-    centroid_B = torch.mean(B, axis=1, keepdims=True)
+    centroid_A = torch.mean(A, axis=-1, keepdims=True)
+    centroid_B = torch.mean(B, axis=-1, keepdims=True)
 
     # subtract mean
     Am = A - centroid_A
     Bm = B - centroid_B
 
-    H = Am @ Bm.T
+    H = Am @ Bm.transpose(-2,-1)
 
     # find rotation
-    U, S, Vt = torch.linalg.svd(H)
+    U, S, Vt = torch.linalg.svd(H, full_matrices=False)
 
-    R = Vt.T @ U.T
+    R = Vt.transpose(-2,-1) @ U.transpose(-2,-1)
 
-    # special reflection case
-    if torch.linalg.det(R) < 0:
-        # print("det(R) < R, reflection detected!, correcting for it ...")
-        SS = torch.diag(torch.tensor([1.,1.,-1.], device=A.device))
-        R = (Vt.T @ SS) @ U.T
-    assert math.fabs(torch.linalg.det(R) - 1) < 1e-5
+    # # special reflection case
+    # if len(R.shape) == 3:
+    #     for i in range(R.shape[0]):
+    #         if torch.linalg.det(R[i]) < 0:
+    #             SS = torch.diag(torch.tensor([1.,1.,-1.], device=A.device))
+    #             R[i] = (Vt[i].T @ SS) @ U[i].T
+    # else:
+    #     assert len(R.shape) == 2
+    #     if torch.linalg.det(R) < 0:
+    #         SS = torch.diag(torch.tensor([1.,1.,-1.], device=A.device))
+    #         R = (Vt.T @ SS) @ U.T
+    # assert (torch.abs(torch.linalg.det(R) - 1) < 1e-5).all()
 
     t = -R @ centroid_A + centroid_B
     return R, t
 
 def rigid_align(A, B):
-    R, t = rigid_transform_Kabsch_3D_torch(A.T, B.T)
-    return (R@A.T + t).T
+    R, t = rigid_transform_Kabsch_3D_torch(A.transpose(-2,-1), B.transpose(-2,-1))
+    return (R@A.transpose(-2,-1) + t).transpose(-2,-1)
 
 def mol_to_nx(mol):
     G = nx.Graph()
@@ -102,9 +110,11 @@ class TorsionData(Batchable):
             ax = coord[idx2] - coord[idx1]
             ax_norm = ax/torch.linalg.norm(ax)
             rot = roma.rotvec_to_rotmat(ax_norm*angle)
+            to_rotate = coord # [mask]
             rotated = torch.einsum('ij,bj->bi', rot, (to_rotate - coord[idx2])) + coord[idx2]
-            ret = coord.clone()
-            ret[mask] = rotated
+            # ret = coord.clone()
+            # ret[mask] = rotated
+            ret = coord*(~mask.unsqueeze(-1)) + rotated*mask.unsqueeze(-1)
             return ret
         elif len(angle.shape) == 1 and len(coord.shape) == 3:
             ax = coord[:,idx2] - coord[:,idx1]
@@ -132,7 +142,15 @@ class TorsionData(Batchable):
             raise NotImplementedError
 
     def set_all_angles(self, angles, coord):
-        new_coord = coord
-        for idx in range(angles.shape[-1]):
-            new_coord = self.set_angle(idx, angles[...,idx], new_coord)
-        return new_coord # rigid_align(new_coord, coord)
+        if isinstance(coord, JorchTensor):
+            def body(idx, args):
+                rot_edges, rot_masks, new_coord = [jorch_wrap(a) for a in args]
+                t = TorsionData(rot_edges, rot_masks)
+                return rot_edges.arr, rot_masks.arr, t.set_angle(idx, angles[...,idx], new_coord).arr
+            *_, new_coord = jax.lax.fori_loop(0, angles.shape[-1], body, (self.rot_edges.arr, self.rot_masks.arr, coord.arr))
+            new_coord = jorch_wrap(new_coord)
+        else:
+            new_coord = coord
+            for idx in range(angles.shape[-1]):
+                new_coord = self.set_angle(idx, angles[...,idx], new_coord)
+        return rigid_align(new_coord, coord)

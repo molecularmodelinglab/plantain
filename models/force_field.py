@@ -24,16 +24,18 @@ class ScaleOutput(nn.Module):
 def rbf_encode(dists, start, end, steps):
     mu = torch.linspace(start, end, steps, device=dists.device)
     sigma = (start - end)/steps
-    dists_expanded = dists.unsqueeze(-1).repeat(1,1,mu.size(0))
+    dists_expanded = dists.unsqueeze(-1)# .repeat(1,1,mu.size(0))
     mu_expanded = mu.view(1,1,-1)
     diff = ((dists_expanded - mu_expanded)/sigma)**2
     return torch.exp(-diff)
 
 def cdist_diff(x, y):
     """ cdist, but you can differentiate its derivative """
-    x_ex = x.unsqueeze(1).expand(-1,y.size(0),-1)
-    y_ex = y.unsqueeze(0).expand(x.size(0),-1,-1)
-    return torch.sqrt(((x_ex - y_ex)**2).sum(-1))
+    x_ex = x.unsqueeze(1)
+    y_ex = y.unsqueeze(0)
+    # eps is needed cus otherwise we get nans in derivatives
+    eps = 1e-10
+    return torch.sqrt(((x_ex - y_ex)**2 + eps).sum(-1))
 
 class ForceField(Module):
 
@@ -48,15 +50,14 @@ class ForceField(Module):
         return ret
 
     def energy_from_atn_coef(self, atn_coefs, coord1, coord2, kill_diag = False):
-        # whaaa
-        # for some reason it _ ised cdist_diff when coord1 == coord2
-        # we get a bunch of NaNs
-        dists = torch.cdist(coord1, coord2) # cdist_diff(coord1, coord2)
+        # dists = torch.cdist(coord1, coord2)
+        dists = cdist_diff(coord1, coord2)
         rbfs = rbf_encode(dists, self.cfg.rbf_start,self.cfg.rbf_end,self.cfg.rbf_steps)
         interact = atn_coefs*rbfs*self.cfg.energy_scale
         if kill_diag:
-            interact = interact.clone()
-            interact.diagonal(dim1=0, dim2=1).zero_()
+            interact = interact*(~torch.eye(interact.shape[0], dtype=bool).unsqueeze(-1))
+            # interact = interact.clone()
+            # interact.diagonal(dim1=0, dim2=1).zero_()
         return interact.sum()
 
     def get_hidden_feat(self, x):
@@ -142,6 +143,27 @@ class ForceField(Module):
             self.scale_output = self.make(ScaleOutput, self.cfg.energy_bias)
         return rec_hid, lig_hid
         
+    def get_energy_single(self,
+                          rec_feat,
+                          lig_feat,
+                          rec_coord,
+                          lig_coord):
+        use_intra_lig = self.cfg.get("intra_lig_energy", False)
+        if use_intra_lig:
+            atn_coefs = torch.einsum('lef,ref->lre', lig_feat[:,0], rec_feat)
+            if self.cfg.get("asym_lig_energy", False):
+                ll_atn = torch.einsum("lef,ref->lre", lig_feat[:,0], lig_feat[:,1])
+            else:
+                ll_atn = torch.einsum("lef,ref->lre", lig_feat[:,1], lig_feat[:,1])
+        else:
+            atn_coefs = torch.einsum('lef,ref->lre', lig_feat, rec_feat)
+
+        U = self.energy_from_atn_coef(atn_coefs, lig_coord, rec_coord)
+        if use_intra_lig:
+            U += self.energy_from_atn_coef(ll_atn, lig_coord, lig_coord, kill_diag=True)
+        return self.scale_output(U)
+
+
     def get_energy(self,
                    batch,
                    batch_rec_feat,

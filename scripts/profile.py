@@ -11,6 +11,7 @@ from validation.metrics import get_metrics
 from validation.validate import validate
 from tqdm import tqdm
 from training.loss import get_losses
+from common.wandb_utils import get_old_model
 
 def profile(task):
 
@@ -18,9 +19,11 @@ def profile(task):
     out_fname = f"outputs/{task}-{stamp}.prof"
 
     if task == "validate":
-        cfg = get_config("attention_gnn")
-        model = make_model(cfg)
-        fn = lambda: validate(cfg, model, cfg.val_datasets[0], "val", 200)
+        cfg = get_config("diffusion")
+        cfg.batch_size=1
+        # model = make_model(cfg)
+        model = get_old_model(cfg, "intra_lig_energy", "best_k")
+        fn = lambda: validate(cfg, model, cfg.val_datasets[0], "val", 30)
     elif task == "train":
         # cfg = get_config("attention_gnn")
         # cfg.profile_max_batches = 250

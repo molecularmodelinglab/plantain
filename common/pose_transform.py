@@ -41,14 +41,14 @@ class PoseTransform(Batchable):
     @staticmethod
     def to_raw(t):
         buf = []
-        for angle in t.tor_angles:
-            buf.append(angle.reshape(-1))
         buf.append(t.trans.reshape(-1))
         buf.append(t.rot.reshape(-1))
+        for angle in t.tor_angles:
+            buf.append(angle.reshape(-1))
         return torch.cat(buf, 0)
 
     @staticmethod
-    def from_raw(raw, template):
+    def from_raw(raw, template=None):
         idx = 0
         def eat_arr(temp_arr):
             nonlocal idx
@@ -57,12 +57,22 @@ class PoseTransform(Batchable):
             ret = raw[idx:idx+size].reshape(shape)
             idx += size
             return ret
-        angles = []
-        for angle in template.tor_angles:
-            angles.append(eat_arr(angle))
-        trans = eat_arr(template.trans)
-        rot = eat_arr(template.rot)
-        return Batch(PoseTransform, trans=trans, rot=rot, tor_angles=angles)
+        if template is None:
+            trans = raw[:3]
+            rot = raw[3:6]
+            angles = raw[6:]
+        else:
+            trans = eat_arr(template.trans)
+            rot = eat_arr(template.rot)
+            angles = []
+            for angle in template.tor_angles:
+                angles.append(eat_arr(angle))
+            if not isinstance(template, Batch):
+                angles = torch.stack(angles)
+        if isinstance(template, Batch):
+            return Batch(PoseTransform, trans=trans, rot=rot, tor_angles=angles)
+        else:
+            return PoseTransform(trans=trans, rot=rot, tor_angles=angles)
 
     @staticmethod
     def make_diffused(diff_cfg, timesteps, batch, device):
@@ -104,13 +114,15 @@ class PoseTransform(Batchable):
     def apply(self, pose, tor_data, use_tor=True):
         coord = pose.coord
         rot_mat = roma.rotvec_to_rotmat(self.rot)
-        if self.tor_angles.size(-1) == 0 or not use_tor:
-            centroid = pose.coord.mean(0)
-            coord = torch.einsum('nij,bj->nbi', rot_mat, coord - centroid) + self.trans.unsqueeze(1) + centroid
-        else:
+        if self.tor_angles.size(-1) > 0 and use_tor:
             coord = tor_data.set_all_angles(self.tor_angles, coord)
-            centroid = coord.mean(1, keepdim=True)
-            coord = torch.einsum('nij,nbj->nbi', rot_mat, coord - centroid) + self.trans.unsqueeze(1) + centroid
+        centroid = coord.mean(-2, keepdim=True)
+        
+        if len(coord.shape) == 3 or len(rot_mat.shape) == 3:
+            trans = self.trans.unsqueeze(1)
+        else:
+            trans = self.trans
+        coord = torch.einsum('...ij,...bj->...bi', rot_mat, coord - centroid) + trans + centroid
         return Pose(coord=coord)
 
     def batch_apply(self, lig_poses, lig_tor_data):
