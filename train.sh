@@ -37,5 +37,6 @@ rm -rf plantain
 rm -rf plantain_pose
 # rm -rf wandb
 
+pip install -r requirements.txt
 pip install --upgrade terrace
 python train.py $@

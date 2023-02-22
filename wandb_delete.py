@@ -2,7 +2,7 @@ import wandb
 
 dry_run = False
 api = wandb.Api()
-proj_names = [ "plantain", "plantain_pose", "direct_bind" ]
+proj_names = [ "plantain_pose" ] # [ "plantain", "plantain_pose", "direct_bind" ]
 for proj_name in proj_names:
     project = api.project(proj_name)
     for artifact_type in project.artifacts_types():

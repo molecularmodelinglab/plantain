@@ -89,7 +89,7 @@ class Trainer(pl.LightningModule):
         tasks = self.get_tasks(prefix, dataset_idx)
         metrics = self.make_metrics(prefix, tasks, dataset_idx)
 
-        pred = self.model.predict_train(x, y, tasks, batch_idx)
+        pred = self.model.predict_train(x, y, tasks, prefix, batch_idx)
         loss, loss_dict = get_losses(self.cfg, tasks, x, pred, y)
 
         if dataset_idx is not None:

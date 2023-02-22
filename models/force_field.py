@@ -49,13 +49,14 @@ class ForceField(Module):
             ret.append("full_rec_data")
         return ret
 
-    def energy_from_atn_coef(self, atn_coefs, coord1, coord2, kill_diag = False):
+    @staticmethod
+    def energy_from_atn_coef(cfg, atn_coefs, coord1, coord2, kill_diag = False):
         # dists = torch.cdist(coord1, coord2)
         dists = cdist_diff(coord1, coord2)
-        rbfs = rbf_encode(dists, self.cfg.rbf_start,self.cfg.rbf_end,self.cfg.rbf_steps)
-        interact = atn_coefs*rbfs*self.cfg.energy_scale
+        rbfs = rbf_encode(dists, cfg.rbf_start,cfg.rbf_end,cfg.rbf_steps)
+        interact = atn_coefs*rbfs*cfg.energy_scale
         if kill_diag:
-            interact = interact*(~torch.eye(interact.shape[0], dtype=bool).unsqueeze(-1))
+            interact = interact*(~torch.eye(interact.shape[0], dtype=bool, device=coord1.device).unsqueeze(-1))
             # interact = interact.clone()
             # interact.diagonal(dim1=0, dim2=1).zero_()
         return interact.sum()
@@ -143,25 +144,29 @@ class ForceField(Module):
             self.scale_output = self.make(ScaleOutput, self.cfg.energy_bias)
         return rec_hid, lig_hid
         
-    def get_energy_single(self,
+    
+    @staticmethod
+    def get_energy_single(cfg,
                           rec_feat,
                           lig_feat,
                           rec_coord,
-                          lig_coord):
-        use_intra_lig = self.cfg.get("intra_lig_energy", False)
+                          lig_coord,
+                          weight,
+                          bias):
+        use_intra_lig = cfg.get("intra_lig_energy", False)
         if use_intra_lig:
             atn_coefs = torch.einsum('lef,ref->lre', lig_feat[:,0], rec_feat)
-            if self.cfg.get("asym_lig_energy", False):
+            if cfg.get("asym_lig_energy", False):
                 ll_atn = torch.einsum("lef,ref->lre", lig_feat[:,0], lig_feat[:,1])
             else:
                 ll_atn = torch.einsum("lef,ref->lre", lig_feat[:,1], lig_feat[:,1])
         else:
             atn_coefs = torch.einsum('lef,ref->lre', lig_feat, rec_feat)
 
-        U = self.energy_from_atn_coef(atn_coefs, lig_coord, rec_coord)
+        U = ForceField.energy_from_atn_coef(cfg, atn_coefs, lig_coord, rec_coord)
         if use_intra_lig:
-            U += self.energy_from_atn_coef(ll_atn, lig_coord, lig_coord, kill_diag=True)
-        return self.scale_output(U)
+            U += ForceField.energy_from_atn_coef(cfg, ll_atn, lig_coord, lig_coord, kill_diag=True)
+        return bias + U*weight
 
 
     def get_energy(self,
@@ -201,9 +206,9 @@ class ForceField(Module):
                 atn_coefs = torch.einsum('lef,ref->lre', lig_feat, rec_feat)
 
             def get_U(lig_coord):
-                U = self.energy_from_atn_coef(atn_coefs, lig_coord, rec_coord)
+                U = ForceField.energy_from_atn_coef(self.cfg, atn_coefs, lig_coord, rec_coord)
                 if use_intra_lig:
-                    U += self.energy_from_atn_coef(ll_atn, lig_coord, lig_coord, kill_diag=True)
+                    U += ForceField.energy_from_atn_coef(self.cfg, ll_atn, lig_coord, lig_coord, kill_diag=True)
                 return U
 
             # very hacky way of allowing diffusion model to pass multiple transforms

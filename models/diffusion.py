@@ -1,3 +1,4 @@
+from copy import deepcopy
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -10,8 +11,12 @@ from terrace.batch import Batch, collate
 from terrace.dataframe import DFRow, merge
 from .model import Model
 from validation.metrics import get_rmsds
+from multiprocessing import Pool
+import multiprocessing as mp
 
 from scipy.optimize import minimize
+
+jax.config.update('jax_platform_name', 'cpu')
 
 class Wrapper:
     def __init__(self, obj):
@@ -28,9 +33,10 @@ def get_transform_rmsds(x, y, transform):
     return torch.stack(ret)
 
 class Diffusion(nn.Module, Model):
+    
     def __init__(self, cfg):
         super().__init__()
-        self.cfg = cfg.model.diffusion
+        self.cfg = cfg
         self.force_field = ForceField(cfg)
 
     @staticmethod
@@ -78,23 +84,29 @@ class Diffusion(nn.Module, Model):
             grad = torch.autograd.grad(U_sum, t_raw, create_graph=True)[0]
         return U_sum.cpu().numpy(), grad.cpu().numpy()
 
-    def energy_raw(self,
-                   t_raw,
+    @staticmethod
+    def energy_raw(t_raw,
+                   cfg,
                    # tor_data_wrap,
                    rot_edges,
                    rot_masks,
                    lig_feat,
                    rec_feat,
                    init_lig_coord,
-                   rec_coord):
+                   rec_coord,
+                   weight,
+                   bias):
         # tor_data = tor_data_wrap.obj
         transform = PoseTransform.from_raw(t_raw)
         tor_data = TorsionData(rot_edges, rot_masks)
         lig_pose = transform.apply(Pose(coord=init_lig_coord), tor_data)
-        U = self.force_field.get_energy_single(rec_feat,
-                                   lig_feat,
-                                   rec_coord,
-                                   lig_pose.coord)
+        U = ForceField.get_energy_single(cfg.model,
+                                        rec_feat,
+                                        lig_feat,
+                                        rec_coord,
+                                        lig_pose.coord,
+                                        weight,
+                                        bias)
         return U
 
     def energy_grad(self,
@@ -116,7 +128,7 @@ class Diffusion(nn.Module, Model):
             return transform.grad(U_sum) 
 
     def get_diffused_transforms(self, batch, device, timesteps=None):
-        diff_cfg = self.cfg
+        diff_cfg = self.cfg.model.diffusion
         if timesteps is None:
             timesteps = diff_cfg.timesteps
 
@@ -177,11 +189,11 @@ class Diffusion(nn.Module, Model):
             batch_rec_feat, batch_lig_feat = hid_feat
         device = batch_lig_feat.device
 
-        transform = PoseTransform.make_initial(self.cfg, batch, device)
+        transform = PoseTransform.make_initial(self.cfg.model.diffusion, batch, device)
         init_pose = batch.lig_embed_pose
         
         all_poses = []
-        for t in range(self.cfg.timesteps):
+        for t in range(self.cfg.model.diffusion.timesteps):
             transform = self.pred_pose(batch, 
                                        batch_rec_feat,
                                        batch_lig_feat,
@@ -192,24 +204,24 @@ class Diffusion(nn.Module, Model):
         return [ collate([all_poses[i][j] for i in range(len(all_poses))]) for j in range(len(all_poses[0]))]
 
     def forward(self, batch, hid_feat=None, train=False):
-        optim = "bfgs"#  if train else self.cfg.get("optim", "bfgs")
+        optim = "bfgs"#  if train else self.cfg.model.diffusion.get("optim", "bfgs")
         if optim == "sgd":
             lig_pose = collate([poses[-1] for poses in self.infer_sgd(batch, hid_feat)])
         elif optim == "bfgs":
             lig_pose, energy = self.infer_bfgs(batch, hid_feat, train)
             # return Batch(DFRow, lig_pose=lig_pose, energy=energy)
-        return Batch(DFRow, lig_pose=lig_pose)
+        return Batch(DFRow, lig_pose=lig_pose, energy=energy)
 
-    def predict_train(self, x, y, task_names, batch_idx):
+    def predict_train(self, x, y, task_names, split, batch_idx):
         hid_feat = self.get_hidden_feat(x)
-        if self.cfg.get("energy_rmsd", False):
+        if self.cfg.model.diffusion.get("energy_rmsd", False):
             diff_energy, diff_rmsds = self.diffuse_energy(x, y, hid_feat)
             ret_dif = Batch(DFRow, diffused_energy=diff_energy, diffused_rmsds=diff_rmsds)   
         else:
             diff = self.diffuse(x, y, hid_feat)
             diff_pose = diff.apply(y.lig_crystal_pose, x.lig_torsion_data)
             ret_dif = Batch(DFRow, diffused_transforms=diff, diffused_poses=diff_pose)
-        if batch_idx % 50 == 0:
+        if split != "train" or batch_idx % 50 == 0:
             with torch.no_grad():
                 ret_pred = self(x, hid_feat, train=True)
             return merge([ret_dif, ret_pred])
@@ -223,8 +235,11 @@ class Diffusion(nn.Module, Model):
         else:
             batch_rec_feat, batch_lig_feat = hid_feat
 
-        ret = []
+        bias, weight = self.force_field.scale_output.parameters()
 
+        x = x.cpu()
+        ret = []
+        args = []
         tot_lig = 0
         for i, l in enumerate(x.lig_graph.dgl().batch_num_nodes()):
 
@@ -232,16 +247,27 @@ class Diffusion(nn.Module, Model):
             rec_feat = batch_rec_feat[i]
             tot_lig += l
 
-            ret.append(self.infer_bfgs_single(x[i], rec_feat, lig_feat, train))
+            args.append((self.cfg, x[i], rec_feat.cpu(), lig_feat.cpu(), weight.cpu(), bias.cpu(), train))
+            # ret.append(self.infer_bfgs_single(x[i], rec_feat, lig_feat, train))
+        
+        if not hasattr(Diffusion, "jit_infer"):
+            Diffusion.jit_infer = jax.jit(jax.value_and_grad(to_jax(Diffusion.energy_raw)), static_argnums=1)
+            # Diffusion.infer_bfgs_single((*args[0][:-1], True))
+
+        if self.cfg.platform.infer_workers > 0:
+            with Pool(processes=self.cfg.platform.infer_workers) as p:
+                for res in p.imap(Diffusion.infer_bfgs_single, args):
+                    ret.append(res)
+        else:
+            for arg in args:
+                ret.append(Diffusion.infer_bfgs_single(arg))
 
         return collate(ret)
 
-    def infer_bfgs_single(self, x, rec_feat, lig_feat, train):
-        if hasattr(self, "cached_f"):
-            f = self.cached_f
-        else:
-            f = jax.jit(jax.value_and_grad(to_jax(self.energy_raw)))
-            self.cached_f = f
+    @staticmethod
+    def infer_bfgs_single(args):
+        cfg, x, rec_feat, lig_feat, weight, bias, train = args
+        f = jax.jit(jax.value_and_grad(to_jax(Diffusion.energy_raw)), static_argnums=1) # deepcopy(Diffusion.jit_infer)
             
         method = "BFGS"
         options = {
@@ -250,20 +276,23 @@ class Diffusion(nn.Module, Model):
         }
         
         device = lig_feat.device
-        t = PoseTransform.make_initial(self.cfg, collate([x]), 'cpu')[0]
-        raw = PoseTransform.to_raw(t).numpy()
 
         extra_args = (
+            cfg,
             x.lig_torsion_data.rot_edges.detach().cpu().numpy(),
             x.lig_torsion_data.rot_masks.detach().cpu().numpy(),
             lig_feat.detach().cpu().numpy(),
             rec_feat.detach().cpu().numpy(),
             x.lig_embed_pose.coord.detach().cpu().numpy(),
-            x.full_rec_data.coord.detach().cpu().numpy()
+            x.full_rec_data.coord.detach().cpu().numpy(),
+            weight.detach().cpu().numpy(),
+            bias.detach().cpu().numpy(),
         )
         best_energy = 1e10
-        n_tries = 1 if train else self.cfg.get("optim_tries", 10)
+        n_tries = 1 if train else cfg.model.diffusion.get("optim_tries", 15)
         for i in range(n_tries):
+            t = PoseTransform.make_initial(cfg.model.diffusion, collate([x]), 'cpu')[0]
+            raw = PoseTransform.to_raw(t).numpy()
             res = minimize(f, raw, extra_args, method=method, jac=True, options=options)
             opt_raw = torch.tensor(res.x, dtype=torch.float32, device=device)
             t_opt = PoseTransform.from_raw(opt_raw)
@@ -284,14 +313,14 @@ class Diffusion(nn.Module, Model):
         device = batch_lig_feat.device
         best_energy = 1e10
         best_pose = None
-        n_tries = 1 if train else self.cfg.get("optim_tries", 10)
+        n_tries = 1 if train else self.cfg.model.diffusion.get("optim_tries", 10)
         method = "BFGS"
         options = {
             # "disp": True,
             "maxiter": 20 if train else 30,
         }
         for i in range(n_tries):
-            t = PoseTransform.make_initial(self.cfg, x, device)
+            t = PoseTransform.make_initial(self.cfg.model.diffusion, x, device)
             raw = PoseTransform.to_raw(t).cpu().numpy()
             init_pose = x.lig_embed_pose
             # print(model.energy_jac_raw(np.array(raw), x, batch_rec_feat, batch_lig_feat, init_pose))
