@@ -67,6 +67,7 @@ losses:
   docked_rmsd_mse:
     func: diffused_rmsd_mse
     weight: 0.1
+    task: null
   
 
 optimizer: adamw

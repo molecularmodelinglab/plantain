@@ -171,7 +171,10 @@ def get_losses(cfg, task_names, x, pred, y):
     ret = {}
     for loss_name, loss_cfg in cfg.losses.items():
         if "task" in loss_cfg:
-            if loss_cfg.task not in task_names:
+            if loss_cfg.task is None:
+                if len(task_names) != 0:
+                    continue
+            elif loss_cfg.task not in task_names:
                 continue
         loss = get_single_loss(loss_cfg, x, pred, y)
         if loss_cfg.weight > 0.0:
