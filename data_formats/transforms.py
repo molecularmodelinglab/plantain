@@ -58,6 +58,11 @@ def get_docked_conformers(cfg, lig):
     if sample == 'all':
         assert num_poses is None
         return range(n_confs)
+    elif sample == "best":
+        ret = []
+        for n in range(num_poses):
+            ret.append(min(n,n_confs-1))
+        return ret
     elif sample == 'best_and_worst':
         n_poses = 2 if num_poses is None else num_poses
         ret = []

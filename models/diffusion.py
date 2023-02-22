@@ -22,10 +22,10 @@ class Wrapper:
     def __init__(self, obj):
         self.obj = obj
 
-def get_transform_rmsds(x, y, transform):
-    trans_poses = transform.apply(y.lig_crystal_pose, x.lig_torsion_data)
+def get_transform_rmsds(x, true_pose, transform):
+    trans_poses = transform.apply(true_pose, x.lig_torsion_data)
     ret = []
-    for lig, tps, true_pose in zip(x.lig, trans_poses, y.lig_crystal_pose):
+    for lig, tps, true_pose in zip(x.lig, trans_poses, true_pose):
         rmsds = []
         for coord in tps.coord:
             rmsds.append(get_rmsds([lig], collate([Pose(coord)]), [true_pose])[0])
@@ -44,7 +44,7 @@ class Diffusion(nn.Module, Model):
         return "diffusion"
 
     def get_input_feats(self):
-        return ["lig_embed_pose", "lig_torsion_data"] + self.force_field.get_input_feats()
+        return ["lig_embed_pose", "lig_torsion_data", "lig_docked_poses"] + self.force_field.get_input_feats()
 
     def get_tasks(self):
         return ["predict_lig_pose"]
@@ -174,11 +174,19 @@ class Diffusion(nn.Module, Model):
 
         transform = self.get_diffused_transforms(batch, device)
 
-        return self.get_energy(batch, 
+        if hasattr(y, "lig_crystal_pose"):
+            true_pose = y.lig_crystal_pose
+        else:
+            true_pose = collate([Pose(p.coord[0]) for p in batch.lig_docked_poses])
+
+        energy = self.get_energy(batch, 
                               batch_rec_feat,
                               batch_lig_feat,
-                              y.lig_crystal_pose,
-                              transform), get_transform_rmsds(batch, y, transform)
+                              true_pose,
+                              transform)
+        rmsds = get_transform_rmsds(batch, true_pose, transform)
+
+        return energy, rmsds
 
     def infer_sgd(self, batch, hid_feat=None):
         """ Final inference -- predict lig_coords directly after randomizing """
@@ -221,7 +229,7 @@ class Diffusion(nn.Module, Model):
             diff = self.diffuse(x, y, hid_feat)
             diff_pose = diff.apply(y.lig_crystal_pose, x.lig_torsion_data)
             ret_dif = Batch(DFRow, diffused_transforms=diff, diffused_poses=diff_pose)
-        if split != "train" or batch_idx % 50 == 0:
+        if "predict_pose" in task_names and (split != "train" or batch_idx % 50 == 0):
             with torch.no_grad():
                 ret_pred = self(x, hid_feat, train=True)
             return merge([ret_dif, ret_pred])
