@@ -109,7 +109,7 @@ model:
   project_full_atom: true
   full_atom_embed_size: 32
 
-  out_size: 1
+  out_size: 32
 
   diffusion:
     timesteps: 16
