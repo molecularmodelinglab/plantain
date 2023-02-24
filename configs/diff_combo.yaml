@@ -11,7 +11,7 @@ train_dataset:
   combo:
     - bigbind_struct
     # - bigbind_gnina
-    - bigbind_act
+    # - bigbind_act
 
 val_datasets: [ bigbind_struct ]
 
@@ -63,19 +63,16 @@ data:
     edge_feats: [ "dist"]
 
 losses:
-  # pose_mse:
-  #   func: diffused_pose_mse
-  #   weight: 1.0
 
   rmsd_mse:
     func: diffused_rmsd_mse
-    weight: 0.5
+    weight: 1.0
     task: predict_lig_pose
 
-  uff_rmsd_mse:
-    func: diffused_rmsd_mse
-    weight: 0.5
-    task: null
+  # uff_rmsd_mse:
+  #   func: diffused_rmsd_mse
+  #   weight: 0.5
+  #   task: null
   
 
 optimizer: adamw
@@ -106,7 +103,8 @@ model:
   multi_pose_attention: true
   intra_lig_energy: true
   asym_lig_energy: true
-  energy_bias: 2.3
+  # energy_bias: 2.3
+  energy_bias: 3.7
 
   project_full_atom: true
   full_atom_embed_size: 32
