@@ -3,7 +3,7 @@ project_postfix: "pose"
 resume_id: null
 name: test_run
 
-val_check_interval: 0.1
+val_check_interval: 1.0 # 0.1
 metric_reset_interval: 50
 debug_dataset_len: null
 
