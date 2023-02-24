@@ -1,3 +1,4 @@
+from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 import torch
 import torch.nn as nn
@@ -266,8 +267,8 @@ class Diffusion(nn.Module, Model):
             # Diffusion.infer_bfgs_single((*args[0][:-1], True))
 
         if self.cfg.platform.infer_workers > 0:
-            with Pool(processes=self.cfg.platform.infer_workers) as p:
-                for res in p.imap(Diffusion.infer_bfgs_single, args):
+            with ThreadPoolExecutor(max_workers=self.cfg.platform.infer_workers) as p:
+                for res in p.map(Diffusion.infer_bfgs_single, args):
                     ret.append(res)
         else:
             for arg in args:
@@ -278,8 +279,9 @@ class Diffusion(nn.Module, Model):
     @staticmethod
     def infer_bfgs_single(args):
         cfg, x, rec_feat, lig_feat, weight, bias = args
-        f = jax.jit(jax.value_and_grad(to_jax(Diffusion.energy_raw)), static_argnums=1) # deepcopy(Diffusion.jit_infer)
-            
+        # f = jax.jit(jax.value_and_grad(to_jax(Diffusion.energy_raw)), static_argnums=1) # deepcopy(Diffusion.jit_infer)
+        f = Diffusion.jit_infer
+
         method = "BFGS"
         options = {
             # "disp": True,
