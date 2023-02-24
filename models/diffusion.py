@@ -260,15 +260,16 @@ class Diffusion(nn.Module, Model):
             rec_feat = batch_rec_feat[i]
             tot_lig += l
 
-            args.append((self.cfg, x[i], rec_feat.cpu(), lig_feat.cpu(), weight.cpu(), bias.cpu()))
+            args.append((self.cfg, x[i], rec_feat.detach().cpu(), lig_feat.detach().cpu(), weight.detach().cpu(), bias.detach().cpu()))
         
         if not hasattr(Diffusion, "jit_infer"):
             Diffusion.jit_infer = jax.jit(jax.value_and_grad(to_jax(Diffusion.energy_raw)), static_argnums=1)
             # Diffusion.infer_bfgs_single((*args[0][:-1], True))
 
         if self.cfg.platform.infer_workers > 0:
-            with ThreadPoolExecutor(max_workers=self.cfg.platform.infer_workers) as p:
-                for res in p.map(Diffusion.infer_bfgs_single, args):
+            # with ThreadPoolExecutor(max_workers=self.cfg.platform.infer_workers) as p:
+            with Pool(self.cfg.platform.infer_workers) as p:
+                for res in p.imap(Diffusion.infer_bfgs_single, args):
                     ret.append(res)
         else:
             for arg in args:
@@ -279,8 +280,8 @@ class Diffusion(nn.Module, Model):
     @staticmethod
     def infer_bfgs_single(args):
         cfg, x, rec_feat, lig_feat, weight, bias = args
-        # f = jax.jit(jax.value_and_grad(to_jax(Diffusion.energy_raw)), static_argnums=1) # deepcopy(Diffusion.jit_infer)
-        f = Diffusion.jit_infer
+        f = jax.jit(jax.value_and_grad(to_jax(Diffusion.energy_raw)), static_argnums=1) # deepcopy(Diffusion.jit_infer)
+        # f = Diffusion.jit_infer
 
         method = "BFGS"
         options = {
