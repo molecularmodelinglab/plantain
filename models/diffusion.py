@@ -44,7 +44,11 @@ class Diffusion(nn.Module, Model):
         return "diffusion"
 
     def get_input_feats(self):
-        return ["lig_embed_pose", "lig_torsion_data", "lig_docked_poses"] + self.force_field.get_input_feats()
+
+        ret = ["lig_embed_pose", "lig_torsion_data"] + self.force_field.get_input_feats()
+        if "pose_sample" in self.cfg.data:
+            ret.append("lig_docked_poses")
+        return ret
 
     def get_tasks(self):
         return ["predict_lig_pose"]
@@ -211,12 +215,12 @@ class Diffusion(nn.Module, Model):
 
         return [ collate([all_poses[i][j] for i in range(len(all_poses))]) for j in range(len(all_poses[0]))]
 
-    def forward(self, batch, hid_feat=None, train=False):
-        optim = "bfgs"#  if train else self.cfg.model.diffusion.get("optim", "bfgs")
+    def forward(self, batch, hid_feat=None):
+        optim = "bfgs"
         if optim == "sgd":
             lig_pose = collate([poses[-1] for poses in self.infer_sgd(batch, hid_feat)])
         elif optim == "bfgs":
-            lig_pose, energy = self.infer_bfgs(batch, hid_feat, train)
+            lig_pose, energy = self.infer_bfgs(batch, hid_feat)
             # return Batch(DFRow, lig_pose=lig_pose, energy=energy)
         return Batch(DFRow, lig_pose=lig_pose, energy=energy)
 
@@ -231,13 +235,13 @@ class Diffusion(nn.Module, Model):
             ret_dif = Batch(DFRow, diffused_transforms=diff, diffused_poses=diff_pose)
         if "predict_lig_pose" in task_names and (split != "train" or batch_idx % 50 == 0):
             with torch.no_grad():
-                ret_pred = self(x, hid_feat, train=True)
+                ret_pred = self(x, hid_feat)
             return merge([ret_dif, ret_pred])
         else:
             return ret_dif
 
     @torch.no_grad()
-    def infer_bfgs(self, x, hid_feat = None, train=False):
+    def infer_bfgs(self, x, hid_feat = None):
         if hid_feat is None:
             batch_rec_feat, batch_lig_feat = self.get_hidden_feat(x)
         else:
@@ -255,8 +259,7 @@ class Diffusion(nn.Module, Model):
             rec_feat = batch_rec_feat[i]
             tot_lig += l
 
-            args.append((self.cfg, x[i], rec_feat.cpu(), lig_feat.cpu(), weight.cpu(), bias.cpu(), train))
-            # ret.append(self.infer_bfgs_single(x[i], rec_feat, lig_feat, train))
+            args.append((self.cfg, x[i], rec_feat.cpu(), lig_feat.cpu(), weight.cpu(), bias.cpu()))
         
         if not hasattr(Diffusion, "jit_infer"):
             Diffusion.jit_infer = jax.jit(jax.value_and_grad(to_jax(Diffusion.energy_raw)), static_argnums=1)
@@ -274,13 +277,13 @@ class Diffusion(nn.Module, Model):
 
     @staticmethod
     def infer_bfgs_single(args):
-        cfg, x, rec_feat, lig_feat, weight, bias, train = args
+        cfg, x, rec_feat, lig_feat, weight, bias = args
         f = jax.jit(jax.value_and_grad(to_jax(Diffusion.energy_raw)), static_argnums=1) # deepcopy(Diffusion.jit_infer)
             
         method = "BFGS"
         options = {
             # "disp": True,
-            "maxiter": 20 if train else 30,
+            "maxiter": 30,
         }
         
         device = lig_feat.device
@@ -297,7 +300,7 @@ class Diffusion(nn.Module, Model):
             bias.detach().cpu().numpy(),
         )
         best_energy = 1e10
-        n_tries = 1 if train else cfg.model.diffusion.get("optim_tries", 15)
+        n_tries = cfg.model.diffusion.get("optim_tries", 15)
         for i in range(n_tries):
             t = PoseTransform.make_initial(cfg.model.diffusion, collate([x]), 'cpu')[0]
             raw = PoseTransform.to_raw(t).numpy()
@@ -310,34 +313,3 @@ class Diffusion(nn.Module, Model):
                 best_pose = pose
         
         return best_pose, best_energy
-
-    @torch.no_grad()
-    def infer_bfgs_old(self, x, hid_feat = None, train=False):
-        if hid_feat is None:
-            batch_rec_feat, batch_lig_feat = self.get_hidden_feat(x)
-        else:
-            batch_rec_feat, batch_lig_feat = hid_feat
-
-        device = batch_lig_feat.device
-        best_energy = 1e10
-        best_pose = None
-        n_tries = 1 if train else self.cfg.model.diffusion.get("optim_tries", 10)
-        method = "BFGS"
-        options = {
-            # "disp": True,
-            "maxiter": 20 if train else 30,
-        }
-        for i in range(n_tries):
-            t = PoseTransform.make_initial(self.cfg.model.diffusion, x, device)
-            raw = PoseTransform.to_raw(t).cpu().numpy()
-            init_pose = x.lig_embed_pose
-            # print(model.energy_jac_raw(np.array(raw), x, batch_rec_feat, batch_lig_feat, init_pose))
-            res = minimize(self.energy_jac_raw, raw, (t, x, batch_rec_feat, batch_lig_feat, init_pose), method=method, jac=True, options=options)
-            opt_raw = torch.tensor(res.x, dtype=torch.float32, device=device)
-            t_opt = PoseTransform.from_raw(opt_raw, t)
-            pose = Batch(Pose, coord=[p.coord[0] for p in t_opt.apply(init_pose, x.lig_torsion_data)])
-            if res.fun < best_energy:
-                best_energy = res.fun
-                best_pose = pose
-
-        return best_pose, torch.tensor(best_energy, dtype=torch.float32, device=device)

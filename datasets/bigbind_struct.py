@@ -14,6 +14,11 @@ class BigBindStructDataset(Dataset):
         super().__init__(cfg, transform)
         csv = cfg.platform.bigbind_dir + f"/structures_{split}.csv"
         self.structures = pd.read_csv(csv)
+
+        max_residues = self.cfg.data.get("max_rec_residues", None)
+        if max_residues is not None:
+            self.structures = self.structures.query("num_pocket_residues <= @max_residues").reset_index(drop=True)
+
         self.dir = cfg.platform.bigbind_dir
         self.split = split
 

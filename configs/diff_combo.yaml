@@ -9,8 +9,9 @@ debug_dataset_len: null
 
 train_dataset: 
   combo:
-    - bigbind_gnina
     - bigbind_struct
+    # - bigbind_gnina
+    - bigbind_act
 
 val_datasets: [ bigbind_struct ]
 
@@ -28,6 +29,13 @@ data:
 
   sna_frac: 1
   only_ki_kd: false
+
+  max_rec_residues: 40
+
+  remove_feats:
+    bigbind_act:
+      - rec_graph
+      - full_rec_data
   
   lig_graph:
     atom_feats: [ "element", "formal_charge", "hybridization", "is_aromatic", "numH"]
@@ -61,12 +69,12 @@ losses:
 
   rmsd_mse:
     func: diffused_rmsd_mse
-    weight: 0.9
+    weight: 0.5
     task: predict_lig_pose
 
-  docked_rmsd_mse:
+  uff_rmsd_mse:
     func: diffused_rmsd_mse
-    weight: 0.1
+    weight: 0.5
     task: null
   
 
@@ -74,13 +82,13 @@ optimizer: adamw
 learn_rate: 1e-5
 max_epochs: 5000
 
-batch_size: 8
+batch_size: 4
 
 test_inference: true
 
 model:
 
-  type: diffusion
+  type: sym_diffusion
   
   rec_encoder:
     node_embed_size: 64
@@ -94,16 +102,16 @@ model:
 
   num_mpnn_layers: 10
   inner_attention: false
-  use_layer_norm: true
+  normalization: layer
   multi_pose_attention: true
   intra_lig_energy: true
   asym_lig_energy: true
-  energy_bias: 3.7
+  energy_bias: 2.3
 
   project_full_atom: true
   full_atom_embed_size: 32
 
-  out_size: 64
+  out_size: 1
 
   diffusion:
     timesteps: 16

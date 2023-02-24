@@ -45,6 +45,8 @@ class JorchTensor():
             new_func = jax_clamp_min
         elif func.__name__ == "cdist":
             new_func = jax_cdist
+        elif func.__name__ == "cat":
+            new_func = jax_cat
         else:
             if func.__name__.startswith("linalg_"):
                 mod = jnp.linalg
@@ -174,6 +176,9 @@ def jax_flatten(arr, start_dim=0, end_dim=-1):
 def jax_cdist(x, y, p, compute_mode):
     assert p == 2
     return jax.vmap(lambda x1: jax.vmap(lambda y1: jnp.linalg.norm(x1 - y1))(y))(x)
+
+def jax_cat(to_cat, axis):
+    return jnp.concatenate(to_cat, axis)
 
 def to_jax(f):
     @wraps(f)

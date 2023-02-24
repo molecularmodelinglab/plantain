@@ -28,6 +28,13 @@ class Transform:
             out[name] = Transform.all_transforms[name](cfg, x)
         return DFRow(**out)
 
+    def get_required_features(transform_names):
+        ret = set()
+        for name in transform_names:
+            for feat in Transform.all_transforms[name].in_features:
+                ret.add(feat)
+        return ret
+
 def transform(in_features):
     def impl(func):
         ret = Transform(in_features, func.__name__, func)

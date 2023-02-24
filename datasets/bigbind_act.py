@@ -84,10 +84,12 @@ class BigBindActDataset(Dataset):
         lig = get_mol_from_file(lig_file)
         lig = Chem.RemoveHs(lig)
 
-        rec = get_prot_from_file(rec_file)
         poc_id = self.activities.pocket[index]
 
-        x = DFRow(lig=lig, rec=rec, pocket_id=poc_id)
+        x = DFRow(lig=lig, pocket_id=poc_id)
+        if "rec" in self.required_x_features:
+            x["rec"] = get_prot_from_file(rec_file)
+
         if self.sna_frac is None:
             y = DFRow(activity=torch.tensor(self.activities.pchembl_value[index], dtype=torch.float32))
         else:

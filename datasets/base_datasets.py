@@ -9,7 +9,12 @@ class Dataset(data.Dataset):
     def __init__(self, cfg, x_transforms=[]):
         super().__init__()
         self.cfg = cfg
-        self.x_transforms = x_transforms
+        self.x_transforms = x_transforms.copy()
+        if "remove_feats" in self.cfg.data and self.get_name() in self.cfg.data.remove_feats:
+            for feat in self.cfg.data.remove_feats[self.get_name()]:
+                if feat in self.x_transforms:
+                    self.x_transforms.remove(feat)
+        self.required_x_features = Transform.get_required_features(self.x_transforms)
         
     @staticmethod
     def get_name() -> str:
@@ -46,6 +51,8 @@ class Dataset(data.Dataset):
 
         try:
             x, y = self.getitem_impl(index)
+            # todo: this whole "remove_feats" thing smells like I'm using
+            # a wrong abstraction for this
             return Transform.apply_many(self.cfg, self.x_transforms, x), y
         except KeyboardInterrupt:
             raise

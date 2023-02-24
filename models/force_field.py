@@ -31,8 +31,8 @@ def rbf_encode(dists, start, end, steps):
 
 def cdist_diff(x, y):
     """ cdist, but you can differentiate its derivative """
-    x_ex = x.unsqueeze(1)
-    y_ex = y.unsqueeze(0)
+    x_ex = x.unsqueeze(-2)
+    y_ex = y.unsqueeze(-3)
     # eps is needed cus otherwise we get nans in derivatives
     eps = 1e-10
     return torch.sqrt(((x_ex - y_ex)**2 + eps).sum(-1))
