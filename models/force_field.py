@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from common.pose_transform import Pose
-from models.attention_gnn import MPNN
+from models.attention_gnn import MPNN, batched_feats, single_batched_feat
 from terrace import Module
 from terrace.batch import Batch
 from terrace.dataframe import DFRow
@@ -104,6 +104,9 @@ class ForceField(Module):
             prev_lig_hid.append(lig_hid)
             prev_rec_hid.append(rec_hid)
 
+        if self.cfg.get("null_pose_option", False):
+            aux_lig_hid = self.make(LazyLinear, self.cfg.null_pose_out_size)(F.leaky_relu(lig_hid))
+
         use_intra_lig = self.cfg.get("intra_lig_energy", False)
         if use_intra_lig:
             lig_hid = self.make(LazyLinear, self.cfg.out_size*self.cfg.rbf_steps*2)(F.leaky_relu(lig_hid))
@@ -121,8 +124,11 @@ class ForceField(Module):
             if self.cfg.get("use_layer_norm", False):
                 full_ln = self.make(LazyLayerNorm)
             full_linear_out = self.make(LazyLinear, self.cfg.out_size*self.cfg.rbf_steps)
+            if self.cfg.get("null_pose_option", False):
+                aux_linear_out = self.make(LazyLinear, self.cfg.null_pose_out_size)
 
             full_rec_hid = []
+            aux_rec_hid = []
             tot_rec = 0
             rec_graph = x.rec_graph.dgl()
             for r, full_rec_data in zip(rec_graph.batch_num_nodes(), x.full_rec_data):
@@ -131,14 +137,27 @@ class ForceField(Module):
                 hid = torch.cat((h1, h2), -1)
                 if self.cfg.get("use_layer_norm", False):
                     hid = full_ln(hid)
+
+                if self.cfg.get("null_pose_option", False):
+                    aux_hid = aux_linear_out(F.leaky_relu(hid))
+                    aux_rec_hid.append(aux_hid)
+                
                 hid = full_linear_out(F.leaky_relu(hid))
                 hid = hid.view(-1, self.cfg.rbf_steps, self.cfg.out_size)
                 full_rec_hid.append(hid)
                 tot_rec += r
             rec_hid = full_rec_hid
         else:
+            assert self.cfg.get("null_pose_option", False)
             rec_hid = self.make(LazyLinear, self.cfg.out_size*self.cfg.rbf_steps)(F.leaky_relu(rec_hid))
             rec_hid = rec_hid.view(-1, self.cfg.rbf_steps, self.cfg.out_size)
+
+        aux_energy = []
+        if self.cfg.get("null_pose_option", False):
+            for lig_feat, rec_feat in zip(single_batched_feat(x, aux_lig_hid), aux_rec_hid):
+                op = torch.einsum('lf,rf->lr', lig_feat, rec_feat)
+                aux_energy.append(op.mean())
+            return rec_hid, lig_hid, torch.stack(aux_energy)
 
         if "energy_bias" in self.cfg:
             self.scale_output = self.make(ScaleOutput, self.cfg.energy_bias)
@@ -246,11 +265,19 @@ class ForceFieldClassifier(Module, ClassifyActivityModel):
     def forward(self, batch):
         self.start_forward()
 
-        batch_rec_feat, batch_lig_feat = self.force_field.get_hidden_feat(batch)
+        hid_feat = self.force_field.get_hidden_feat(batch)
+        if self.cfg.get("null_pose_option", False):
+            batch_rec_feat, batch_lig_feat, U_null = hid_feat
+        else:
+            batch_rec_feat, batch_lig_feat = hid_feat
+
         ret = []
         for conf_id in range(len(batch.lig_docked_poses.coord[0])):
             pose = Batch(Pose, coord=[coord[conf_id] for coord in batch.lig_docked_poses.coord])
             ret.append(self.force_field.get_energy(batch, batch_rec_feat, batch_lig_feat, pose))
+        if self.cfg.get("null_pose_option", False):
+            ret.append(U_null)
+
         U = torch.stack(ret).T
 
         if self.cfg.get("multi_pose_attention", False):

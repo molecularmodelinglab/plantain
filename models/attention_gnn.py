@@ -27,7 +27,6 @@ class MPNN(Module):
 def batched_feats(x, batch_lig_feat, batch_rec_feat):
     tot_rec = 0
     tot_lig = 0
-    ret = []
     for l, r in zip(x.lig_graph.dgl().batch_num_nodes(), x.rec_graph.dgl().batch_num_nodes()):
         lig_feat = batch_lig_feat[tot_lig:tot_lig+l]
         rec_feat = batch_rec_feat[tot_rec:tot_rec+r]
@@ -36,8 +35,13 @@ def batched_feats(x, batch_lig_feat, batch_rec_feat):
         tot_lig += l
 
         yield lig_feat, rec_feat
-        # op = torch.einsum('lf,rf->lr', lig_feat, rec_feat)
-        # ret.append(op)
+
+def single_batched_feat(x, batch_lig_feat):
+    tot_lig = 0
+    for l in x.lig_graph.dgl().batch_num_nodes():
+        lig_feat = batch_lig_feat[tot_lig:tot_lig+l]
+        tot_lig += l
+        yield lig_feat
 
 class AttentionGNN(Module, ClassifyActivityModel):
 

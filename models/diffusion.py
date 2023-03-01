@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import jax
-from common.pose_transform import PoseTransform, Pose
+from common.pose_transform import MultiPose, PoseTransform, Pose
 from common.torsion import TorsionData
 from common.jorch import to_jax
 from models.force_field import ForceField
@@ -302,8 +302,9 @@ class Diffusion(nn.Module, Model):
             weight.detach().cpu().numpy(),
             bias.detach().cpu().numpy(),
         )
-        best_energy = 1e10
-        n_tries = cfg.model.diffusion.get("optim_tries", 15)
+        # best_energy = 1e10
+        pose_and_energies = []
+        n_tries = cfg.model.diffusion.get("optim_tries", 16)
         for i in range(n_tries):
             t = PoseTransform.make_initial(cfg.model.diffusion, collate([x]), 'cpu')[0]
             raw = PoseTransform.to_raw(t).numpy()
@@ -311,8 +312,15 @@ class Diffusion(nn.Module, Model):
             opt_raw = torch.tensor(res.x, dtype=torch.float32, device=device)
             t_opt = PoseTransform.from_raw(opt_raw)
             pose = t_opt.apply(x.lig_embed_pose, x.lig_torsion_data)
-            if res.fun < best_energy:
-                best_energy = res.fun
-                best_pose = pose
+            pose_and_energies.append((res.fun, pose))
+            # if res.fun < best_energy:
+            #     best_energy = res.fun
+            #     best_pose = pose
         
-        return best_pose, best_energy
+        poses = []
+        energies = []
+        for energy, pose in sorted(pose_and_energies, key=lambda x: x[0]):
+            energies.append(energy)
+            poses.append(pose)
+
+        return MultiPose.combine(poses), torch.asarray(energies)

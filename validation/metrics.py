@@ -162,12 +162,18 @@ def get_rmsds(ligs, pred_pose, true_pose):
     for lig, pred, yt in zip(ligs, pred_pose, true_pose):
         mol1 = deepcopy(lig)
         mol2 = deepcopy(lig)
-        add_pose_to_mol(mol1, pred)
         add_pose_to_mol(mol2, yt)
-        # made maxMatches very low for now because it's freezing training
-        # with the default value. Perhaps raise later
-        ret.append(CalcRMS(mol1, mol2, maxMatches=1000))
-    return torch.tensor(ret, dtype=torch.float32, device=pred_pose.coord[0].device)
+        if pred.coord.dim() == 3:
+            ret.append([])
+            for p in pred.items():
+                add_pose_to_mol(mol1, p)
+                ret[-1].append(CalcRMS(mol1, mol2, maxMatches=1000))
+        else:
+            add_pose_to_mol(mol1, pred)
+            # made maxMatches very low for now because it's freezing training
+            # with the default value. Perhaps raise later
+            ret.append(CalcRMS(mol1, mol2, maxMatches=1000))
+    return torch.asarray(ret, dtype=torch.float32, device=pred_pose.coord[0].device)
 
 class PoseRMSD(FullMetric):
 
@@ -178,7 +184,10 @@ class PoseRMSD(FullMetric):
 
     def update(self, x, pred, y):
         if not hasattr(pred, "lig_pose"): return
-        self.rmsd_sum += get_rmsds(x.lig, pred.lig_pose, y.lig_crystal_pose).sum()
+        rmsds = get_rmsds(x.lig, pred.lig_pose, y.lig_crystal_pose)
+        if rmsds.dim() == 2:
+            rmsds = rmsds[:,0]
+        self.rmsd_sum += rmsds.sum()
         self.total += len(x)
 
     def compute(self):
@@ -190,17 +199,28 @@ class PoseAcc(FullMetric):
     def __init__(self, rmsd_cutoff):
         super().__init__()
         self.rmsd_cutoff = rmsd_cutoff
-        self.add_state("correct", default=torch.tensor(0))
-        self.add_state("total", default=torch.tensor(0))
+        self.correct_n = defaultdict(int)
+        self.total_n = defaultdict(int)
+
+    def reset(self):
+        self.correct_n = defaultdict(int)
+        self.total_n = defaultdict(int)
 
     def update(self, x, pred, y):
         if not hasattr(pred, "lig_pose"): return
         rmsds = get_rmsds(x.lig, pred.lig_pose, y.lig_crystal_pose)
-        self.correct += (rmsds < self.rmsd_cutoff).sum()
-        self.total += len(x)
+        if rmsds.dim() == 1:
+            rmsds = rmsds.unsqueeze(1)
+        correct = (rmsds < self.rmsd_cutoff)
+        for n in range(correct.shape[1]):
+            self.correct_n[n] += correct[:,:n+1].amax(1).sum()
+            self.total_n[n] += len(x)
 
     def compute(self):
-        return self.correct.float()/self.total
+        ret = {}
+        for n in self.total_n:
+            ret[f"{n+1}"] = self.correct_n[n].float()/self.total_n[n]
+        return ret
 
 class EnrichmentFactor(FullMetric):
 

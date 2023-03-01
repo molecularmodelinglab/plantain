@@ -13,6 +13,27 @@ class Pose(Batchable):
     def collate_coord(x):
         return x
 
+class MultiPose(Batchable):
+    coord: torch.Tensor
+
+    @staticmethod
+    def collate_coord(x):
+        return x
+
+    @staticmethod
+    def combine(poses):
+        return MultiPose(torch.stack([ p.coord for p in poses ]))
+
+    def get(self, i):
+        return Pose(coord=self.coord[i])
+
+    def items(self):
+        for coord in self.coord:
+            yield Pose(coord)
+
+    def batch_get(self, i):
+        return collate([mp.get(i) for mp in self.items()])
+
 def add_pose_to_mol(mol, pose):
     mol.RemoveAllConformers()
     conformer = Chem.Conformer(mol.GetNumAtoms())
