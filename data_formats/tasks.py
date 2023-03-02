@@ -40,3 +40,7 @@ Task("predict_lig_pose",
     ["lig", "rec"],
     ["lig_crystal_pose"],
     ["lig_pose"])
+Task("score_pose",
+    ["rec","lig", "lig_docked_poses"],
+    ["pose_rmsds"],
+    ["pose_scores"])

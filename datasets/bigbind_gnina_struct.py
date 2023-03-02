@@ -4,6 +4,7 @@ from typing import Set, Type
 import pandas as pd
 from common.utils import get_mol_from_file, get_prot_from_file, get_gnina_scores_from_pdbqt
 from data_formats.tasks import Task
+from data_formats.transforms import get_docked_conformers
 from datasets.base_datasets import Dataset
 from terrace.batch import NoStackTensor
 from terrace.dataframe import DFRow
@@ -70,10 +71,10 @@ class BigBindGninaStructDataset(Dataset):
         pose_scores = torch.tensor(pose_scores, dtype=torch.float32)
         affinities = torch.tensor(affinities, dtype=torch.float32)
 
-        x = DFRow(docked_lig, rec, poc_id, pose_scores, affinities)
+        x = DFRow(lig=docked_lig, rec=rec, pocket_id=poc_id, gnina_pose_scores=pose_scores, gnina_affinities=affinities)
         
         rmsds = []
-        for conformer in range(docked_lig.GetNumConformers()):
+        for conformer in get_docked_conformers(self.cfg, docked_lig):
             rmsds.append(rdMolAlign.CalcRMS(true_lig, docked_lig, 0, conformer))
         rmsds = NoStackTensor(torch.tensor(rmsds, dtype=torch.float32))
         y = DFRow(pose_rmsds=rmsds)

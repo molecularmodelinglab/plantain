@@ -258,6 +258,9 @@ class ForceFieldClassifier(Module, ClassifyActivityModel):
     @staticmethod
     def get_name() -> str:
         return "force_field"
+        
+    def get_tasks(self):
+        return [ "score_activity_class", "classify_activity", "score_pose" ]
 
     def get_input_feats(self):
         return ["lig_docked_poses"] + self.force_field.get_input_feats()
@@ -282,11 +285,17 @@ class ForceFieldClassifier(Module, ClassifyActivityModel):
 
         if self.cfg.get("multi_pose_attention", False):
             lin_out = self.make(LazyLinear, 2)(U.unsqueeze(-1))
-            pose_scores = lin_out[...,0]
+            per_pose_scores = lin_out[...,0]
             atn = lin_out[...,1]
-            atn = torch.softmax(atn[:,:-1], -1)
-            score = (pose_scores[:,:-1]*atn).sum(-1)
+            if not self.cfg.get("null_pose_option", False):
+                atn = atn[:,:-1]
+                per_pose_scores = per_pose_scores[:,:-1]
+            atn = torch.softmax(atn, -1)
+            print(atn.shape)
+            score = (per_pose_scores*atn).sum(-1)
+            pose_scores = lin_out[...,1]
         else:
+            raise AssertionError
             score = U[:,0]
             pose_scores = U
 

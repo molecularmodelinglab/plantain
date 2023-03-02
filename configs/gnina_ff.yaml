@@ -6,7 +6,7 @@ val_check_interval: 0.25
 metric_reset_interval: 50
 
 train_dataset: bigbind_gnina
-val_datasets: [ bigbind_gnina ]
+val_datasets: [ bigbind_gnina, bigbind_gnina_struct ]
 
 monitor_metric:
   name: val/bigbind_gnina/auroc_all
@@ -46,7 +46,7 @@ data:
   interaction_graph:
     dist_cutoff: 10
     max_neighbors: null
-    edge_feats: [ "dist"]
+    edge_feats: ["dist"]
 
 losses:
   act_bce:
@@ -57,15 +57,7 @@ losses:
   
   worse_pose_bce:
     func: worse_pose_bce
-    weight: 0.0
-
-  # opposite_pose_bce:
-  #   func: opposite_pose_bce
-  #   weight: 0.5
-
-  # pose_class_bce:
-  #   func: pose_class_bce
-  #   weight: 1.0
+    weight: 0.5
 
 optimizer: adamw
 learn_rate: 1e-5

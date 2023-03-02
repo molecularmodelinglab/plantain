@@ -75,14 +75,17 @@ class ClassifyActivityModel(ScoreActivityClassModel):
         prob = torch.sigmoid(unnorm)
         return Batch(DFRow, active_prob_unnorm=unnorm, active_prob=prob)
 
-# class RandomPoseScore(Model):
+class RandomPoseScore(Model):
 
-#     def get_tasks(self):
-#         return [ ScorePose ]
+    def get_tasks(self):
+        return [ "score_pose" ]
 
-#     def __call__(self, x):
-#         return [ torch.randn((lig.GetNumConformers(),), dtype=torch.float32) for lig in x.lig ]
+    def get_input_feats(self):
+        return ["lig_docked_poses"]
 
-#     def score_pose(self, x, pred):
-#         type_ = self.get_pred_type()
-#         return Batch(type_, pose_scores=pred)
+    def __call__(self, x):
+        pose_scores = [ torch.randn(x0.lig_docked_poses.coord.shape[0]) for x0 in x ]
+        return Batch(DFRow, pose_scores=pose_scores)
+
+    def to(self, device):
+        return self

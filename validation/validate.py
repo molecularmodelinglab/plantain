@@ -18,7 +18,7 @@ from common.utils import flatten_dict
 def pred_key(cfg, model, dataset_name, split, num_batches):
     return (model.cache_key, dataset_name, split, num_batches)
 
-@cache(pred_key)
+@cache(pred_key, disable=True)
 @torch.no_grad()
 def get_preds(cfg, model, dataset_name, split, num_batches):
 
