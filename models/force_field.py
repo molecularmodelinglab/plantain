@@ -291,7 +291,6 @@ class ForceFieldClassifier(Module, ClassifyActivityModel):
                 atn = atn[:,:-1]
                 per_pose_scores = per_pose_scores[:,:-1]
             atn = torch.softmax(atn, -1)
-            print(atn.shape)
             score = (per_pose_scores*atn).sum(-1)
             pose_scores = lin_out[...,1]
         else:
