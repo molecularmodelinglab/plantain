@@ -5,7 +5,7 @@ from datasets.make_dataset import make_dataloader
 
 
 def dataset_iterate(cfg):
-    train_dataloader = make_dataloader(cfg, cfg.train_dataset, "train", ["lig_graph", "rec_graph"])
+    train_dataloader = make_dataloader(cfg, cfg.train_dataset, "train", [])# "lig_graph", "rec_graph"])
     for i, data in enumerate(tqdm(train_dataloader)):
         # if i > 100:
         #     break

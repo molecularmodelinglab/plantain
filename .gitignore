@@ -26,3 +26,4 @@ notebooks
 *.prof
 terrace
 terrace_tmp
+scripts/sync_longleaf.sh

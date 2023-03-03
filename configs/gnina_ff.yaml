@@ -54,10 +54,12 @@ losses:
     pred: active_prob_unnorm
     y: is_active
     weight: 1.0
+    task: "classify_activity"
   
   worse_pose_bce:
     func: worse_pose_bce
     weight: 0.5
+    task: "classify_activity"
 
 optimizer: adamw
 learn_rate: 1e-5

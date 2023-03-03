@@ -203,8 +203,12 @@ class Diffusion(nn.Module, Model):
         device = batch_lig_feat.device
 
         transform = PoseTransform.make_initial(self.cfg.model.diffusion, batch, device)
-        init_pose = batch.lig_embed_pose
         
+        # center ligand at rec center
+        rec_mean = batch.full_rec_data.coord.mean(0)
+        lig_mean = batch.lig_embed_pose.coord.mean(0)
+        init_pose = Pose(coord=batch.lig_embed_pose.coord + rec_mean - lig_mean)
+
         all_poses = []
         for t in range(self.cfg.model.diffusion.timesteps):
             transform = self.pred_pose(batch, 
