@@ -3,14 +3,12 @@
 #SBATCH -t 10-00:00:00
 #SBATCH --partition=gpu
 #SBATCH --cpus-per-task=16
-#SBATCH --mem=32G
+#SBATCH --mem=16G
 #SBATCH --gres=gpu:1
 #SBATCH --output=jobs/R-%x.%j.out
 #SBATCH --error=jobs/R-%x.%j.err
 #SBATCH --gres=gpu:1
 #SBATCH --qos=gpu_access
-#SBATCH --exclude=g0605
-# ^^^ until they fix that node
 
 # >>> conda initialize >>>
 # !! Contents within this block are managed by 'conda init' !!

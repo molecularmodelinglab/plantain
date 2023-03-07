@@ -3,7 +3,7 @@ project_postfix: "pose"
 resume_id: null
 name: test_run
 
-val_check_interval: 1.0 # 0.1
+val_check_interval: 1.0
 metric_reset_interval: 50
 debug_dataset_len: null
 
@@ -79,7 +79,7 @@ optimizer: adamw
 learn_rate: 1e-5
 max_epochs: 5000
 
-batch_size: 4
+batch_size: 2
 
 test_inference: true
 
@@ -123,8 +123,8 @@ model:
     optim: bfgs
 
   rbf_start: 0
-  rbf_end: 16
-  rbf_steps: 32
+  rbf_end: 8
+  rbf_steps: 16
 
   norm_grad: false
   energy_scale: 1.0 #5e-4
