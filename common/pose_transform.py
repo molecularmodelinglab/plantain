@@ -32,7 +32,7 @@ class MultiPose(Batchable):
             yield Pose(coord)
 
     def batch_get(self, i):
-        return collate([mp.get(i) for mp in self.items()])
+        return collate([mp.get(i) for mp in self])
 
 def add_pose_to_mol(mol, pose):
     mol.RemoveAllConformers()

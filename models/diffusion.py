@@ -1,6 +1,7 @@
 from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 import torch
+import numpy as np
 import torch.nn as nn
 import torch.nn.functional as F
 import jax
@@ -153,6 +154,12 @@ class Diffusion(nn.Module, Model):
                                 transform)
         return transform.update_from_grad(grad)
 
+    def get_true_pose(self, y):
+        if self.cfg.data.get("use_embed_crystal_pose", False):
+            return y.lig_embed_crystal_pose
+        else:
+            return y.lig_crystal_pose
+
     def diffuse(self, batch, y, hid_feat=None):
 
         if hid_feat is None:
@@ -166,7 +173,7 @@ class Diffusion(nn.Module, Model):
         return self.pred_pose(batch, 
                               batch_rec_feat,
                               batch_lig_feat,
-                              y.lig_crystal_pose,
+                              self.get_true_pose(y),
                               transform)
 
     def diffuse_energy(self, batch, y, hid_feat=None):
@@ -220,12 +227,12 @@ class Diffusion(nn.Module, Model):
 
         return [ collate([all_poses[i][j] for i in range(len(all_poses))]) for j in range(len(all_poses[0]))]
 
-    def forward(self, batch, hid_feat=None):
+    def forward(self, batch, hid_feat=None, init_pose_override=None):
         optim = "bfgs"
         if optim == "sgd":
             lig_pose = collate([poses[-1] for poses in self.infer_sgd(batch, hid_feat)])
         elif optim == "bfgs":
-            lig_pose, energy = self.infer_bfgs(batch, hid_feat)
+            lig_pose, energy = self.infer_bfgs(batch, hid_feat, init_pose_override)
             # return Batch(DFRow, lig_pose=lig_pose, energy=energy)
         return Batch(DFRow, lig_pose=lig_pose, energy=energy)
 
@@ -236,17 +243,20 @@ class Diffusion(nn.Module, Model):
             ret_dif = Batch(DFRow, diffused_energy=diff_energy, diffused_rmsds=diff_rmsds)   
         else:
             diff = self.diffuse(x, y, hid_feat)
-            diff_pose = diff.apply(y.lig_crystal_pose, x.lig_torsion_data)
+            diff_pose = diff.apply(self.get_true_pose(y), x.lig_torsion_data)
             ret_dif = Batch(DFRow, diffused_transforms=diff, diffused_poses=diff_pose)
         if "predict_lig_pose" in task_names and (split != "train" or batch_idx % 50 == 0):
             with torch.no_grad():
                 ret_pred = self(x, hid_feat)
+                pred_crystal = self(x, hid_feat, self.get_true_pose(y))
+                pred_crystal = Batch(DFRow, crystal_pose=pred_crystal.lig_pose.get(0), crystal_energy=pred_crystal.energy[:,0])
+                ret_pred = merge([ret_pred, pred_crystal])
             return merge([ret_dif, ret_pred])
         else:
             return ret_dif
 
     @torch.no_grad()
-    def infer_bfgs(self, x, hid_feat = None):
+    def infer_bfgs(self, x, hid_feat = None, init_pose_override=None):
         if hid_feat is None:
             batch_rec_feat, batch_lig_feat = self.get_hidden_feat(x)
         else:
@@ -264,7 +274,12 @@ class Diffusion(nn.Module, Model):
             rec_feat = batch_rec_feat[i]
             tot_lig += l
 
-            args.append((self.cfg, x[i], rec_feat.detach().cpu(), lig_feat.detach().cpu(), weight.detach().cpu(), bias.detach().cpu()))
+            if init_pose_override is not None:
+                pose_override = init_pose_override.cpu()[i]
+            else:
+                pose_override = None
+
+            args.append((self.cfg, x[i], rec_feat.detach().cpu(), lig_feat.detach().cpu(), weight.detach().cpu(), bias.detach().cpu(), pose_override))
         
         if not hasattr(Diffusion, "jit_infer"):
             Diffusion.jit_infer = jax.jit(jax.value_and_grad(to_jax(Diffusion.energy_raw)), static_argnums=1)
@@ -283,7 +298,7 @@ class Diffusion(nn.Module, Model):
 
     @staticmethod
     def infer_bfgs_single(args):
-        cfg, x, rec_feat, lig_feat, weight, bias = args
+        cfg, x, rec_feat, lig_feat, weight, bias, init_pose_override = args
         f = jax.jit(jax.value_and_grad(to_jax(Diffusion.energy_raw)), static_argnums=1) # deepcopy(Diffusion.jit_infer)
         # f = Diffusion.jit_infer
 
@@ -295,27 +310,45 @@ class Diffusion(nn.Module, Model):
         
         device = lig_feat.device
 
+        if init_pose_override is None:
+            init_pose = init_pose_override
+            rec_mean = x.full_rec_data.coord.mean(0)
+            lig_mean = x.lig_embed_pose.coord.mean(0)
+            init_pose = Pose(coord=x.lig_embed_pose.coord + rec_mean - lig_mean)
+        else:
+            init_pose = init_pose_override
+
         extra_args = (
             cfg,
             x.lig_torsion_data.rot_edges.detach().cpu().numpy(),
             x.lig_torsion_data.rot_masks.detach().cpu().numpy(),
             lig_feat.detach().cpu().numpy(),
             rec_feat.detach().cpu().numpy(),
-            x.lig_embed_pose.coord.detach().cpu().numpy(),
+            init_pose.coord.detach().cpu().numpy(),
             x.full_rec_data.coord.detach().cpu().numpy(),
             weight.detach().cpu().numpy(),
             bias.detach().cpu().numpy(),
         )
         # best_energy = 1e10
+
         pose_and_energies = []
         n_tries = cfg.model.diffusion.get("optim_tries", 16)
+        if init_pose_override is not None:
+            n_tries = 1
+
         for i in range(n_tries):
             t = PoseTransform.make_initial(cfg.model.diffusion, collate([x]), 'cpu')[0]
-            raw = PoseTransform.to_raw(t).numpy()
+            raw = PoseTransform.to_raw(t)
+            if init_pose_override is not None:
+                raw = torch.zeros_like(raw) + torch.randn_like(raw)*0.1
+            raw = raw.numpy()
+
             res = minimize(f, raw, extra_args, method=method, jac=True, options=options)
             opt_raw = torch.tensor(res.x, dtype=torch.float32, device=device)
+            # t_opt = PoseTransform.from_raw(torch.tensor(raw, dtype=torch.float32, device=device))
             t_opt = PoseTransform.from_raw(opt_raw)
-            pose = t_opt.apply(x.lig_embed_pose, x.lig_torsion_data)
+            # print(opt_raw)
+            pose = t_opt.apply(init_pose, x.lig_torsion_data)
             pose_and_energies.append((res.fun, pose))
             # if res.fun < best_energy:
             #     best_energy = res.fun

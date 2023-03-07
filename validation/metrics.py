@@ -1,6 +1,6 @@
 from collections import defaultdict
 from copy import deepcopy
-from rdkit.Chem.rdMolAlign import CalcRMS
+from rdkit.Chem.rdMolAlign import CalcRMS, GetBestRMS
 import random
 from terrace import Batch, collate
 from typing import Callable, Dict, List, Set, Type
@@ -157,7 +157,8 @@ class PoseRankAcc(FullMetric):
             ret[f"top_{n}"] = correct/self.total_seen
         return ret
 
-def get_rmsds(ligs, pred_pose, true_pose):
+def get_rmsds(ligs, pred_pose, true_pose, align=False):
+    rms_func = GetBestRMS if align else CalcRMS
     ret = []
     for lig, pred, yt in zip(ligs, pred_pose, true_pose):
         mol1 = deepcopy(lig)
@@ -167,13 +168,13 @@ def get_rmsds(ligs, pred_pose, true_pose):
             ret.append([])
             for p in pred.items():
                 add_pose_to_mol(mol1, p)
-                ret[-1].append(CalcRMS(mol1, mol2, maxMatches=1000))
+                ret[-1].append(rms_func(mol1, mol2, maxMatches=1000))
         else:
             add_pose_to_mol(mol1, pred)
             # made maxMatches very low for now because it's freezing training
             # with the default value. Perhaps raise later
-            ret.append(CalcRMS(mol1, mol2, maxMatches=1000))
-    return torch.asarray(ret, dtype=torch.float32, device=pred_pose.coord[0].device)
+            ret.append(rms_func(mol1, mol2, maxMatches=1000))
+    return torch.asarray(ret, dtype=torch.float32, device=pred_pose[0].coord.device)
 
 class PoseRMSD(FullMetric):
 
@@ -221,6 +222,34 @@ class PoseAcc(FullMetric):
         for n in self.total_n:
             ret[f"{n+1}"] = self.correct_n[n].float()/self.total_n[n]
         return ret
+
+class CrystalEnergy(FullMetric):
+    
+    def __init__(self, rmsd_cutoff):
+        super().__init__()
+        self.rmsd_cutoff = rmsd_cutoff
+        self.add_state("num_local", default=torch.tensor(0))
+        self.add_state("num_global", default=torch.tensor(0))
+        self.add_state("total", default=torch.tensor(0))
+
+    def update(self, x, pred, y):
+        if not hasattr(pred, "crystal_pose"): return
+        crystal_rmsds = get_rmsds(x.lig, pred.crystal_pose, y.lig_crystal_pose)
+        local = crystal_rmsds < self.rmsd_cutoff
+        self.num_local += local.sum()
+        for loc, energy, crys_energy in zip(local, pred.energy, pred.crystal_energy):
+            if not loc: continue
+            all_energies = torch.cat((energy, crys_energy.unsqueeze(0)), 0)
+            if all_energies.min() == crys_energy:
+                self.num_global += 1
+        self.total += len(x)
+
+    def compute(self):
+        if self.total == 0: return {}
+        return {
+            "global_min": self.num_global.float()/self.total,
+            "local_min": self.num_local.float()/self.total
+        }
 
 class EnrichmentFactor(FullMetric):
 
@@ -332,6 +361,8 @@ def get_single_task_metrics(task: str):
             "rmsd": PoseRMSD(),
             "acc_2": PoseAcc(2.0),
             "acc_5": PoseAcc(5.0),
+            "crystal_2": CrystalEnergy(2.0),
+            "crystal_5": CrystalEnergy(5.0)
         })
     }[task]
 

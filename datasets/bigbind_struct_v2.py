@@ -1,23 +1,36 @@
+from copy import deepcopy
 import torch
 from typing import Set, Type
 import pandas as pd
 from rdkit import Chem
-from common.pose_transform import Pose
+from rdkit.Chem import AllChem
+from common.pose_transform import MultiPose, Pose
 from data_formats.graphs.mol_graph import get_mol_coords
-from common.utils import get_mol_from_file, get_prot_from_file
+from common.utils import get_mol_from_file, get_mol_from_file_no_cache, get_prot_from_file
 from data_formats.tasks import Task
 from datasets.base_datasets import Dataset
 from terrace.dataframe import DFRow
+from validation.metrics import get_rmsds
 
 def canonicalize(mol):
 
-    order = tuple(zip(*sorted([(j, i) for i, j in enumerate(Chem.CanonicalRankAtoms(mol))])))[1]
+    order = tuple(zip(*sorted([(j, i) for i, j in enumerate(Chem.CanonicalRankAtoms(mol, includeChirality=False))])))[1]
     mol = Chem.RenumberAtoms(mol, list(order))
 
-    # for i, a in enumerate(mol.GetAtoms()):
-    #     a.SetAtomMapNum(i)
-
     return mol
+
+def gen_conformers(mol, numConfs=100, maxAttempts=1000, pruneRmsThresh=0.1, useExpTorsionAnglePrefs=True, useBasicKnowledge=True, enforceChirality=True):
+    mol = Chem.AddHs(mol)
+    ids = AllChem.EmbedMultipleConfs(mol, numConfs=numConfs, maxAttempts=maxAttempts, pruneRmsThresh=pruneRmsThresh, useExpTorsionAnglePrefs=useExpTorsionAnglePrefs, useBasicKnowledge=useBasicKnowledge, enforceChirality=enforceChirality, numThreads=0)
+    mol = Chem.RemoveHs(mol)
+    return mol
+
+def get_mol_multipose(mol):
+    coords = []
+    for n in range(mol.GetNumConformers()):
+        coords.append(get_mol_coords(mol, n))
+    return MultiPose(coord=torch.stack(coords))
+
 
 class BigBindStructV2Dataset(Dataset):
 
@@ -74,30 +87,37 @@ class BigBindStructV2Dataset(Dataset):
     def getitem_impl(self, index):
 
         rec_file = self.get_rec_file(index)
-        # lig = Chem.MolFromSmiles(self.structures.lig_smiles[index])
-        lig_crystal = get_mol_from_file(self.get_lig_crystal_file(index))
-        lig_uff = get_mol_from_file(self.get_lig_uff_file(index))
 
-        print(self.get_lig_crystal_file(index))
+        lig_crystal = get_mol_from_file_no_cache(self.get_lig_crystal_file(index))
+        lig_crystal = Chem.RemoveHs(lig_crystal)
+        lig_crystal_pose = Pose(get_mol_coords(lig_crystal, 0))
 
-        # lig_crystal = Chem.RemoveHs(lig_crystal)
-        # lig_uff = Chem.RemoveHs(lig_uff)
+        if self.cfg.data.get("use_embed_crystal_pose", False):
+            lig = Chem.MolFromSmiles(self.structures.lig_smiles[index])
+            order = lig.GetSubstructMatch(lig_crystal)
+            lig = Chem.RenumberAtoms(lig, list(order))
 
-        # lig_uff = canonicalize(lig_uff)
-        # lig_crystal = canonicalize(lig_crystal)
-
-        # Chem.RemoveStereochemistry(lig_crystal)
-        # Chem.RemoveStereochemistry(lig_uff)
-
-        # assert Chem.MolToSmiles(lig_uff) == Chem.MolToSmiles(lig_crystal)
-        if Chem.MolToSmiles(lig_uff) != Chem.MolToSmiles(lig_crystal):
-            print("invalid!", index)
+            lig = gen_conformers(lig, self.cfg.data.num_embeddings)
+            embed_poses = get_mol_multipose(lig)
+            rmsds = get_rmsds([lig], [embed_poses], [lig_crystal_pose], align=True)[0]
+            best_conf = lig.GetConformer(rmsds.argmin().item())
+            lig_embed_crystal = deepcopy(lig)
+            lig_embed_crystal.RemoveAllConformers()
+            lig_embed_crystal.AddConformer(best_conf, True)
+            Chem.rdMolAlign.AlignMol(lig_embed_crystal, lig_crystal)
+            lig_embed_crystal_pose = Pose(get_mol_coords(lig_embed_crystal, 0))
+        else:
+            lig = get_mol_from_file_no_cache(self.get_lig_file(index))
+            lig = Chem.RemoveHs(lig)
+            order = lig.GetSubstructMatch(lig_crystal)
+            lig = Chem.RenumberAtoms(lig, list(order))
+        
 
         rec = get_prot_from_file(rec_file)
         poc_id = self.structures.pocket[index]
 
-        x = DFRow(lig=lig_uff, lig_crystal=lig_crystal, rec=rec, pocket_id=poc_id)
+        x = DFRow(lig=lig, lig_crystal=lig_crystal, rec=rec, pocket_id=poc_id)
         
-        y = DFRow(lig_crystal_pose=Pose(get_mol_coords(lig_crystal, 0)))
+        y = DFRow(lig_crystal_pose=lig_crystal_pose, lig_embed_crystal_pose=lig_embed_crystal_pose)
 
         return x, y

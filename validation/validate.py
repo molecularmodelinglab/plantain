@@ -44,7 +44,7 @@ def get_preds(cfg, model, dataset_name, split, num_batches):
     for i, (x, y) in enumerate(tqdm(loader)):
         x = x.to(device)
         y = y.to(device)
-        pred = model.predict(x, tasks)
+        pred = model.predict_train(x, y, tasks, split, i)
         if num_batches is not None and i >= num_batches:
 
             break
