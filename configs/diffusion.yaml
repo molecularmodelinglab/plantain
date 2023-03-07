@@ -8,10 +8,10 @@ metric_reset_interval: 50
 debug_dataset_len: null
 
 train_dataset: bigbind_struct_v2
-val_datasets: [ bigbind_struct ]
+val_datasets: [ bigbind_struct_v2 ]
 
 monitor_metric:
-  name: val/bigbind_struct/acc_2_16
+  name: val/bigbind_struct_v2/acc_2_16
   mode: max
 
 data:
