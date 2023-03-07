@@ -28,7 +28,7 @@ data:
   dock_strategy: "crossdock"
 
   use_embed_crystal_pose: true
-  num_embeddings: 100
+  num_embeddings: 50
 
   lig_graph:
     atom_feats: [ "element", "formal_charge", "hybridization", "is_aromatic", "numH"]
