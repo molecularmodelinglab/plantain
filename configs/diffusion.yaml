@@ -114,8 +114,8 @@ model:
   fix_infer_torsion: false
 
   rbf_start: 0
-  rbf_end: 16
-  rbf_steps: 32
+  rbf_end: 32
+  rbf_steps: 64
 
   norm_grad: false
   energy_scale: 1.0 #5e-4
