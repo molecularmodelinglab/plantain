@@ -79,12 +79,12 @@ model:
   rec_encoder:
     node_embed_size: 64
     edge_embed_size: 64
-    node_out_size: 256
+    node_out_size: 128
 
   lig_encoder:
     node_embed_size: 16
     edge_embed_size: 64
-    node_out_size: 256
+    node_out_size: 128
 
   num_mpnn_layers: 16
   inner_attention: true
