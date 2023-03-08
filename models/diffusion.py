@@ -16,7 +16,7 @@ from validation.metrics import get_rmsds
 from multiprocessing import Pool
 import multiprocessing as mp
 
-from scipy.optimize import minimize
+from scipy.optimize import minimize, basinhopping
 
 jax.config.update('jax_platform_name', 'cpu')
 
@@ -270,8 +270,8 @@ class Diffusion(nn.Module, Model):
     @staticmethod
     def infer_bfgs_single(args):
         cfg, x, rec_feat, lig_feat, weight, bias, init_pose_override = args
-        f = jax.jit(jax.value_and_grad(to_jax(Diffusion.energy_raw)), static_argnums=1) # deepcopy(Diffusion.jit_infer)
-        # f = Diffusion.jit_infer
+        # f = jax.jit(jax.value_and_grad(to_jax(Diffusion.energy_raw)), static_argnums=1) # deepcopy(Diffusion.jit_infer)
+        f = Diffusion.jit_infer
 
         method = "BFGS"
         options = {
@@ -323,6 +323,7 @@ class Diffusion(nn.Module, Model):
             raw = raw.numpy()
 
             res = minimize(f, raw, extra_args, method=method, jac=True, options=options)
+            # res = basinhopping(f, raw, niter=32, T=3.0, stepsize=3.0, minimizer_kwargs={"method": method, "jac": True, "args": extra_args, "options": options})
             opt_raw = torch.tensor(res.x, dtype=torch.float32, device=device)
             # t_opt = PoseTransform.from_raw(torch.tensor(raw, dtype=torch.float32, device=device))
             t_opt = PoseTransform.from_raw(opt_raw)

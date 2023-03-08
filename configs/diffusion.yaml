@@ -68,7 +68,7 @@ optimizer: adamw
 learn_rate: 1e-5
 max_epochs: 5000
 
-batch_size: 16
+batch_size: 8
 
 test_inference: true
 
@@ -79,25 +79,25 @@ model:
   rec_encoder:
     node_embed_size: 64
     edge_embed_size: 64
-    node_out_size: 128
+    node_out_size: 256
 
   lig_encoder:
     node_embed_size: 16
     edge_embed_size: 64
-    node_out_size: 128
+    node_out_size: 256
 
-  num_mpnn_layers: 10
-  inner_attention: false
+  num_mpnn_layers: 16
+  inner_attention: true
   use_layer_norm: true
   multi_pose_attention: true
   intra_lig_energy: true
   asym_lig_energy: true
-  energy_bias: 3.7
+  energy_bias: 6.2
 
   project_full_atom: true
   full_atom_embed_size: 32
 
-  out_size: 64
+  out_size: 128
 
   diffusion:
     timesteps: 16
