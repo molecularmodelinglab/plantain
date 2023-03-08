@@ -3,6 +3,9 @@ import torch
 from rdkit import Chem
 from rdkit.Geometry import Point3D
 from functools import reduce
+import torch.nn.functional as F
+from scipy.optimize import minimize
+from common.torsion import rigid_align
 
 from terrace.batch import Batch, Batchable, collate
 
@@ -144,6 +147,8 @@ class PoseTransform(Batchable):
         else:
             trans = self.trans
         coord = torch.einsum('...ij,...bj->...bi', rot_mat, coord - centroid) + trans + centroid
+        if coord.dim() == 3:
+            return MultiPose(coord=coord)
         return Pose(coord=coord)
 
     def batch_apply(self, lig_poses, lig_tor_data):
@@ -181,3 +186,34 @@ class PoseTransform(Batchable):
                 tor.append(angle - mul*grad_angle)
         # print(grad.rot, grad.tor_angles)
         return Batch(PoseTransform, rot=rot, trans=trans, tor_angles=tor)
+
+def align_poses(pose1, pose2, tor_data, tries=5, maxiter=10):
+    """ Computes the optimal PoseTransform to turn pose1 into pose2, 
+    and returns the transformed pose1 """
+    @torch.set_grad_enabled(True)
+    def f(t_raw):
+        t_raw = torch.asarray(t_raw, dtype=torch.float32)
+        t_raw.requires_grad_()
+        transform = PoseTransform.from_raw(t_raw)
+        pose = transform.apply(pose1, tor_data)
+        pose = Pose(coord=rigid_align(pose.coord, pose2.coord))
+        mse = F.mse_loss(pose.coord, pose2.coord)
+        return mse.detach(), torch.autograd.grad(mse, t_raw)[0]
+
+    options = {
+        "maxiter": maxiter,
+    }
+
+    best_res = None
+    for i in range(tries):
+        raw = torch.rand(6 + tor_data.rot_edges.shape[0])*2*torch.pi
+        res = minimize(f, raw, jac=True, options=options)
+        if best_res is None or res.fun < best_res.fun:
+            best_res = res
+
+    t_raw = torch.asarray(best_res.x, dtype=torch.float32)
+    transform = PoseTransform.from_raw(t_raw)
+    align_pose = transform.apply(pose1, tor_data)
+    align_pose = Pose(coord=rigid_align(align_pose.coord, pose2.coord))
+
+    return align_pose

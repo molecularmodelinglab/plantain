@@ -200,38 +200,9 @@ class Diffusion(nn.Module, Model):
 
         return energy, rmsds
 
-    def infer_sgd(self, batch, hid_feat=None):
-        """ Final inference -- predict lig_coords directly after randomizing """
-
-        if hid_feat is None:
-            batch_rec_feat, batch_lig_feat = self.get_hidden_feat(batch)
-        else:
-            batch_rec_feat, batch_lig_feat = hid_feat
-        device = batch_lig_feat.device
-
-        transform = PoseTransform.make_initial(self.cfg.model.diffusion, batch, device)
-        
-        # center ligand at rec center
-        rec_mean = batch.full_rec_data.coord.mean(0)
-        lig_mean = batch.lig_embed_pose.coord.mean(0)
-        init_pose = Pose(coord=batch.lig_embed_pose.coord + rec_mean - lig_mean)
-
-        all_poses = []
-        for t in range(self.cfg.model.diffusion.timesteps):
-            transform = self.pred_pose(batch, 
-                                       batch_rec_feat,
-                                       batch_lig_feat,
-                                       init_pose,
-                                       transform)
-            all_poses.append(Batch(Pose, coord=[p.coord[0] for p in transform.apply(init_pose, batch.lig_torsion_data)]))
-
-        return [ collate([all_poses[i][j] for i in range(len(all_poses))]) for j in range(len(all_poses[0]))]
-
     def forward(self, batch, hid_feat=None, init_pose_override=None):
         optim = "bfgs"
-        if optim == "sgd":
-            lig_pose = collate([poses[-1] for poses in self.infer_sgd(batch, hid_feat)])
-        elif optim == "bfgs":
+        if optim == "bfgs":
             lig_pose, energy = self.infer_bfgs(batch, hid_feat, init_pose_override)
             # return Batch(DFRow, lig_pose=lig_pose, energy=energy)
         return Batch(DFRow, lig_pose=lig_pose, energy=energy)
@@ -248,9 +219,9 @@ class Diffusion(nn.Module, Model):
         if "predict_lig_pose" in task_names and (split != "train" or batch_idx % 50 == 0):
             with torch.no_grad():
                 ret_pred = self(x, hid_feat)
-                pred_crystal = self(x, hid_feat, self.get_true_pose(y))
-                pred_crystal = Batch(DFRow, crystal_pose=pred_crystal.lig_pose.get(0), crystal_energy=pred_crystal.energy[:,0])
-                ret_pred = merge([ret_pred, pred_crystal])
+                # pred_crystal = self(x, hid_feat, self.get_true_pose(y))
+                # pred_crystal = Batch(DFRow, crystal_pose=pred_crystal.lig_pose.get(0), crystal_energy=pred_crystal.energy[:,0])
+                # ret_pred = merge([ret_pred, pred_crystal])
             return merge([ret_dif, ret_pred])
         else:
             return ret_dif
@@ -310,33 +281,41 @@ class Diffusion(nn.Module, Model):
         
         device = lig_feat.device
 
-        if init_pose_override is None:
-            init_pose = init_pose_override
-            rec_mean = x.full_rec_data.coord.mean(0)
-            lig_mean = x.lig_embed_pose.coord.mean(0)
-            init_pose = Pose(coord=x.lig_embed_pose.coord + rec_mean - lig_mean)
-        else:
-            init_pose = init_pose_override
-
-        extra_args = (
-            cfg,
-            x.lig_torsion_data.rot_edges.detach().cpu().numpy(),
-            x.lig_torsion_data.rot_masks.detach().cpu().numpy(),
-            lig_feat.detach().cpu().numpy(),
-            rec_feat.detach().cpu().numpy(),
-            init_pose.coord.detach().cpu().numpy(),
-            x.full_rec_data.coord.detach().cpu().numpy(),
-            weight.detach().cpu().numpy(),
-            bias.detach().cpu().numpy(),
-        )
-        # best_energy = 1e10
-
         pose_and_energies = []
         n_tries = cfg.model.diffusion.get("optim_tries", 16)
         if init_pose_override is not None:
             n_tries = 1
+        if cfg.model.get("fix_infer_torsion", False):
+            n_tries = cfg.data.num_poses
 
-        for i in range(n_tries):
+        for i in range(n_tries):  
+            
+            if init_pose_override is None:
+                pose_idx = min(x.lig_docked_poses.coord.shape[0]-1, i)
+                embed_pose = x.lig_docked_poses.get(pose_idx)
+                rec_mean = x.full_rec_data.coord.mean(0)
+                lig_mean = embed_pose.coord.mean(0)
+                init_pose = Pose(coord=embed_pose.coord + rec_mean - lig_mean)
+            else:
+                init_pose = init_pose_override
+
+            if cfg.model.get("fix_infer_torsion", False):
+                x.lig_torsion_data.rot_edges = torch.zeros((0,0))
+                x.lig_torsion_data.rot_masks = torch.zeros((0,0))
+
+            extra_args = (
+                cfg,
+                x.lig_torsion_data.rot_edges.detach().cpu().numpy(),
+                x.lig_torsion_data.rot_masks.detach().cpu().numpy(),
+                lig_feat.detach().cpu().numpy(),
+                rec_feat.detach().cpu().numpy(),
+                init_pose.coord.detach().cpu().numpy(),
+                x.full_rec_data.coord.detach().cpu().numpy(),
+                weight.detach().cpu().numpy(),
+                bias.detach().cpu().numpy(),
+            )
+
+
             t = PoseTransform.make_initial(cfg.model.diffusion, collate([x]), 'cpu')[0]
             raw = PoseTransform.to_raw(t)
             if init_pose_override is not None:
@@ -350,10 +329,7 @@ class Diffusion(nn.Module, Model):
             # print(opt_raw)
             pose = t_opt.apply(init_pose, x.lig_torsion_data)
             pose_and_energies.append((res.fun, pose))
-            # if res.fun < best_energy:
-            #     best_energy = res.fun
-            #     best_pose = pose
-        
+
         poses = []
         energies = []
         for energy, pose in sorted(pose_and_energies, key=lambda x: x[0]):

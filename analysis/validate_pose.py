@@ -8,7 +8,8 @@ cfg = get_config("diffusion")
 # cfg.batch_size=1
 # model = SymDiffusion(cfg)
 model = get_old_model(cfg, "more_data_10", "best_k")
+model.cfg = cfg
 # metrics, plots = validate(cfg, model, cfg.val_datasets[0], "val", 5)
-metrics, plots = validate(cfg, model, "bigbind_struct_v2", "val", None)
+metrics, plots = validate(cfg, model, "bigbind_struct_v2", "val", 50)
 for key, val in flatten_dict(metrics).items():
     print(f"{key}: {val:.3f}")

@@ -4,7 +4,8 @@ from typing import Set, Type
 import pandas as pd
 from rdkit import Chem
 from rdkit.Chem import AllChem
-from common.pose_transform import MultiPose, Pose
+from common.pose_transform import MultiPose, Pose, align_poses
+from common.torsion import TorsionData
 from data_formats.graphs.mol_graph import get_mol_coords
 from common.utils import get_mol_from_file, get_mol_from_file_no_cache, get_prot_from_file
 from data_formats.tasks import Task
@@ -93,24 +94,38 @@ class BigBindStructV2Dataset(Dataset):
         lig_crystal_pose = Pose(get_mol_coords(lig_crystal, 0))
 
         if self.cfg.data.get("use_embed_crystal_pose", False):
-            lig = Chem.MolFromSmiles(self.structures.lig_smiles[index])
-            order = lig.GetSubstructMatch(lig_crystal)
-            lig = Chem.RenumberAtoms(lig, list(order))
 
-            lig = gen_conformers(lig, self.cfg.data.num_embeddings)
-            embed_poses = get_mol_multipose(lig)
-            rmsds = get_rmsds([lig], [embed_poses], [lig_crystal_pose], align=True)[0]
-            best_conf = lig.GetConformer(rmsds.argmin().item())
-            lig_embed_crystal = deepcopy(lig)
-            lig_embed_crystal.RemoveAllConformers()
-            lig_embed_crystal.AddConformer(best_conf, True)
-            Chem.rdMolAlign.AlignMol(lig_embed_crystal, lig_crystal)
-            lig_embed_crystal_pose = Pose(get_mol_coords(lig_embed_crystal, 0))
+            if self.cfg.data.get("direct_align_embed_pose", False):
+                lig = get_mol_from_file(self.get_lig_uff_file(index))
+                lig = Chem.RemoveHs(lig)
+                order = lig.GetSubstructMatch(lig_crystal)
+                lig = Chem.RenumberAtoms(lig, list(order))
+
+                lig_torsion_data = TorsionData.from_mol(lig)
+                embed_pose = Pose(get_mol_coords(lig, 0))
+                lig_embed_crystal_pose = align_poses(embed_pose, lig_crystal_pose, lig_torsion_data)
+
+            else:
+
+                lig = Chem.MolFromSmiles(self.structures.lig_smiles[index])
+                order = lig.GetSubstructMatch(lig_crystal)
+                lig = Chem.RenumberAtoms(lig, list(order))
+
+                lig = gen_conformers(lig, self.cfg.data.num_poses)
+                embed_poses = get_mol_multipose(lig)
+                rmsds = get_rmsds([lig], [embed_poses], [lig_crystal_pose], align=True)[0]
+                best_conf = lig.GetConformer(rmsds.argmin().item())
+                lig_embed_crystal = deepcopy(lig)
+                lig_embed_crystal.RemoveAllConformers()
+                lig_embed_crystal.AddConformer(best_conf, True)
+                Chem.rdMolAlign.AlignMol(lig_embed_crystal, lig_crystal)
+                lig_embed_crystal_pose = Pose(get_mol_coords(lig_embed_crystal, 0))
         else:
-            lig = get_mol_from_file_no_cache(self.get_lig_file(index))
+            lig = get_mol_from_file(self.get_lig_uff_file(index))
             lig = Chem.RemoveHs(lig)
             order = lig.GetSubstructMatch(lig_crystal)
             lig = Chem.RenumberAtoms(lig, list(order))
+            lig_embed_crystal_pose = lig_crystal_pose
         
 
         rec = get_prot_from_file(rec_file)

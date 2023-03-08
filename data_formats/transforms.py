@@ -2,7 +2,7 @@
 from dataclassy import dataclass
 import torch
 from typing import Any, Callable, List
-from common.pose_transform import Pose
+from common.pose_transform import MultiPose, Pose
 from common.torsion import TorsionData
 from data_formats.graphs.mol_graph import MolGraph, get_mol_coords
 from data_formats.graphs.prot_graph import ProtGraph, get_full_rec_data
@@ -84,7 +84,7 @@ def get_docked_conformers(cfg, lig):
 def lig_docked_poses(cfg, x):
     confs = get_docked_conformers(cfg, x.lig)
     coords = [ get_mol_coords(x.lig, c) for c in confs ]
-    return Pose(torch.stack(coords))
+    return MultiPose(torch.stack(coords))
 
 @transform(["rec"])
 def full_rec_data(cfg, x):

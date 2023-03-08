@@ -28,7 +28,7 @@ data:
   dock_strategy: "crossdock"
 
   use_embed_crystal_pose: true
-  num_embeddings: 50
+  direct_align_embed_pose: true
 
   lig_graph:
     atom_feats: [ "element", "formal_charge", "hybridization", "is_aromatic", "numH"]
@@ -101,14 +101,16 @@ model:
 
   diffusion:
     timesteps: 16
-    max_trans_sigma: 4.0
-    max_rot_sigma: 1.5
-    max_tor_sigma: 1.5
+    max_trans_sigma: 8.0
+    max_rot_sigma: 2.0
+    max_tor_sigma: 2.0
     use_rot: true
     use_trans: true
-    exponent: 2.0
+    exponent: 1.5
     energy_rmsd: true
     optim: bfgs
+
+  fix_infer_torsion: true
 
   rbf_start: 0
   rbf_end: 16
