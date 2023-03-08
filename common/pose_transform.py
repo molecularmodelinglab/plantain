@@ -1,10 +1,12 @@
 import roma
 import torch
+import jax
 from rdkit import Chem
 from rdkit.Geometry import Point3D
 from functools import reduce
 import torch.nn.functional as F
 from scipy.optimize import minimize
+from common.jorch import to_jax
 from common.torsion import rigid_align
 
 from terrace.batch import Batch, Batchable, collate
@@ -190,15 +192,17 @@ class PoseTransform(Batchable):
 def align_poses(pose1, pose2, tor_data, tries=5, maxiter=10):
     """ Computes the optimal PoseTransform to turn pose1 into pose2, 
     and returns the transformed pose1 """
-    @torch.set_grad_enabled(True)
+    # @torch.set_grad_enabled(True)
+    # @jax.value_and_grad
+    # @to_jax
     def f(t_raw):
         t_raw = torch.asarray(t_raw, dtype=torch.float32)
-        t_raw.requires_grad_()
+        # t_raw.requires_grad_()
         transform = PoseTransform.from_raw(t_raw)
         pose = transform.apply(pose1, tor_data)
         pose = Pose(coord=rigid_align(pose.coord, pose2.coord))
-        mse = F.mse_loss(pose.coord, pose2.coord)
-        return mse.detach(), torch.autograd.grad(mse, t_raw)[0]
+        mse = ((pose.coord - pose2.coord)**2).sum()
+        return mse # .detach(), torch.autograd.grad(mse, t_raw)[0]
 
     options = {
         "maxiter": maxiter,
@@ -207,7 +211,7 @@ def align_poses(pose1, pose2, tor_data, tries=5, maxiter=10):
     best_res = None
     for i in range(tries):
         raw = torch.rand(6 + tor_data.rot_edges.shape[0])*2*torch.pi
-        res = minimize(f, raw, jac=True, options=options)
+        res = minimize(f, raw, options=options)
         if best_res is None or res.fun < best_res.fun:
             best_res = res
 
