@@ -111,7 +111,7 @@ model:
     energy_rmsd: true
     optim: bfgs
 
-  fix_infer_torsion: true
+  fix_infer_torsion: false
 
   rbf_start: 0
   rbf_end: 16
