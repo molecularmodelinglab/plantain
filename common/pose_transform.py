@@ -124,7 +124,7 @@ class PoseTransform(Batchable):
     @staticmethod
     def make_initial(diff_cfg, batch, device):
         batch_size = len(batch)
-        trans_sigma = diff_cfg.max_trans_sigma
+        trans_sigma = diff_cfg.get("infer_trans_sigma", diff_cfg.max_trans_sigma)
         trans = torch.randn((batch_size,1,3), device=device)*trans_sigma
     
         rot = torch.stack([torch.stack([roma.random_rotvec(device=device)]) for b in range(batch_size)])

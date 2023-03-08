@@ -104,6 +104,7 @@ model:
     max_trans_sigma: 8.0
     max_rot_sigma: 2.0
     max_tor_sigma: 2.0
+    infer_trans_sigma: 5.0
     use_rot: true
     use_trans: true
     exponent: 1.5
