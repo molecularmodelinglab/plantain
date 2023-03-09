@@ -7,11 +7,15 @@ val_check_interval: 1.0
 metric_reset_interval: 50
 debug_dataset_len: null
 
-train_dataset: bigbind_struct_v2
-val_datasets: [ bigbind_struct_v2 ]
+train_dataset: 
+  combo:
+    - bigbind_gnina
+    - bigbind_struct_v2
+
+val_datasets: [ bigbind_gnina ]
 
 monitor_metric:
-  name: val/bigbind_struct_v2/acc_2_16
+  name: val/bigbind_gnina/auroc_all
   mode: max
 
 data:
@@ -20,7 +24,7 @@ data:
   use_lig: true
 
   pose_sample: best
-  num_poses: 1
+  num_poses: 4
 
   sna_frac: 1
   only_ki_kd: false
@@ -56,25 +60,34 @@ data:
     edge_feats: [ "dist"]
 
 losses:
-  # pose_mse:
-  #   func: diffused_pose_mse
-  #   weight: 1.0
-
-  rmsd_mse:
-    func: diffused_rmsd_mse
+  act_bce:
+    func: bce
+    pred: active_prob_unnorm
+    y: is_active
     weight: 1.0
+    task: "classify_activity"
+
+  worse_pose_bce:
+    func: worse_pose_bce
+    weight: 0.5
+    task: "classify_activity"
+
+  crystal_pose_ce:
+    func: crystal_pose_ce
+    weight: 0.5
+    task: null
 
 optimizer: adamw
 learn_rate: 1e-5
 max_epochs: 5000
 
-batch_size: 8
+batch_size: 1
 
 test_inference: true
 
 model:
 
-  type: diffusion
+  type: twister
   
   rec_encoder:
     node_embed_size: 64
@@ -86,37 +99,18 @@ model:
     edge_embed_size: 64
     node_out_size: 128
 
-  num_mpnn_layers: 16
-  inner_attention: true
-  use_layer_norm: true
-  multi_pose_attention: true
-  intra_lig_energy: true
-  asym_lig_energy: true
-  energy_bias: 6.2
+  num_mpnn_layers: 4
+  normalization: layer
+  inner_attention: false
 
   project_full_atom: true
-  full_atom_embed_size: 32
+  full_atom_embed_size: 2
 
-  out_size: 128
-
-  diffusion:
-    timesteps: 16
-    max_trans_sigma: 8.0
-    max_rot_sigma: 2.0
-    max_tor_sigma: 2.0
-    infer_trans_sigma: 5.0
-    use_rot: true
-    use_trans: true
-    exponent: 1.5
-    energy_rmsd: true
-    energy_rank: true
-    optim: bfgs
-
-  fix_infer_torsion: false
+  single_out_size: 8
+  interact_hid_size: 2
+  interact_dist_in_size: 2
+  interact_out_size: 2
 
   rbf_start: 0
-  rbf_end: 32
-  rbf_steps: 64
-
-  norm_grad: false
-  energy_scale: 1.0 #5e-4
+  rbf_end: 8
+  rbf_steps: 16
