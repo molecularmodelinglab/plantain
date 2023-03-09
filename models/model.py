@@ -9,10 +9,13 @@ class Model():
     def predict(self, x: Batch[DFRow], task_names: Optional[List[str]] = None) -> Batch[DFRow]:
         if task_names is None:
             task_names = self.get_tasks()
+        # if len(task_names) == 0:
+        #     raise ValueError("predict needs at least one task")
         pred = self(x)
+        return self.finalize_prediction(x, pred, task_names)
+
+    def finalize_prediction(self, x, pred, task_names):
         ret = [ pred ]
-        if len(task_names) == 0:
-            raise ValueError("predict needs at least one task")
         for task_name in task_names:
             task = Task.all_tasks[task_name]
             method_name = task_name
