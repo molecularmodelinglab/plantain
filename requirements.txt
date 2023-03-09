@@ -21,3 +21,4 @@ rdkit
 py3Dmol
 jax
 jaxlib
+terrace
