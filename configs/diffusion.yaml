@@ -92,7 +92,7 @@ model:
   multi_pose_attention: true
   intra_lig_energy: true
   asym_lig_energy: true
-  energy_bias: 6.2
+  energy_bias: 0.5
 
   project_full_atom: true
   full_atom_embed_size: 32
