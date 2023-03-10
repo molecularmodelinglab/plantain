@@ -66,6 +66,12 @@ def crystal_pose_ce_loss(x, pred, y):
     labels = torch.ones((p.shape[0],), dtype=torch.long, device=p.device)
     return F.cross_entropy(p, labels)
 
+def worst_pose_atn_ce_loss(x, pred, y):
+    p = pred.full_pose_scores
+    p = torch.cat((p[:,:-1].mean(-1, keepdims=True), p[:,-1:]), -1)
+    labels = torch.zeros((p.shape[0],), dtype=torch.long, device=p.device)
+    return F.cross_entropy(p, labels)
+
 def opposite_pose_bce_loss(x, pred, y):
     pred = pred.pose_scores[:,-1]
     y = ~y.is_active
@@ -116,7 +122,8 @@ def get_single_loss(loss_cfg, x, pred, y):
         "trans_mse": trans_mse,
         "diffused_pose_mse": diffused_pose_mse,
         "diffused_rmsd_mse": diffused_rmsd_mse,
-        "crystal_pose_ce": crystal_pose_ce_loss
+        "crystal_pose_ce": crystal_pose_ce_loss,
+        "worse_pose_atn_ce": worst_pose_atn_ce_loss,
     }[loss_cfg.func]
     if "x" in loss_cfg:
         x = getattr(x, loss_cfg["x"])
