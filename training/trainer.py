@@ -172,6 +172,7 @@ class Trainer(pl.LightningModule):
         self.trainer = pl.Trainer(gpus=gpus,
                              max_epochs=self.cfg.max_epochs,
                              val_check_interval=self.cfg.val_check_interval,
+                             check_val_every_n_epoch=self.cfg.get("check_val_every_n_epoch", None),
                              logger=logger,
                              callbacks=callbacks,
                              resume_from_checkpoint=None)
