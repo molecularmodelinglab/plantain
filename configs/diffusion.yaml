@@ -5,7 +5,7 @@ name: test_run
 
 val_check_interval: null
 metric_reset_interval: 50
-check_val_every_n_epoch: 5
+check_val_every_n_epoch: 10
 debug_dataset_len: null
 
 train_dataset: bigbind_struct_v2
