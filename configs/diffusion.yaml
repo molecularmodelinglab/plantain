@@ -4,7 +4,7 @@ resume_id: null
 name: test_run
 
 val_check_interval: null
-metric_reset_interval: 50
+metric_reset_interval: 500
 check_val_every_n_epoch: 10
 debug_dataset_len: null
 
