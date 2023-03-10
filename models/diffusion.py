@@ -220,7 +220,7 @@ class Diffusion(nn.Module, Model):
             diff = self.diffuse(x, y, hid_feat)
             diff_pose = diff.apply(self.get_true_pose(y), x.lig_torsion_data)
             ret_dif = Batch(DFRow, diffused_transforms=diff, diffused_poses=diff_pose)
-        if "predict_lig_pose" in task_names and (split != "train" or batch_idx % 50 == 0):
+        if "predict_lig_pose" in task_names and (split != "train" or batch_idx % self.cfg.metric_reset_interval == 0):
             with torch.no_grad():
                 ret_pred = self(x, hid_feat)
                 # pred_crystal = self(x, hid_feat, self.get_true_pose(y))
