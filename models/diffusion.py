@@ -198,7 +198,7 @@ class Diffusion(nn.Module, Model):
                               transform)
 
         if self.cfg.model.diffusion.get("energy_rank", False):
-            rmsds = torch.linspace(0,1,energy.shape[1]).unsqueeze(0).repeat(energy.shape[0], 1)
+            rmsds = torch.linspace(0,1,energy.shape[1], device=energy.device).unsqueeze(0).repeat(energy.shape[0], 1)
         else:
             rmsds = get_transform_rmsds(batch, true_pose, transform)
 
