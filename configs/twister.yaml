@@ -22,8 +22,8 @@ data:
   use_rec: true
   use_lig: true
 
-  pose_sample: best
-  num_poses: 4
+  pose_sample: best_and_worst
+  num_poses: 5
 
   sna_frac: 1
   only_ki_kd: false
@@ -68,12 +68,12 @@ losses:
 
   worst_pose_atn_ce:
     func: worse_pose_atn_ce
-    weight: 0.5
+    weight: 0.1
     task: "classify_activity"
 
   crystal_pose_ce:
     func: crystal_pose_ce
-    weight: 0.5
+    weight: 0.1
     task: null
 
 optimizer: adamw
