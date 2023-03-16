@@ -8,6 +8,7 @@ def act_mse_loss(x, pred, y):
     mask = ~torch.isnan(y.activity)
     pred = pred.activity[mask]
     y = y.activity[mask]
+    if mask.sum() == 0: return 0.0
     return F.mse_loss(pred, y)
 
 def x_mse_loss(x, pred, y):
