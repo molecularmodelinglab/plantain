@@ -76,7 +76,8 @@ class BigBindGninaStructDataset(Dataset):
         rmsds = []
         for conformer in get_docked_conformers(self.cfg, docked_lig):
             rmsds.append(rdMolAlign.CalcRMS(true_lig, docked_lig, 0, conformer))
-        rmsds = NoStackTensor(torch.tensor(rmsds, dtype=torch.float32))
+        # rmsds = NoStackTensor(torch.tensor(rmsds, dtype=torch.float32))
+        rmsds = torch.tensor(rmsds, dtype=torch.float32)
         y = DFRow(pose_rmsds=rmsds)
 
         return x, y
