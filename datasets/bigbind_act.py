@@ -18,6 +18,7 @@ class BigBindActDataset(Dataset):
             csv = cfg.platform.bigbind_dir + f"/activities_{split}.csv"
         else:
             csv = cfg.platform.bigbind_dir + f"/activities_sna_{self.sna_frac}_{split}.csv"
+            self.activity_values = pd.read_csv(cfg.platform.bigbind_dir + f"/activities_{split}.csv")
         self.activities = pd.read_csv(csv)
         self.dir = cfg.platform.bigbind_dir
         self.split = split
@@ -74,7 +75,20 @@ class BigBindActDataset(Dataset):
     def get_label_feats(self):
         if self.sna_frac is None:
             return { "activity"}
-        return { "is_active" }
+        return { "is_active", "activity" }
+
+    def get_activity(self, index):
+        if self.sna_frac is None:
+            return self.activities[index].activity
+        elif self.sna_frac == 1:
+            if index % 2 == 0:
+                val_idx = index // 2
+                assert self.activities.lig_smiles[index] == self.activity_values.lig_smiles[val_idx]
+                return self.activity_values.pchembl_value[val_idx]
+            else:
+                return torch.nan
+        else:
+            raise AssertionError
 
     def getitem_impl(self, index):
 
@@ -90,10 +104,13 @@ class BigBindActDataset(Dataset):
         if "rec" in self.required_x_features:
             x["rec"] = get_prot_from_file(rec_file)
 
+        activity = self.get_activity(index)
+        activity = torch.tensor(activity, dtype=torch.float32)
+
         if self.sna_frac is None:
-            y = DFRow(activity=torch.tensor(self.activities.pchembl_value[index], dtype=torch.float32))
+            y = DFRow(activity=activity)
         else:
-            y = DFRow(is_active=self.activities.active[index])
+            y = DFRow(is_active=self.activities.active[index], activity=activity)
 
         # if self.split == "val":
         #     x["train_probis_similarity"] = self.activities.train_probis_similarity[index]

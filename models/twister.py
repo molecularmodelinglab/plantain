@@ -23,7 +23,12 @@ class Twister(Module, ClassifyActivityModel):
         return "twister"
 
     def get_tasks(self):
-        return [ "score_activity_class", "classify_activity", "score_pose" ]
+        return [ "score_activity_class",
+                 "classify_activity",
+                 "score_pose",
+                 "predict_activity",
+                 # "score_activity_regr" 
+                ]
 
     def get_input_feats(self):
         ret = [ "lig_graph", "rec_graph", "lig_docked_poses" ]
@@ -63,22 +68,35 @@ class Twister(Module, ClassifyActivityModel):
             lig_poses = x.lig_docked_poses
 
         inter_mat = self.get_initial_interaction_matrix(x)
-        dist_inter_mat = self.get_dist_inter_mat(x, inter_mat, lig_poses)
+        flat_output = self.get_outputs_from_inter_mat(inter_mat, 3).unsqueeze(1)
 
-        flat_output = self.get_outputs_from_inter_mat(inter_mat, 2).unsqueeze(1)
-        dist_output = self.get_outputs_from_inter_mat(dist_inter_mat, 2)
+        if x.lig_docked_poses[0].coord.shape[0] > 0:
+            dist_inter_mat = self.get_dist_inter_mat(x, inter_mat, lig_poses)
+            dist_output = self.get_outputs_from_inter_mat(dist_inter_mat, 2)
+            pose_scores = dist_output[:,:,1]
+        else:
+            dist_output = torch.zeros((len(x), 0, 3), device=flat_output.device)
+            pose_scores =torch.zeros((len(x), 0),  device=flat_output.device)
 
         full_output = torch.cat((flat_output, dist_output), 1)
         preds = full_output[:,:,0]
         atn = full_output[:,:,1]
+        act_preds = full_output[:,:,2]
         
         atn = torch.softmax(atn, -1)
         score = (preds*atn).sum(-1)
+        act = (act_preds*atn).sum(-1)
 
-        pose_scores = dist_output[:,:,1]
         full_pose_scores = full_output[:,:,1]
 
-        return Batch(DFRow, score=score, pose_scores=pose_scores, full_pose_scores=full_pose_scores)
+        return Batch(DFRow,
+                     score=score,
+                     activity=act,
+                     activity_score=act,
+                     pose_scores=pose_scores,
+                     full_pose_scores=full_pose_scores,
+                     full_activity_scores=preds,
+                     full_activities=act_preds)
 
     def predict_train(self, x, y, task_names, split, batch_idx):
         if hasattr(y, "lig_crystal_pose"):

@@ -84,7 +84,7 @@ def get_docked_conformers(cfg, lig):
 def lig_docked_poses(cfg, x):
     confs = get_docked_conformers(cfg, x.lig)
     coords = [ get_mol_coords(x.lig, c) for c in confs ]
-    return MultiPose(torch.stack(coords))
+    return MultiPose(torch.asarray(coords))
 
 @transform(["rec"])
 def full_rec_data(cfg, x):

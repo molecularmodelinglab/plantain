@@ -32,6 +32,10 @@ Task("classify_activity",
     ["lig", "rec"],
     ["is_active"],
     ["active_prob_unnorm", "active_prob"])
+Task("predict_activity",
+    ["lig", "rec"],
+    ["activity"],
+    ["activity"])
 Task("reject_option",
     [],
     [],

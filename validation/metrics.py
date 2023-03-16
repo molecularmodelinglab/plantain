@@ -341,6 +341,35 @@ class RejectOptionMetric(FullMetric):
             }
         return ret
 
+class ActivityR2(FullMetric):
+
+    def __init__(self):
+        super().__init__()
+        self.metric = R2Score()
+
+    def update(self, x, pred, y):
+        mask = ~torch.isnan(y.activity)
+        pred = pred.activity[mask]
+        y = y.activity[mask]
+        self.metric.update(pred, y)
+
+    def compute(self):
+        if self.metric.sum_error.shape[0] < 2:
+            return torch.tensor(torch.nan, device=self.metric.sum_error.device)
+        return self.metric.compute()
+
+
+class PerPocketActR2(PerPocketMetric):
+
+    def __init__(self):
+        super().__init__(IsActiveAUC)
+
+    def pre_compute(self):
+        """ Can't compute AUC for labels that are all active or all inactive"""
+        for key, val in list(self.pocket_metrics.items()):
+            if val.metric.sum_error.shape[0] < 2:
+                del self.pocket_metrics[key]
+
 def get_single_task_metrics(task: str):
     return {
         "score_activity_class": nn.ModuleDict({
@@ -363,6 +392,9 @@ def get_single_task_metrics(task: str):
             "acc_5": PoseAcc(5.0),
             "crystal_2": CrystalEnergy(2.0),
             "crystal_5": CrystalEnergy(5.0)
+        }),
+        "predict_activity": nn.ModuleDict({
+            "r2": PerPocketMetric(ActivityR2),
         })
     }[task]
 

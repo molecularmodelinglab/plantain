@@ -4,6 +4,12 @@ import torch.nn.functional as F
 def bce_loss(x, pred, y):
     return F.binary_cross_entropy_with_logits(pred, y.float())
 
+def act_mse_loss(x, pred, y):
+    mask = ~torch.isnan(y.activity)
+    pred = pred.activity[mask]
+    y = y.activity[mask]
+    return F.mse_loss(pred, y)
+
 def x_mse_loss(x, pred, y):
     return F.mse_loss(pred, x)
 
@@ -124,6 +130,7 @@ def get_single_loss(loss_cfg, x, pred, y):
         "diffused_rmsd_mse": diffused_rmsd_mse,
         "crystal_pose_ce": crystal_pose_ce_loss,
         "worse_pose_atn_ce": worst_pose_atn_ce_loss,
+        "act_mse": act_mse_loss,
     }[loss_cfg.func]
     if "x" in loss_cfg:
         x = getattr(x, loss_cfg["x"])
