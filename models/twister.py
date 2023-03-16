@@ -72,7 +72,7 @@ class Twister(Module, ClassifyActivityModel):
 
         if x.lig_docked_poses[0].coord.shape[0] > 0:
             dist_inter_mat = self.get_dist_inter_mat(x, inter_mat, lig_poses)
-            dist_output = self.get_outputs_from_inter_mat(dist_inter_mat, 2)
+            dist_output = self.get_outputs_from_inter_mat(dist_inter_mat, 3)
             pose_scores = dist_output[:,:,1]
         else:
             dist_output = torch.zeros((len(x), 0, 3), device=flat_output.device)
@@ -81,7 +81,7 @@ class Twister(Module, ClassifyActivityModel):
         full_output = torch.cat((flat_output, dist_output), 1)
         preds = full_output[:,:,0]
         atn = full_output[:,:,1]
-        act_preds = full_output[:,:,2]
+        act_preds = self.make(ScaleOutput, 6.0)(full_output[:,:,2])
         
         atn = torch.softmax(atn, -1)
         score = (preds*atn).sum(-1)

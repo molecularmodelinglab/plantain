@@ -67,7 +67,7 @@ losses:
     weight: 0.1
 
 optimizer: adamw
-learn_rate: 1e-5
+learn_rate: 1e-3
 max_epochs: 5000
 
 batch_size: 16
