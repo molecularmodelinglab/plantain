@@ -354,7 +354,7 @@ class ActivityR2(FullMetric):
         self.metric.update(pred, y)
 
     def compute(self):
-        if self.metric.sum_error.shape[0] < 2:
+        if self.metric.total < 2:
             return torch.tensor(torch.nan, device=self.metric.sum_error.device)
         return self.metric.compute()
 
@@ -362,12 +362,12 @@ class ActivityR2(FullMetric):
 class PerPocketActR2(PerPocketMetric):
 
     def __init__(self):
-        super().__init__(IsActiveAUC)
+        super().__init__(ActivityR2)
 
     def pre_compute(self):
         """ Can't compute AUC for labels that are all active or all inactive"""
         for key, val in list(self.pocket_metrics.items()):
-            if val.metric.sum_error.shape[0] < 2:
+            if val.metric.total < 2:
                 del self.pocket_metrics[key]
 
 def get_single_task_metrics(task: str):
@@ -394,7 +394,7 @@ def get_single_task_metrics(task: str):
             "crystal_5": CrystalEnergy(5.0)
         }),
         "predict_activity": nn.ModuleDict({
-            "r2": PerPocketMetric(ActivityR2),
+            "r2": PerPocketActR2(),
         })
     }[task]
 
