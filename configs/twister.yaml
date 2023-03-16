@@ -23,7 +23,7 @@ data:
   use_lig: true
 
   pose_sample: best_and_worst
-  num_poses: 5
+  num_poses: 3
 
   sna_frac: 1
   only_ki_kd: false
