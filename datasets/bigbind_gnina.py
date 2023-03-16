@@ -17,6 +17,7 @@ class BigBindGninaDataset(Dataset):
             csv = cfg.platform.bigbind_gnina_dir + f"/activities_{split}.csv"
         else:
             csv = cfg.platform.bigbind_gnina_dir + f"/activities_sna_{self.sna_frac}_{split}.csv"
+            self.activity_values = pd.read_csv(cfg.platform.bigbind_dir + f"/activities_{split}.csv")
         self.activities = pd.read_csv(csv)
         self.dir = cfg.platform.bigbind_dir
         self.gnina_dir = cfg.platform.bigbind_gnina_dir
@@ -50,10 +51,25 @@ class BigBindGninaDataset(Dataset):
         else:
             return self.dir + "/" + rec_file
 
-    def get_label_feats(self) -> Set[Type[Task]]:
+    def get_label_feats(self):
         if self.sna_frac is None:
-            return { "activity" }
-        return { "is_active" }
+            return { "activity"}
+        return { "is_active", "activity" }
+
+    def get_activity(self, index):
+        if self.sna_frac is None:
+            return self.activities[index].activity
+        elif self.sna_frac == 1:
+            lf = self.activities.docked_lig_file[index]
+            og_index = int(lf.split("/")[-1].split(".")[0])
+            if og_index % 2 == 0:
+                val_idx = og_index // 2
+                assert self.activities.lig_smiles[index] == self.activity_values.lig_smiles[val_idx]
+                return self.activity_values.pchembl_value[val_idx]
+            else:
+                return torch.nan
+        else:
+            raise AssertionError
 
     def getitem_impl(self, index):
 
@@ -69,10 +85,13 @@ class BigBindGninaDataset(Dataset):
         pose_scores = NoStackTensor(torch.tensor(pose_scores, dtype=torch.float32))
         affinities = NoStackTensor(torch.tensor(affinities, dtype=torch.float32))
 
+        activity = self.get_activity(index)
+        activity = torch.tensor(activity, dtype=torch.float32)
+
         x = DFRow(lig=lig, rec=rec, pocket_id=poc_id, gnina_pose_scores=pose_scores, gnina_affinities=affinities)
         if self.sna_frac is None:
-            y = DFRow(activity=torch.tensor(self.activities.pchembl_value[index], dtype=torch.float32))
+            y = DFRow(activity=activity)
         else:
-            y = DFRow(is_active=self.activities.active[index])
+            y = DFRow(is_active=self.activities.active[index], activity=activity)
 
         return x, y
