@@ -94,4 +94,6 @@ class BigBindGninaDataset(Dataset):
         else:
             y = DFRow(is_active=self.activities.active[index], activity=activity)
 
+        # print("act", index, affinities.shape)
+
         return x, y

@@ -10,6 +10,8 @@ class ComboDataset(data.Dataset):
 
     def __getitem__(self, index: int):
 
+        # print("combo", index)
+
         if index >= len(self):
             raise IndexError()
 

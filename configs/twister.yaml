@@ -6,7 +6,7 @@ val_check_interval: 0.25
 metric_reset_interval: 50
 debug_dataset_len: null
 
-train_dataset: 
+train_dataset:
   combo:
     - bigbind_gnina
     - bigbind_gnina_struct

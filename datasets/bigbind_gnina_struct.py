@@ -67,11 +67,12 @@ class BigBindGninaStructDataset(Dataset):
         rec = get_prot_from_file(rec_file)
         poc_id = self.structures.pocket[index]
 
-        pose_scores, affinities = get_gnina_scores_from_pdbqt(docked_lig_file)
-        pose_scores = torch.tensor(pose_scores, dtype=torch.float32)
-        affinities = torch.tensor(affinities, dtype=torch.float32)
+        # can't collate pose scores and affinities, must use get_docked_conformers!
+        # pose_scores, affinities = get_gnina_scores_from_pdbqt(docked_lig_file)
+        # pose_scores = torch.tensor(pose_scores, dtype=torch.float32)
+        # affinities = torch.tensor(affinities, dtype=torch.float32)
 
-        x = DFRow(lig=docked_lig, rec=rec, pocket_id=poc_id, gnina_pose_scores=pose_scores, gnina_affinities=affinities)
+        x = DFRow(lig=docked_lig, rec=rec, pocket_id=poc_id) #, gnina_pose_scores=pose_scores, gnina_affinities=affinities)
         
         rmsds = []
         for conformer in get_docked_conformers(self.cfg, docked_lig):
@@ -79,5 +80,7 @@ class BigBindGninaStructDataset(Dataset):
         # rmsds = NoStackTensor(torch.tensor(rmsds, dtype=torch.float32))
         rmsds = torch.tensor(rmsds, dtype=torch.float32)
         y = DFRow(pose_rmsds=rmsds)
+
+        # print("struct", index)
 
         return x, y
