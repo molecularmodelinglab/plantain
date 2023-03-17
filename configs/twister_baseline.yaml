@@ -25,7 +25,7 @@ data:
   sna_frac: 1
   only_ki_kd: false
   
-  dock_strategy: "redock"
+  dock_strategy: "crossdock"
 
   # use_embed_crystal_pose: true
   # direct_align_embed_pose: true

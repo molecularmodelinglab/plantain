@@ -1,11 +1,12 @@
 import sys
 from tqdm import tqdm
 from common.cfg_utils import get_config
-from datasets.make_dataset import make_dataloader
-
+from datasets.make_dataset import make_dataloader, make_train_dataloader
+from models.make_model import make_model
 
 def dataset_iterate(cfg):
-    train_dataloader = make_dataloader(cfg, cfg.train_dataset, "train", [])# "lig_graph", "rec_graph"])
+    model = make_model(cfg)
+    train_dataloader = make_train_dataloader(cfg, model.get_input_feats())
     for i, data in enumerate(tqdm(train_dataloader)):
         # if i > 100:
         #     break
