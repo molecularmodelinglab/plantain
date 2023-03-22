@@ -9,10 +9,10 @@ check_val_every_n_epoch: 10
 debug_dataset_len: null
 
 train_dataset: bigbind_struct_v2
-val_datasets: [ bigbind_struct_v2 ]
+val_datasets: [ bigbind_struct ]
 
 monitor_metric:
-  name: val/bigbind_struct_v2/acc_2_16
+  name: val/bigbind_struct/acc_2_16
   mode: max
 
 data:
@@ -116,7 +116,7 @@ model:
   fix_infer_torsion: false
 
   rbf_start: 0
-  rbf_end: 32
+  rbf_end: 8
   rbf_steps: 64
 
   norm_grad: false

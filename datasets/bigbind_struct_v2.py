@@ -89,7 +89,7 @@ class BigBindStructV2Dataset(Dataset):
 
         rec_file = self.get_rec_file(index)
 
-        lig_crystal = get_mol_from_file_no_cache(self.get_lig_crystal_file(index))
+        lig_crystal = get_mol_from_file(self.get_lig_crystal_file(index))
         lig_crystal = Chem.RemoveHs(lig_crystal)
         lig_crystal_pose = Pose(get_mol_coords(lig_crystal, 0))
 
@@ -130,6 +130,9 @@ class BigBindStructV2Dataset(Dataset):
 
         rec = get_prot_from_file(rec_file)
         poc_id = self.structures.pocket[index]
+
+        if self.cfg.get("debug_crystal_pose_cheat", False):
+            lig = lig_crystal
 
         x = DFRow(lig=lig, lig_crystal=lig_crystal, rec=rec, pocket_id=poc_id)
         

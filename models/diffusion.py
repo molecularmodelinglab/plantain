@@ -225,19 +225,46 @@ class Diffusion(nn.Module, Model):
                 ret_pred = self(x, hid_feat)
                 # pred_crystal = self(x, hid_feat, self.get_true_pose(y))
                 # pred_crystal = Batch(DFRow, crystal_pose=pred_crystal.lig_pose.get(0), crystal_energy=pred_crystal.energy[:,0])
-                # ret_pred = merge([ret_pred, pred_crystal])
+                # if self.cfg.model.diffusion.get("only_pred_local_min", False):
+                #     ret_pred = pred_crystal
+                # else:
+                #     ret_pred = self(x, hid_feat)
+                #     ret_pred = merge([ret_pred, pred_crystal])
             return merge([ret_dif, ret_pred])
         else:
             return ret_dif
 
+    @staticmethod
+    def get_init_pose(x):
+        init_poses = []
+        for x0 in x:
+            embed_pose = x0.lig_docked_poses.get(0)
+            rec_mean = x0.full_rec_data.coord.mean(0)
+            lig_mean = embed_pose.coord.mean(0)
+            init_poses.append(Pose(coord=embed_pose.coord + rec_mean - lig_mean))
+        return collate(init_poses)
+
     @torch.no_grad()
     def infer_bfgs(self, x, hid_feat = None, init_pose_override=None):
+        # x = deepcopy(x)
         if hid_feat is None:
             batch_rec_feat, batch_lig_feat = self.get_hidden_feat(x)
         else:
             batch_rec_feat, batch_lig_feat = hid_feat
 
         bias, weight = self.force_field.scale_output.parameters()
+
+        if init_pose_override is None:
+            # print("running init energy")
+            num_rand_poses = self.cfg.model.diffusion.get("num_init_poses", 1024)
+            init_pose = Diffusion.get_init_pose(x)
+            rand_transforms = PoseTransform.make_initial(self.cfg.model.diffusion, x, batch_lig_feat.device, num_rand_poses)
+            rand_poses = rand_transforms.apply(init_pose, x.lig_torsion_data).cpu()
+            init_energy = self.get_energy(x, batch_rec_feat, batch_lig_feat, init_pose, rand_transforms).cpu()
+            # print("stopped init energy")
+        else:
+            rand_poses = [None]*len(x)
+            init_energy = [None]*len(x)
 
         x = x.cpu()
         ret = []
@@ -254,10 +281,13 @@ class Diffusion(nn.Module, Model):
             else:
                 pose_override = None
 
-            args.append((self.cfg, x[i], rec_feat.detach().cpu(), lig_feat.detach().cpu(), weight.detach().cpu(), bias.detach().cpu(), pose_override))
+            args.append((self.cfg, x[i], rec_feat.detach().cpu(), lig_feat.detach().cpu(), weight.detach().cpu(), bias.detach().cpu(), pose_override, rand_poses[i], init_energy[i]))
         
         if not hasattr(Diffusion, "jit_infer"):
-            Diffusion.jit_infer = jax.jit(jax.value_and_grad(to_jax(Diffusion.energy_raw)), static_argnums=1)
+            if self.cfg.model.diffusion.get("use_jit", True):
+                Diffusion.jit_infer = jax.jit(jax.value_and_grad(to_jax(Diffusion.energy_raw)), static_argnums=1)
+            else:
+                Diffusion.jit_infer = jax.value_and_grad(to_jax(Diffusion.energy_raw))
             # Diffusion.infer_bfgs_single((*args[0][:-1], True))
 
         if self.cfg.platform.infer_workers > 0:
@@ -273,7 +303,7 @@ class Diffusion(nn.Module, Model):
 
     @staticmethod
     def infer_bfgs_single(args):
-        cfg, x, rec_feat, lig_feat, weight, bias, init_pose_override = args
+        cfg, x, rec_feat, lig_feat, weight, bias, init_pose_override, rand_poses, init_energy = args
         # f = jax.jit(jax.value_and_grad(to_jax(Diffusion.energy_raw)), static_argnums=1) # deepcopy(Diffusion.jit_infer)
         f = Diffusion.jit_infer
 
@@ -292,14 +322,18 @@ class Diffusion(nn.Module, Model):
         if cfg.model.get("fix_infer_torsion", False):
             n_tries = cfg.data.num_poses
 
+        if init_pose_override is None:
+            best_pose_indices = init_energy.argsort()
+
         for i in range(n_tries):  
-            
             if init_pose_override is None:
-                pose_idx = min(x.lig_docked_poses.coord.shape[0]-1, i)
-                embed_pose = x.lig_docked_poses.get(pose_idx)
-                rec_mean = x.full_rec_data.coord.mean(0)
-                lig_mean = embed_pose.coord.mean(0)
-                init_pose = Pose(coord=embed_pose.coord + rec_mean - lig_mean)
+                pose_index = best_pose_indices[i]
+                init_pose = rand_poses.get(pose_index)
+                # pose_idx = min(x.lig_docked_poses.coord.shape[0]-1, i)
+                # embed_pose = x.lig_docked_poses.get(pose_idx)
+                # rec_mean = x.full_rec_data.coord.mean(0)
+                # lig_mean = embed_pose.coord.mean(0)
+                # init_pose = Pose(coord=embed_pose.coord + rec_mean - lig_mean)
             else:
                 init_pose = init_pose_override
 
@@ -331,7 +365,6 @@ class Diffusion(nn.Module, Model):
             opt_raw = torch.tensor(res.x, dtype=torch.float32, device=device)
             # t_opt = PoseTransform.from_raw(torch.tensor(raw, dtype=torch.float32, device=device))
             t_opt = PoseTransform.from_raw(opt_raw)
-            # print(opt_raw)
             pose = t_opt.apply(init_pose, x.lig_torsion_data)
             pose_and_energies.append((res.fun, pose))
 

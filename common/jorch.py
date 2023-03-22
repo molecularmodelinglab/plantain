@@ -49,6 +49,8 @@ class JorchTensor():
             new_func = jax_cat
         elif func.__name__ == "mul":
             new_func = lambda x, y: x*y
+        elif func.__name__ == "det":
+            new_func = jnp.linalg.det
         else:
             if func.__name__.startswith("linalg_"):
                 mod = jnp.linalg

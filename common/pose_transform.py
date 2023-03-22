@@ -122,24 +122,26 @@ class PoseTransform(Batchable):
         return Batch(PoseTransform, rot=rot, trans=trans, tor_angles=angles)
 
     @staticmethod
-    def make_initial(diff_cfg, batch, device):
+    def make_initial(diff_cfg, batch, device, num_poses=1):
         batch_size = len(batch)
         trans_sigma = diff_cfg.get("infer_trans_sigma", diff_cfg.max_trans_sigma)
-        trans = torch.randn((batch_size,1,3), device=device)*trans_sigma
+        trans = torch.randn((batch_size,num_poses,3), device=device)*trans_sigma
     
-        rot = torch.stack([torch.stack([roma.random_rotvec(device=device)]) for b in range(batch_size)])
+        rot = torch.stack([torch.stack([roma.random_rotvec(device=device) for t in range(num_poses)]) for b in range(batch_size)])
         if hasattr(diff_cfg, "max_rot_sigma") and diff_cfg.max_rot_sigma == 0:
             rot = torch.zeros_like(rot)
 
+        max_angle = 2*torch.pi
         angles = []
         for tor_data in batch.lig_torsion_data:
-            angles.append(torch.rand((1, len(tor_data.rot_edges)), device=device)*2*torch.pi)
+            angles.append(torch.rand((num_poses, len(tor_data.rot_edges)), device=device)*max_angle)
 
         return Batch(PoseTransform, rot=rot, trans=trans, tor_angles=angles)
 
     def apply(self, pose, tor_data, use_tor=True):
         coord = pose.coord
-        rot_mat = roma.rotvec_to_rotmat(self.rot)
+        rot = self.rot + 1e-10 # add epsilon to avoid NaN gradients
+        rot_mat = roma.rotvec_to_rotmat(rot)
         if self.tor_angles.size(-1) > 0 and use_tor:
             coord = tor_data.set_all_angles(self.tor_angles, coord)
         centroid = coord.mean(-2, keepdim=True)
@@ -189,14 +191,15 @@ class PoseTransform(Batchable):
         # print(grad.rot, grad.tor_angles)
         return Batch(PoseTransform, rot=rot, trans=trans, tor_angles=tor)
 
-def align_poses(pose1, pose2, tor_data, tries=5, maxiter=10):
+def align_poses(pose1, pose2, tor_data, tries=20, maxiter=50):
     """ Computes the optimal PoseTransform to turn pose1 into pose2, 
     and returns the transformed pose1 """
     # @torch.set_grad_enabled(True)
-    # @jax.value_and_grad
-    # @to_jax
+    @jax.jit
+    @jax.value_and_grad
+    @to_jax
     def f(t_raw):
-        t_raw = torch.asarray(t_raw, dtype=torch.float32)
+        # t_raw = torch.asarray(t_raw, dtype=torch.float32)
         # t_raw.requires_grad_()
         transform = PoseTransform.from_raw(t_raw)
         pose = transform.apply(pose1, tor_data)
@@ -211,7 +214,7 @@ def align_poses(pose1, pose2, tor_data, tries=5, maxiter=10):
     best_res = None
     for i in range(tries):
         raw = torch.rand(6 + tor_data.rot_edges.shape[0])*2*torch.pi
-        res = minimize(f, raw, options=options)
+        res = minimize(f, raw, jac=True, method="BFGS", options=options)
         if best_res is None or res.fun < best_res.fun:
             best_res = res
 
