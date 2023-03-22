@@ -37,18 +37,8 @@ def rigid_transform_Kabsch_3D_torch(A, B):
 
     R = Vt.transpose(-2,-1) @ U.transpose(-2,-1)
 
-    # # special reflection case
-    # if len(R.shape) == 3:
-    #     for i in range(R.shape[0]):
-    #         if torch.linalg.det(R[i]) < 0:
-    #             SS = torch.diag(torch.tensor([1.,1.,-1.], device=A.device))
-    #             R[i] = (Vt[i].T @ SS) @ U[i].T
-    # else:
-    #     assert len(R.shape) == 2
-    #     if torch.linalg.det(R) < 0:
-    #         SS = torch.diag(torch.tensor([1.,1.,-1.], device=A.device))
-    #         R = (Vt.T @ SS) @ U.T
-    # assert (torch.abs(torch.linalg.det(R) - 1) < 1e-5).all()
+    s = R.det().sign()
+    R = torch.cat((R[...,:-1], (R[...,-1]*s.unsqueeze(-1)).unsqueeze(-1)), -1)
 
     t = -R @ centroid_A + centroid_B
     return R, t
@@ -104,6 +94,7 @@ class TorsionData(Batchable):
         return TorsionData(rot_edges, mask_rotate)
 
     def set_angle(self, rot_index, angle, coord):
+        angle = angle + 1e-10 # add epsilon to avoid NaN gradients
         idx1, idx2 = self.rot_edges[rot_index]
         mask = self.rot_masks[rot_index]
         if (isinstance(angle, float) or angle.shape == tuple()) and len(coord.shape) == 2:
@@ -153,4 +144,4 @@ class TorsionData(Batchable):
             new_coord = coord
             for idx in range(angles.shape[-1]):
                 new_coord = self.set_angle(idx, angles[...,idx], new_coord)
-        return rigid_align(new_coord, coord)
+        return new_coord #rigid_align(new_coord, coord)

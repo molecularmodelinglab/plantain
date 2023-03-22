@@ -11,7 +11,7 @@ train_dataset:
     - bigbind_gnina
     - bigbind_gnina_struct
 
-val_datasets: [ bigbind_gnina ]
+val_datasets: [ bigbind_gnina, bigbind_gnina_struct ]
 
 monitor_metric:
   name: val/bigbind_gnina/auroc_all

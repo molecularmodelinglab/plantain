@@ -6,7 +6,7 @@ from validation.validate import save_validation
 def main(cfg):
     # model_names = [ "gnina_mse" ]
     # model_names = ["rec_feats" ]
-    model_names = [ "softmax" ]
+    model_names = [ "docked_ce_smol" ]
     # model_names = [ "pos_softmax_0.5", "softmax_0.001", "select_correct", "bce_mse", "combo_1.5_0.5" ]
     for name in model_names:
         print(f"Validating {name}")
