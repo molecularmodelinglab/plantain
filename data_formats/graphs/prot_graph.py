@@ -279,16 +279,14 @@ def get_full_rec_data(cfg, rec):
 
     atoms = []
     res_indexes = []
-    graph_res_indexes = []
+    cur_res_index = 0
     for chain in rec:
-        graph_res_index = 0
         for i, residue in enumerate(chain):
             if residue.get_resname() not in possible_residue_feats["residue_type"]: continue
             for atom in residue:
                 atoms.append(atom)
-                res_indexes.append(i)
-                graph_res_indexes.append(graph_res_index)
-            graph_res_index += 1
+                res_indexes.append(cur_res_index)
+            cur_res_index += 1
 
     cat_feat = torch.zeros((len(atoms), len(prot_cfg.atom_feats)), dtype=torch.long)
     num_classes = [ len(possible_atom_feats[feat_name]) for feat_name in prot_cfg.atom_feats]
@@ -306,7 +304,7 @@ def get_full_rec_data(cfg, rec):
 
     cat_feat = CategoricalTensor(cat_feat, num_classes=num_classes)
     scal_feat = torch.zeros((len(atoms), 0))
-    res_indexes = torch.tensor(graph_res_indexes, dtype=torch.long)
+    res_indexes = torch.tensor(res_indexes, dtype=torch.long)
 
     if cfg.data.use_v2_full_rec_data:
         ndata = Batch(FullRecNode, 

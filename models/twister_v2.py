@@ -391,6 +391,11 @@ class TwisterV2(Module, ClassifyActivityModel):
 
     def forward(self, x):
         self.start_forward()
+
+        res_index = x.full_rec_data.get_res_index()
+        print(res_index.amax() + 1, x.rec_graph.ndata.cat_feat.shape[0])
+        assert res_index.amax() + 1 == x.rec_graph.ndata.cat_feat.shape[0]
+
         td = self.make(TwistEncoder, self.cfg)(x)
         for i in range(self.cfg.num_blocks):
             td = td + self.make(TwistBlock, self.cfg)(x, td)
