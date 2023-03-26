@@ -393,7 +393,6 @@ class TwisterV2(Module, ClassifyActivityModel):
         self.start_forward()
 
         res_index = x.full_rec_data.get_res_index()
-        print(res_index.amax() + 1, x.rec_graph.ndata.cat_feat.shape[0])
         assert res_index.amax() + 1 == x.rec_graph.ndata.cat_feat.shape[0]
 
         td = self.make(TwistEncoder, self.cfg)(x)
