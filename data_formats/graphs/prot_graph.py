@@ -11,6 +11,7 @@ from terrace import CategoricalTensor
 from terrace.batch import Batch, Batchable, NoStackTensor
 from terrace.dataframe import DFRow
 from terrace import NoStackCatTensor
+from terrace.graph import Graph
 from .graph3d import Graph3d, Node3d, Edge3d
 from .knn import make_knn_edgelist, make_res_knn_edgelist
 from .dist_edge import DistEdge
@@ -241,17 +242,37 @@ class FullRecData(Batchable):
     scal_feat: torch.Tensor
     res_index: torch.Tensor
 
+    @staticmethod
     def collate_coord(x):
         return x
 
+    @staticmethod
     def collate_cat_feat(x):
         return x
 
+    @staticmethod
     def collate_scal_feat(x):
         return x
 
+    @staticmethod
     def collate_res_index(x):
         return x
+
+class FullRecNode(Node3d):
+    _res_index: torch.Tensor
+
+class FullRecGraph(Graph[FullRecNode, None]):
+    
+    # hacky way to get around that fact that we can't (atm) custom collate
+    # ndata/edata objects in terrace
+    def batch_get_res_index(self):
+        ret = []
+        cur_max_res = 0
+        for node_slice in self.node_slices:
+            cur_res = self.ndata._res_index[node_slice] 
+            ret.append(cur_res + cur_max_res)
+            cur_max_res += cur_res.amax() + 1
+        return torch.cat(ret, 0)
 
 def get_full_rec_data(cfg, rec):
     prot_cfg = cfg.data.rec_graph
@@ -284,13 +305,18 @@ def get_full_rec_data(cfg, rec):
         coord[j] = torch.tensor(list(atom.get_vector()), dtype=torch.float32)
 
     cat_feat = CategoricalTensor(cat_feat, num_classes=num_classes)
-    return FullRecData(coord, 
-                       cat_feat,
-                       torch.zeros((len(atoms), 0)),
-                       torch.tensor(graph_res_indexes, dtype=torch.long))
-    # cat_feat = NoStackCatTensor(cat_feat, num_classes=num_classes)
-    # return DFRow(
-    #             coord = NoStackTensor(coord),
-    #             cat_feat = cat_feat,
-    #             scal_feat = NoStackTensor(torch.zeros((len(atoms), 0))),
-    #             res_index = NoStackTensor(torch.tensor(graph_res_indexes, dtype=torch.long)))
+    scal_feat = torch.zeros((len(atoms), 0))
+    res_indexes = torch.tensor(graph_res_indexes, dtype=torch.long)
+
+    if cfg.data.use_v2_full_rec_data:
+        ndata = Batch(FullRecNode, 
+                      coord=coord, 
+                      cat_feat=cat_feat,
+                      scal_feat=scal_feat,
+                      _res_index=res_indexes)
+        return FullRecGraph(ndata, [])
+    else:
+        return FullRecData(coord, 
+                        cat_feat,
+                        scal_feat,
+                        res_indexes)
