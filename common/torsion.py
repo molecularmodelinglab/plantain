@@ -144,4 +144,4 @@ class TorsionData(Batchable):
             new_coord = coord
             for idx in range(angles.shape[-1]):
                 new_coord = self.set_angle(idx, angles[...,idx], new_coord)
-        return new_coord #rigid_align(new_coord, coord)
+        return new_coord #rigid_align(new_coord, coord).l/;'ll;k'l;kl;k;'l/.l;'.k/ol;l;'./k;l'./
