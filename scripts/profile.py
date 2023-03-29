@@ -3,13 +3,14 @@ import sys
 import cProfile
 import traceback
 import torch
-from datasets.make_dataset import make_dataloader
+from datasets.make_dataset import make_dataloader, make_dataset
 from models.make_model import make_model
 from common.cfg_utils import get_config
+from terrace.batch import collate
 from training.trainer import Trainer
 from validation.metrics import get_metrics
 from validation.validate import validate
-from tqdm import tqdm
+from tqdm import tqdm, trange
 from training.loss import get_losses
 from common.wandb_utils import get_old_model
 
@@ -18,11 +19,28 @@ def profile(task):
     stamp = datetime.timestamp(datetime.now())
     out_fname = f"outputs/{task}-{stamp}.prof"
 
-    if task == "validate":
-        cfg = get_config("diffusion")
+    if task == "inference":
+        cfg = get_config("twister_v2")
+        model = make_model(cfg)
+        loader = make_dataloader(cfg, "bigbind_act", "val", model.get_input_feats())
+        x, y = next(iter(loader))
+        model(x)
+        x = x.to("cuda")
+        model = model.to("cuda")
+        # lin = torch.nn.Linear(128, 128).cuda()
+        # data = torch.zeros((16, 128), device='cuda')
+        def fn():
+            for i in trange(500):
+                # lin(data.reshape((-1, 128)))
+                # torch.cuda.synchronize()
+                model(x)
+            torch.cuda.synchronize()
+    elif task == "validate":
+        cfg = get_config("twister_v2")
         cfg.batch_size=1
-        # model = make_model(cfg)
-        model = get_old_model(cfg, "intra_lig_energy", "best_k")
+        model = make_model(cfg)
+        model.cache_key = "dummy"
+        # model = get_old_model(cfg, "intra_lig_energy", "best_k")
         fn = lambda: validate(cfg, model, cfg.val_datasets[0], "val", 30)
     elif task == "train":
         # cfg = get_config("attention_gnn")

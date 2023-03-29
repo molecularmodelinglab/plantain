@@ -232,27 +232,50 @@ class TwistBlock(TwistModule):
         mod = self.make(NormAndLinear, self.cfg, out_feat)
         return [ mod(feat) for feat in feat_list ]
 
-    def update_once(self, x, td):
+    def full_linear(self, feat_list, out_feat):
+        """ Runs a new NormAndLinear layer on an list of tensors"""
+        mod = self.make(LazyLinear, out_feat)
+        return [ mod(feat) for feat in feat_list ]
 
-        res_index = x.full_rec_data.get_res_index()
+    # def __init__(self, cfg):
+    #     super().__init__(cfg)
+    #     td_cfg = self.cfg.twist_data
+    #     self.lin = nn.Linear(td_cfg.lig_feat, td_cfg.lig_feat)
+    #     self.lin2 = nn.Linear(td_cfg.rec_feat, td_cfg.rec_feat)
+
+    def update_once(self, x, td, res_index):
+
         td_cfg = self.cfg.twist_data
+
+        # return TwistData(
+        #     lig_feat=self.lin(self.lin(self.lin(self.lin(self.lin(td.lig_feat))))),
+        #     rec_feat=self.lin2(self.lin2(self.lin2(self.lin2(self.lin2(td.rec_feat))))),
+        #     full_rec_feat=td.full_rec_feat,
+        #     lig_edge_feat=td.lig_edge_feat,
+        #     rec_edge_feat=td.rec_edge_feat,
+        #     ll_feat=td.ll_feat,
+        #     l_ra_feat=td.l_ra_feat,
+        #     l_rf_feat=td.l_rf_feat
+        # )
         
         # lig_feat, lig_edge_feat, ll_feat, l_ra_feat, l_rf_feat -> lig_feat
-        lig_hid = [ td.lig_feat, self.make(MPNN)(x.lig_graph, td.lig_feat, td.lig_edge_feat) ]
+        lig_hid = [ td.lig_feat ] 
+        lig_hid.append(self.make(MPNN)(x.lig_graph, td.lig_feat, td.lig_edge_feat))
         lig_hid.append(self.full_attention_contract(td.ll_feat, self.cfg.ll_atn_heads, self.cfg.ll_atn_feat, eye_mask=True))
         lig_hid.append(self.full_attention_contract(td.l_ra_feat, self.cfg.l_ra_atn_heads, self.cfg.l_ra_atn_feat))
         lig_hid.append(self.full_attention_contract(td.l_rf_feat, self.cfg.l_rf_atn_heads, self.cfg.l_rf_atn_feat))
         
         lig_hid = torch.cat(lig_hid, -1)
-        lig_feat = self.make(NormAndLinear, self.cfg, td_cfg.lig_feat)(lig_hid)
+        lig_feat = self.make(LazyLinear, td_cfg.lig_feat)(lig_hid)
         
         # rec_feat, rec_edge_feat, l_ra_feat, rf_feat -> rec_feat
-        rec_hid = [ td.rec_feat, self.make(MPNN)(x.rec_graph, td.rec_feat, td.rec_edge_feat) ]
+        rec_hid = [ td.rec_feat ]
+        rec_hid.append(self.make(MPNN)(x.rec_graph, td.rec_feat, td.rec_edge_feat))
         rec_hid.append(self.full_attention_contract(td.l_ra_feat, self.cfg.l_ra_atn_heads, self.cfg.l_ra_atn_feat, transpose=True))
         rec_hid.append(self.make(FullRecContract, self.cfg)(td.full_rec_feat, res_index, self.cfg.rf_ra_hid_size))
 
         rec_hid = torch.cat(rec_hid, -1)
-        rec_feat = self.make(NormAndLinear, self.cfg, td_cfg.rec_feat)(rec_hid)
+        rec_feat = self.make(LazyLinear, td_cfg.rec_feat)(rec_hid)
 
         # full_rec_feat, l_rf_feat, ra_feat -> full_rec_feat
         full_rec_hid = [ td.full_rec_feat ]
@@ -260,9 +283,10 @@ class TwistBlock(TwistModule):
         full_rec_hid.append(self.make(FullRecExpand, self.cfg)(td.rec_feat, res_index, self.cfg.rf_ra_hid_size))
 
         full_rec_hid = torch.cat(full_rec_hid, -1)
-        full_rec_feat = self.make(NormAndLinear, self.cfg, td_cfg.full_rec_feat)(full_rec_hid)
+        full_rec_feat = self.make(LazyLinear, td_cfg.full_rec_feat)(full_rec_hid)
 
         # lig_edge_feat, lig_feat, ll_feat -> lig_edge_feat
+        
         ll_2_lig_edge = self.full_norm_and_linear(td.ll_feat, self.cfg.ll_lig_edge_hid_size)
         lig_2_lig_edge = self.make(NormAndLinear, self.cfg, self.cfg.lig_feat_lig_edge_hid_size)(td.lig_feat)
 
@@ -271,7 +295,7 @@ class TwistBlock(TwistModule):
         lig_edge_hid.append(ll_feat_to_lig_edges(ll_2_lig_edge, x.lig_graph))
         
         lig_edge_hid = torch.cat(lig_edge_hid, -1)
-        lig_edge_feat = self.make(NormAndLinear, self.cfg, td_cfg.lig_edge_feat)(lig_edge_hid)
+        lig_edge_feat = self.make(LazyLinear, td_cfg.lig_edge_feat)(lig_edge_hid)
 
         # rec_edge_feat, rec_feat -> rec_edge_feat
 
@@ -281,7 +305,7 @@ class TwistBlock(TwistModule):
         rec_edge_hid.append(feat_to_edge_feat(rec_2_rec_edge, x.rec_graph))        
 
         rec_edge_hid = torch.cat(rec_edge_hid, -1)
-        rec_edge_feat = self.make(NormAndLinear, self.cfg, td_cfg.rec_edge_feat)(rec_edge_hid)
+        rec_edge_feat = self.make(LazyLinear, td_cfg.rec_edge_feat)(rec_edge_hid)
 
         # ll_feat, lig_feat, lig_edge_feat -> ll_feat
         lig_edge_2_ll = self.make(NormAndLinear, self.cfg, self.cfg.ll_lig_edge_hid_size)(td.lig_edge_feat)
@@ -296,7 +320,7 @@ class TwistBlock(TwistModule):
         ll_hid.append(lig_edges_to_ll_feat(lig_edge_2_ll, x.lig_graph))
 
         ll_hid = cat_feat_list_list(ll_hid)
-        ll_feat = self.full_norm_and_linear(ll_hid, td_cfg.ll_feat)
+        ll_feat = self.full_linear(ll_hid, td_cfg.ll_feat)
 
         # l_ra_feat, lig_feat, rec_feat -> l_ra_feat
         
@@ -308,7 +332,7 @@ class TwistBlock(TwistModule):
                                                 self.cfg.l_ra_expand_heads,
                                                 self.cfg.l_ra_expand_feat))
         l_ra_hid = cat_feat_list_list(l_ra_hid)
-        l_ra_feat = self.full_norm_and_linear(l_ra_hid, td_cfg.l_ra_feat)
+        l_ra_feat = self.full_linear(l_ra_hid, td_cfg.l_ra_feat)
 
         # l_rf_feat, lig_feat, full_rec_feat -> l_rf_feat
         
@@ -320,7 +344,7 @@ class TwistBlock(TwistModule):
                                                 self.cfg.l_rf_expand_heads,
                                                 self.cfg.l_rf_expand_feat))
         l_rf_hid = cat_feat_list_list(l_rf_hid)
-        l_rf_feat = self.full_norm_and_linear(l_rf_hid, td_cfg.l_rf_feat)
+        l_rf_feat = self.full_linear(l_rf_hid, td_cfg.l_rf_feat)
         
         return TwistData(
             lig_feat=lig_feat,
@@ -333,10 +357,10 @@ class TwistBlock(TwistModule):
             l_rf_feat=l_rf_feat
         )
 
-    def forward(self, x, td):
+    def forward(self, x, td, res_index):
         self.start_forward()
         for i in range(self.cfg.updates_per_block):
-            td = self.update_once(x, td)
+            td = self.update_once(x, td, res_index)
         return td
 
 class TwisterV2(Module, ClassifyActivityModel):
@@ -397,7 +421,7 @@ class TwisterV2(Module, ClassifyActivityModel):
 
         td = self.make(TwistEncoder, self.cfg)(x)
         for i in range(self.cfg.num_blocks):
-            td = td + self.make(TwistBlock, self.cfg)(x, td)
+            td = td + self.make(TwistBlock, self.cfg)(x, td, res_index)
 
         scal_outputs = self.get_scal_outputs(td, x, 2)
         act = scal_outputs[:,0]

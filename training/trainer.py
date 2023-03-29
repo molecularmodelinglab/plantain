@@ -169,6 +169,9 @@ class Trainer(pl.LightningModule):
 
         gpus = int(torch.cuda.is_available())
 
+        # from pytorch_lightning.profiler import PyTorchProfiler
+        # profiler = PyTorchProfiler()
+
         self.trainer = pl.Trainer(gpus=gpus,
                              max_epochs=self.cfg.max_epochs,
                              val_check_interval=self.cfg.val_check_interval,
@@ -176,6 +179,7 @@ class Trainer(pl.LightningModule):
                              log_every_n_steps=self.cfg.metric_reset_interval,
                              logger=logger,
                              callbacks=callbacks,
+                              #profiler=profiler,
                              resume_from_checkpoint=None)
 
         self.trainer.fit(self, train_loader, val_loaders)

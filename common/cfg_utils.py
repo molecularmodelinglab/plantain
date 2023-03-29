@@ -1,4 +1,50 @@
 from omegaconf import OmegaConf
+from torch.utils._pytree import tree_map
+
+# OmegaConf access methods take too long. This speeds things up
+def to_attr_dict(d):
+    if isinstance(d, dict):
+        return AttrDict({key: to_attr_dict(val) for key, val in d.items() })
+    elif isinstance(d, list):
+        return [ to_attr_dict(val) for val in d ]
+    return d
+
+class AttrDict:
+    def __init__(self, d):
+        self.__dict__ = d
+
+    def __getitem__(self, key):
+        return self.__dict__[key]
+
+    def get(self, key, default):
+        return self.__dict__.get(key, default)
+
+    def __setitem__(self, key, val):
+        self.__dict__[key] = val
+
+    def __len__(self):
+        return len(self.__dict__)
+
+    def __contains__(self, item):
+        return item in self.__dict__
+
+    def __iter__(self):
+        return iter(self.__dict__)
+
+    def __next__(self):
+        return next(self.__dict__)
+
+    def __repr__(self) -> str:
+        return f"AttrDict({repr(self.__dict__)})"
+
+    def keys(self):
+        return self.__dict__.keys()
+
+    def values(self):
+        return self.__dict__.values()
+
+    def items(self):
+        return self.__dict__.items()
 
 def get_config_dict(run):
     """ wandb flattens dicts when uploading hyperparams. This unflattens them """
@@ -30,7 +76,7 @@ def get_config(cfg_name, folder="./configs"):
     cfg = OmegaConf.merge(base_conf, platform_conf, cli_conf)
     if cfg.project is not None and "project_postfix" in cfg:
         cfg.project = cfg.project + "_" + cfg.project_postfix
-    return cfg
+    return to_attr_dict(OmegaConf.to_container(cfg))
 
 def get_all_tasks(cfg):
     """ Returns all the config tasks (if there is only one, creates
