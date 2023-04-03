@@ -79,7 +79,7 @@ class BigBindActDataset(Dataset):
 
     def get_activity(self, index):
         if self.sna_frac is None:
-            return self.activities[index].activity
+            return self.activities.pchembl_value[index]
         elif self.sna_frac == 1:
             if index % 2 == 0:
                 val_idx = index // 2

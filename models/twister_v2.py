@@ -248,35 +248,14 @@ class FlattenXYData(TwistModule):
         atn = atn.softmax(1)
         return (feat*atn).sum(1).reshape(B, -1)
 
-# todo: both the following functions need to be optimized now that we
-# are properly padding the ll feat tensors
-
 def ll_feat_to_lig_edges(ll_feat, lig_edge_index):
     """ returns the data in ll_feat indexes by the edge indexes in lig_graph """
-    # all_src, all_dst = lig_graph.dgl().edges()
-    # all_src, all_dst = all_src.long(), all_dst.long()
-    # ret = []
-    # for llf, edge_slice, node_slice in zip(ll_feat, lig_graph.edge_slices, lig_graph.node_slices):
-    #     src, dst = all_src[edge_slice] - node_slice.start, all_dst[edge_slice] - node_slice.start
-    #     ret.append(llf[src, dst])
-    # return torch.cat(ret, 0)
     return ll_feat[lig_edge_index]
 
 def lig_edges_to_ll_feat(lig_edge_feat, lig_edge_index, B, L):
-    # all_src, all_dst = lig_graph.dgl().edges()
-    # all_src, all_dst = all_src.long(), all_dst.long()
-    # ret = []
-    # # L = lig_graph.dgl().batch_num_nodes().cpu().item()
-    # for edge_slice, node_slice in zip(lig_graph.edge_slices, lig_graph.node_slices):
-    #     src, dst = all_src[edge_slice] - node_slice.start, all_dst[edge_slice] - node_slice.start
-    #     llf = torch.zeros((L, L, lig_edge_feat.shape[-1]), device=lig_edge_feat.device)
-    #     llf[src, dst] += lig_edge_feat[edge_slice]
-    #     ret.append(llf)
-    # return torch.stack(ret)
     llf = torch.zeros((B, L, L, lig_edge_feat.shape[-1]), device=lig_edge_feat.device)
     llf[lig_edge_index] += lig_edge_feat
     return llf
-
 
 def feat_to_edge_feat(x_feat, edge_index):
     src, dst = edge_index
@@ -472,8 +451,6 @@ class TwisterV2(Module, ClassifyActivityModel):
     def forward(self, x):
         self.start_forward()
 
-        # res_index = x.full_rec_data.get_res_index()
-        # assert res_index.amax() + 1 == x.rec_graph.ndata.cat_feat.shape[0]
         twist_index = TwistIndex(x)
 
         td = self.make(TwistEncoder, self.cfg)(x, twist_index)

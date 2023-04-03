@@ -1,0 +1,138 @@
+project: null
+resume_id: null
+name: test_run
+
+val_check_interval: 0.5
+metric_reset_interval: 50
+debug_dataset_len: null
+
+train_dataset: bigbind_act
+
+val_datasets: [ bigbind_act ]
+
+monitor_metric:
+  name: val/bigbind_act/spearman_all
+  mode: max
+
+data:
+
+  use_rec: true
+  use_lig: true
+
+  pose_sample: best
+  num_poses: 0
+
+  sna_frac: null
+  only_ki_kd: false
+  
+  dock_strategy: "crossdock"
+
+  use_v2_full_rec_data: true
+
+  lig_graph:
+    atom_feats: [ "element", "formal_charge", "hybridization", "is_aromatic", "numH"]
+    bond_feats:
+      bond_order: true
+
+  rec_graph:
+    only_pocket: true
+    node_type: "residue"
+    atom_feats: [ "atom_type", "atom_residue_type" ]
+    residue_feats: [ "residue_type" ]
+    edge_method:
+      type: "knn"
+      atom_knn_rad: 5
+      residue_knn_rad: 10
+      knn_rad: 10
+      max_neighbors: null
+    edge_feats: [ "dist"]
+    include_h: False
+
+  use_interaction_graph: false
+  interaction_graph:
+    dist_cutoff: 10
+    max_neighbors: null
+    edge_feats: [ "dist"]
+
+losses:
+
+  act_mse:
+    func: act_mse
+    weight: 1.0
+
+optimizer: adamw
+learn_rate: 1e-5
+max_epochs: 5000
+
+batch_size: 8
+
+test_inference: true
+
+model:
+
+  type: twister_v2
+  
+  rec_encoder:
+    node_embed_size: 64
+    edge_embed_size: 64
+
+  lig_encoder:
+    node_embed_size: 16
+    edge_embed_size: 64
+
+  twist_data:
+    lig_feat: 64
+    rec_feat: 32
+    full_rec_feat: 16
+
+    lig_edge_feat: 32
+    rec_edge_feat: 32
+
+    ll_feat: 64
+    l_ra_feat: 64
+    l_rf_feat: 16
+
+  full_atom_embed_size: 16
+  normalization: layer
+
+  ll_atn_heads: 4
+  ll_atn_feat: 16
+
+  l_ra_atn_heads: 4
+  l_ra_atn_feat: 16
+
+  l_rf_atn_heads: 2
+  l_rf_atn_feat: 8
+
+  rf_ra_hid_size: 8
+
+  ll_lig_edge_hid_size: 32
+  lig_feat_lig_edge_hid_size: 16
+
+  rec_feat_rec_edge_hid_size: 16
+
+  ll_expand_heads: 16
+  ll_expand_feat: 8
+
+  l_ra_expand_heads: 16
+  l_ra_expand_feat: 8
+
+  l_rf_expand_heads: 4
+  l_rf_expand_feat: 4
+
+  updates_per_block: 2
+
+  lig_scal_hid: 64
+  rec_scal_hid: 64
+  full_rec_scal_hid: 16
+
+  ll_scal_hid: 8
+  ll_scal_heads: 8
+  l_ra_scal_hid: 8
+  l_ra_scal_heads: 8
+  l_rf_scal_hid: 8
+  l_rf_scal_heads: 2
+
+  scal_hid: 256
+
+  num_blocks: 8
