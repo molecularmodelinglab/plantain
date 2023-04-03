@@ -136,3 +136,5 @@ model:
   scal_hid: 256
 
   num_blocks: 8
+
+  correct_attention_mask: true

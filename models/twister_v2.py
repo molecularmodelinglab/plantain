@@ -192,6 +192,9 @@ class AttentionContract(TwistModule):
             atn_coefs = atn_coefs.masked_fill(mask.unsqueeze(-1), 0)
 
         atn_coefs = F.softmax(atn_coefs, -3)
+        if mask is not None and self.cfg.get("correct_attention_mask", False):
+            atn_coefs = atn_coefs.masked_fill(mask.unsqueeze(-1), 0)
+
         out = (atn_coefs*out_feat).sum(-3).reshape((*atn_coefs.shape[:-3], -1))
         return out
 
@@ -246,6 +249,8 @@ class FlattenXYData(TwistModule):
         if mask is not None:
             atn = atn.masked_fill(mask.reshape((1, -1, 1, 1)), 1)
         atn = atn.softmax(1)
+        if mask is not None and self.cfg.get("correct_attention_mask", False):
+            atn = atn.masked_fill(mask.reshape((1, -1, 1, 1)), 1)
         return (feat*atn).sum(1).reshape(B, -1)
 
 def ll_feat_to_lig_edges(ll_feat, lig_edge_index):
