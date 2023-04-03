@@ -1,5 +1,6 @@
 from collections import defaultdict
 from copy import deepcopy
+import warnings
 from rdkit.Chem.rdMolAlign import CalcRMS, GetBestRMS
 import random
 from terrace import Batch, collate
@@ -53,15 +54,17 @@ class PerPocketMetric(FullMetric):
         self.pocket_metrics = nn.ModuleDict()
 
     def update(self, x_b: Batch[DFRow], pred_b: Batch[DFRow], label_b: Batch[DFRow]):
-        self.metric.update(x_b, pred_b, label_b)
-        for x, pred, label in zip(x_b, pred_b, label_b):
-            poc_id = x.pocket_id
-            xi = collate([x])
-            predi = collate([pred])
-            labeli = collate([label])
-            if poc_id not in self.pocket_metrics:
-                self.pocket_metrics[poc_id] = self.metric_maker().to(self.device)
-            self.pocket_metrics[poc_id].update(xi, predi, labeli)
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=UserWarning)
+            self.metric.update(x_b, pred_b, label_b)
+            for x, pred, label in zip(x_b, pred_b, label_b):
+                poc_id = x.pocket_id
+                xi = collate([x])
+                predi = collate([pred])
+                labeli = collate([label])
+                if poc_id not in self.pocket_metrics:
+                    self.pocket_metrics[poc_id] = self.metric_maker().to(self.device)
+                self.pocket_metrics[poc_id].update(xi, predi, labeli)
 
     def pre_compute(self):
         pass
@@ -399,18 +402,22 @@ def get_single_task_metrics(task: str):
     }[task]
 
 def get_metrics(cfg, tasks: List[str], offline=False):
-    ret = nn.ModuleDict({})
-    for task in tasks:
-        if task == "reject_option": continue
-        ret.update(get_single_task_metrics(task))
+    # filter out those torchmetrics warnings
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=UserWarning)
 
-    if offline and "score_activity_class" in tasks:
-        ret.update({"enrichment": EnrichmentFactor()})
-    
-    # pretty hacky way of integrating reject option
-    # todo: put back. Took out because of OOMing
-    if "reject_option" in tasks and offline:
-        ret["select"] = RejectOptionMetric(cfg, deepcopy(ret))
+        ret = nn.ModuleDict({})
+        for task in tasks:
+            if task == "reject_option": continue
+            ret.update(get_single_task_metrics(task))
+
+        if offline and "score_activity_class" in tasks:
+            ret.update({"enrichment": EnrichmentFactor()})
+        
+        # pretty hacky way of integrating reject option
+        # todo: put back. Took out because of OOMing
+        if "reject_option" in tasks and offline:
+            ret["select"] = RejectOptionMetric(cfg, deepcopy(ret))
         
     return ret
 

@@ -19,28 +19,6 @@ from .force_field import ScaleOutput, rbf_encode, cdist_diff
 def is_tensor(obj):
     return isinstance(obj, torch.Tensor)
 
-# def pad_packed_tensor(input, lengths, value, l_min=None):
-#     old_shape = input.shape
-#     device = input.device
-#     if not is_tensor(lengths):
-#         lengths = torch.tensor(lengths, dtype=torch.int64, device=device)
-#     else:
-#         lengths = lengths.to(device)
-#     max_len = as_scalar(lengths.max())
-
-#     if l_min is not None:
-#         max_len = builtins.max(max_len, l_min)
-
-#     batch_size = len(lengths)
-#     x = input.new(batch_size * max_len, *old_shape[1:])
-#     x.fill_(value)
-#     index = torch.ones(len(input), dtype=torch.int64, device=device)
-#     cum_lengths = torch.cumsum(lengths, 0)
-#     index[cum_lengths[:-1]] += (max_len - lengths[:-1])
-#     index = torch.cumsum(index, 0) - 1
-#     x[index] = input
-#     return x.view(batch_size, max_len, *old_shape[1:])
-
 # taken from dgl backend code -- computing the index actually takes some time,
 # so we precompute it
 
@@ -57,6 +35,29 @@ def get_padded_index(lengths):
 def pack_padded_tensor_with_index(input, index):
     input = input.view(-1, *input.shape[2:])
     return input[index]
+
+def pad_packed_tensor_with_index(input, lengths, max_len, index, value):
+    old_shape = input.shape
+    batch_size = len(lengths)
+    x = input.new(batch_size * max_len, *old_shape[1:])
+    x.fill_(value)
+    x[index] = input
+    return x.view(batch_size, max_len, *old_shape[1:])
+
+
+def get_padded_edge_indexes(graph):
+    """ Returns indexes mapping (padded) LL feat to (packed) lig edge feat"""
+    all_src, all_dst = graph.dgl().edges()
+    all_src, all_dst = all_src.long(), all_dst.long()
+    batch = torch.zeros_like(all_src)
+    src = torch.zeros_like(all_src)
+    dst = torch.zeros_like(all_src)
+    for i, (edge_slice, node_slice) in enumerate(zip(graph.edge_slices, graph.node_slices)):
+        cur_src, cur_dst = all_src[edge_slice] - node_slice.start, all_dst[edge_slice] - node_slice.start
+        batch[edge_slice] = i
+        src[edge_slice] = cur_src
+        dst[edge_slice] = cur_dst
+    return batch, src, dst
 
 class TwistIndex:
     """ Used to store precomputed indexes for padding/packing tensors """
@@ -75,6 +76,14 @@ class TwistIndex:
         self.Rfm = max(self.full_rec_lens).cpu().item()
 
         self.res_index = x.full_rec_data.get_res_index()
+
+        self.lig_edge_pad_index = get_padded_edge_indexes(x.lig_graph)
+
+        lig_src, lig_dst = x.lig_graph.dgl().edges()
+        self.lig_edge_index = lig_src.long(), lig_dst.long()
+
+        rec_src, rec_dst = x.rec_graph.dgl().edges()
+        self.rec_edge_index = rec_src.long(), rec_dst.long()
 
 # L = number of atoms in ligand
 # Ra = number of rec residues (nodes in Ca graph)
@@ -230,44 +239,48 @@ class FlattenXYData(TwistModule):
 
     def forward(self, xy_feat, n_heads, n_feat, mask=None):
         self.start_forward()
-        xy_feat = xy_feat.reshape((-1, xy_feat.shape[-1]))
-        feat = self.make(NormAndLinear, self.cfg, n_heads*n_feat)(xy_feat).reshape((-1, n_heads, n_feat))
+        B = xy_feat.shape[0]
+        xy_feat = xy_feat.reshape((B, -1, xy_feat.shape[-1]))
+        feat = self.make(NormAndLinear, self.cfg, n_heads*n_feat)(xy_feat).reshape((B, -1, n_heads, n_feat))
         atn = self.make(LazyLinear, n_heads)(F.leaky_relu(xy_feat)).unsqueeze(-1)
         if mask is not None:
-            atn = atn.masked_fill(mask.reshape((-1, 1, 1)), 0)
-        atn = atn.softmax(0)
-        return (feat*atn).sum(0).reshape(-1)
+            atn = atn.masked_fill(mask.reshape((1, -1, 1, 1)), 1)
+        atn = atn.softmax(1)
+        return (feat*atn).sum(1).reshape(B, -1)
 
 # todo: both the following functions need to be optimized now that we
 # are properly padding the ll feat tensors
 
-def ll_feat_to_lig_edges(ll_feat, lig_graph):
+def ll_feat_to_lig_edges(ll_feat, lig_edge_index):
     """ returns the data in ll_feat indexes by the edge indexes in lig_graph """
-    all_src, all_dst = lig_graph.dgl().edges()
-    all_src, all_dst = all_src.long(), all_dst.long()
-    ret = []
-    for llf, edge_slice, node_slice in zip(ll_feat, lig_graph.edge_slices, lig_graph.node_slices):
-        src, dst = all_src[edge_slice] - node_slice.start, all_dst[edge_slice] - node_slice.start
-        ret.append(llf[src, dst])
-    return torch.cat(ret, 0)
+    # all_src, all_dst = lig_graph.dgl().edges()
+    # all_src, all_dst = all_src.long(), all_dst.long()
+    # ret = []
+    # for llf, edge_slice, node_slice in zip(ll_feat, lig_graph.edge_slices, lig_graph.node_slices):
+    #     src, dst = all_src[edge_slice] - node_slice.start, all_dst[edge_slice] - node_slice.start
+    #     ret.append(llf[src, dst])
+    # return torch.cat(ret, 0)
+    return ll_feat[lig_edge_index]
 
-def lig_edges_to_ll_feat(lig_edge_feat, lig_graph, L):
-    all_src, all_dst = lig_graph.dgl().edges()
-    all_src, all_dst = all_src.long(), all_dst.long()
-    ret = []
-    # L = lig_graph.dgl().batch_num_nodes().cpu().item()
-    for edge_slice, node_slice in zip(lig_graph.edge_slices, lig_graph.node_slices):
-        src, dst = all_src[edge_slice] - node_slice.start, all_dst[edge_slice] - node_slice.start
-        llf = torch.zeros((L, L, lig_edge_feat.shape[-1]), device=lig_edge_feat.device)
-        llf[src, dst] += lig_edge_feat[edge_slice]
-        ret.append(llf)
-    return torch.stack(ret)
+def lig_edges_to_ll_feat(lig_edge_feat, lig_edge_index, B, L):
+    # all_src, all_dst = lig_graph.dgl().edges()
+    # all_src, all_dst = all_src.long(), all_dst.long()
+    # ret = []
+    # # L = lig_graph.dgl().batch_num_nodes().cpu().item()
+    # for edge_slice, node_slice in zip(lig_graph.edge_slices, lig_graph.node_slices):
+    #     src, dst = all_src[edge_slice] - node_slice.start, all_dst[edge_slice] - node_slice.start
+    #     llf = torch.zeros((L, L, lig_edge_feat.shape[-1]), device=lig_edge_feat.device)
+    #     llf[src, dst] += lig_edge_feat[edge_slice]
+    #     ret.append(llf)
+    # return torch.stack(ret)
+    llf = torch.zeros((B, L, L, lig_edge_feat.shape[-1]), device=lig_edge_feat.device)
+    llf[lig_edge_index] += lig_edge_feat
+    return llf
 
 
-def feat_to_edge_feat(x_feat, x_graph):
-    all_src, all_dst = x_graph.dgl().edges()
-    all_src, all_dst = all_src.long(), all_dst.long()
-    return torch.cat((x_feat[all_src], x_feat[all_dst]), -1)
+def feat_to_edge_feat(x_feat, edge_index):
+    src, dst = edge_index
+    return torch.cat((x_feat[src], x_feat[dst]), -1)
 
 def cat_feat_list_list(feats):
     return [ torch.cat([feats[i][j] for i in range(len(feats))], -1) for j in range(len(feats[0])) ]
@@ -299,9 +312,9 @@ class TwistBlock(TwistModule):
 
         td_cfg = self.cfg.twist_data
 
-        lig_packed = dF.pad_packed_tensor(td.lig_feat, twist_index.lig_lens, 0.0)
-        rec_packed = dF.pad_packed_tensor(td.rec_feat, twist_index.rec_lens, 0.0)
-        full_rec_packed = dF.pad_packed_tensor(td.full_rec_feat, twist_index.full_rec_lens, 0.0)
+        lig_packed = pad_packed_tensor_with_index(td.lig_feat, twist_index.lig_lens, twist_index.Lm, twist_index.lig_pad_index, 0.0)
+        rec_packed = pad_packed_tensor_with_index(td.rec_feat, twist_index.rec_lens, twist_index.Ram, twist_index.rec_pad_index,  0.0)
+        full_rec_packed = pad_packed_tensor_with_index(td.full_rec_feat, twist_index.full_rec_lens, twist_index.Rfm, twist_index.full_rec_pad_index,  0.0)
 
         # lig_feat, lig_edge_feat, ll_feat, l_ra_feat, l_rf_feat -> lig_feat
         lig_hid = [ td.lig_feat ] 
@@ -336,8 +349,8 @@ class TwistBlock(TwistModule):
         lig_2_lig_edge = self.make(NormAndLinear, self.cfg, self.cfg.lig_feat_lig_edge_hid_size)(td.lig_feat)
 
         lig_edge_hid = [ td.lig_edge_feat ]
-        lig_edge_hid.append(feat_to_edge_feat(lig_2_lig_edge, x.lig_graph))
-        lig_edge_hid.append(ll_feat_to_lig_edges(ll_2_lig_edge, x.lig_graph))
+        lig_edge_hid.append(feat_to_edge_feat(lig_2_lig_edge, twist_index.lig_edge_index))
+        lig_edge_hid.append(ll_feat_to_lig_edges(ll_2_lig_edge, twist_index.lig_edge_pad_index))
         
         lig_edge_hid = torch.cat(lig_edge_hid, -1)
         lig_edge_feat = self.make(LazyLinear, td_cfg.lig_edge_feat)(lig_edge_hid)
@@ -347,7 +360,7 @@ class TwistBlock(TwistModule):
         rec_2_rec_edge = self.make(NormAndLinear, self.cfg, self.cfg.rec_feat_rec_edge_hid_size)(td.rec_feat)
 
         rec_edge_hid = [ td.rec_edge_feat ]
-        rec_edge_hid.append(feat_to_edge_feat(rec_2_rec_edge, x.rec_graph))        
+        rec_edge_hid.append(feat_to_edge_feat(rec_2_rec_edge, twist_index.rec_edge_index))        
 
         rec_edge_hid = torch.cat(rec_edge_hid, -1)
         rec_edge_feat = self.make(LazyLinear, td_cfg.rec_edge_feat)(rec_edge_hid)
@@ -360,7 +373,7 @@ class TwistBlock(TwistModule):
                                                 lig_packed,
                                                 self.cfg.ll_expand_heads,
                                                 self.cfg.ll_expand_feat))
-        ll_hid.append(lig_edges_to_ll_feat(lig_edge_2_ll, x.lig_graph, twist_index.Lm))
+        ll_hid.append(lig_edges_to_ll_feat(lig_edge_2_ll, twist_index.lig_edge_pad_index, td.ll_feat.shape[0], td.ll_feat.shape[1]))
 
         # ll_hid = cat_feat_list_list(ll_hid)
         # ll_feat = self.full_linear(ll_hid, td_cfg.ll_feat)
@@ -430,14 +443,10 @@ class TwisterV2(Module, ClassifyActivityModel):
     def get_input_feats(self):
         return [ "lig_graph", "rec_graph", "full_rec_data" ]
 
-    def flatten_xy_feat(self, all_xy_feat, n_heads, n_feat, eye_mask=False):
-        device = all_xy_feat[0].device
-        ret = []
-        flatten = self.make(FlattenXYData, self.cfg)
-        for xy_feat in all_xy_feat:
-            mask = torch.eye(xy_feat.shape[0], device=device, dtype=bool).unsqueeze(-1) if eye_mask else None
-            ret.append(flatten(xy_feat, n_heads, n_feat, mask))
-        return torch.stack(ret)
+    def flatten_xy_feat(self, xy_feat, n_heads, n_feat, eye_mask=False):
+        device = xy_feat[0].device
+        mask = torch.eye(xy_feat.shape[1], device=device, dtype=bool).unsqueeze(-1) if eye_mask else None
+        return self.make(FlattenXYData, self.cfg)(xy_feat, n_heads, n_feat, mask)
 
     def get_scal_outputs(self, td, x, num_outputs):
         """ Return the scalar outputs (activity, is_active, etc) """
