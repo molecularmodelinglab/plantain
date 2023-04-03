@@ -63,13 +63,13 @@ losses:
 
   act_mse:
     func: act_mse
-    weight: 0.1
+    weight: 1.0
 
 optimizer: adamw
 learn_rate: 1e-5
 max_epochs: 5000
 
-batch_size: 8
+batch_size: 6
 
 test_inference: true
 
