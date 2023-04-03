@@ -9,13 +9,16 @@ _api = wandb.Api()
 def get_weight_artifact(run, tag):
     return _api.artifact(f"{run.project}/model-{run.id}:{tag}", type='model')
 
-def get_old_model(cfg, run_name, tag="best_k"):
+def get_old_model(cfg, run_name, tag="best_k", cfg_override=False):
     """ Get the wandb run with name run_name, and return a model
     loaded from the saved checkpoint with the correct tag"""
     runs = _api.runs(path=cfg.project, filters={"display_name": run_name})
     assert len(runs) == 1
     run = runs[0]
-    cfg = get_run_config(run, cfg)
+    if not cfg_override:
+        # need the option of overriding the cfg in case there was a cfg
+        # logging bug when we ran
+        cfg = get_run_config(run, cfg)
 
     if run.commit == "cc756c9d0482e4453f4185cc0506e3700349cba5":
         cfg.model.use_slope_intercept = True

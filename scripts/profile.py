@@ -27,12 +27,9 @@ def profile(task):
         model(x)
         x = x.to("cuda")
         model = model.to("cuda")
-        # lin = torch.nn.Linear(128, 128).cuda()
-        # data = torch.zeros((16, 128), device='cuda')
+
         def fn():
-            for i in trange(500):
-                # lin(data.reshape((-1, 128)))
-                # torch.cuda.synchronize()
+            for i in trange(50):
                 model(x)
             torch.cuda.synchronize()
     elif task == "validate":

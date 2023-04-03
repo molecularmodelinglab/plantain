@@ -1,3 +1,4 @@
+from typing import MutableMapping
 from omegaconf import OmegaConf
 from torch.utils._pytree import tree_map
 
@@ -9,7 +10,7 @@ def to_attr_dict(d):
         return [ to_attr_dict(val) for val in d ]
     return d
 
-class AttrDict:
+class AttrDict(MutableMapping):
     def __init__(self, d):
         self.__dict__ = d
 
@@ -21,6 +22,9 @@ class AttrDict:
 
     def __setitem__(self, key, val):
         self.__dict__[key] = val
+
+    def __delitem__(self, key):
+        del self.__dict__[key]
 
     def __len__(self):
         return len(self.__dict__)
@@ -63,7 +67,7 @@ def get_config_dict(run):
 
 def get_run_config(run, cfg=None):
     """ Get the config used by the wandb run """
-    ret = OmegaConf.create(get_config_dict(run))
+    ret = to_attr_dict(get_config_dict(run))
     if cfg is not None:
         ret.platform = cfg.platform
     return ret

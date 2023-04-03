@@ -140,4 +140,4 @@ model:
 
   scal_hid: 256
 
-  num_blocks: 16
+  num_blocks: 8
