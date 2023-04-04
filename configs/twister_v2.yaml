@@ -6,9 +6,12 @@ val_check_interval: 0.25
 metric_reset_interval: 50
 debug_dataset_len: null
 
-train_dataset: bigbind_act
+train_dataset:
+  combo:
+    - bigbind_act
+    - bigbind_struct_v2
 
-val_datasets: [ bigbind_act ]
+val_datasets: [ bigbind_act, bigbind_struct_v2 ]
 
 monitor_metric:
   name: val/bigbind_act/auroc_all
@@ -25,7 +28,7 @@ data:
   sna_frac: 1
   only_ki_kd: false
   
-  dock_strategy: "crossdock"
+  dock_strategy: "redock"
 
   use_v2_full_rec_data: true
 
@@ -60,16 +63,23 @@ losses:
     pred: active_prob_unnorm
     y: is_active
     weight: 1.0
+    task: "classify_activity"
 
   act_mse:
     func: act_mse
+    weight: 0.2
+    task: "predict_activity"
+
+  inv_dist_mse:
+    func: full_inv_dist_mse
     weight: 1.0
+    task: null
 
 optimizer: adamw
 learn_rate: 1e-5
 max_epochs: 5000
 
-batch_size: 6
+batch_size: 3
 
 test_inference: true
 

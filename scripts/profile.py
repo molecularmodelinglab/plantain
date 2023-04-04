@@ -28,9 +28,14 @@ def profile(task):
         x = x.to("cuda")
         model = model.to("cuda")
 
+        it = iter(loader)
         def fn():
-            for i in trange(50):
-                model(x)
+            for i in trange(500):
+                x, y = next(it)
+                x = x.to("cuda")
+                l = model(x).active_prob_unnorm
+                l.backward()
+                torch.zero_grad()
             torch.cuda.synchronize()
     elif task == "validate":
         cfg = get_config("twister_v2")

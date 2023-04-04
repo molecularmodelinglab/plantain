@@ -453,6 +453,9 @@ class TwisterV2(Module, ClassifyActivityModel):
         scal = self.make(LazyLinear, num_outputs)(F.leaky_relu(hid))
         return scal
 
+    def get_inv_dist_mat(self, td):
+        return self.make(LazyLinear, 1)(F.leaky_relu(td.l_rf_feat))[...,0]
+
     def forward(self, x):
         self.start_forward()
 
@@ -466,10 +469,14 @@ class TwisterV2(Module, ClassifyActivityModel):
         act = scal_outputs[:,0]
         is_act = scal_outputs[:,1]
 
+        inv_dist_mat = self.get_inv_dist_mat(td)
+
         return Batch(DFRow,
                      score=is_act,
                      activity=act,
                      activity_score=act,
-                     final_l_rf_hid=td.l_rf_feat,
-                     final_l_ra_hid=td.l_ra_feat,
-                     final_ll_hid=td.ll_feat)
+                     inv_dist_mat=inv_dist_mat
+                     )
+                    #  final_l_rf_hid=td.l_rf_feat,
+                    #  final_l_ra_hid=td.l_ra_feat,
+                    #  final_ll_hid=td.ll_feat)

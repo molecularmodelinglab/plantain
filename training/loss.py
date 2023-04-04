@@ -117,6 +117,14 @@ def diffused_pose_mse(x, pred, y):
 def diffused_rmsd_mse(x, pred, y):
     return F.mse_loss(pred.diffused_energy, pred.diffused_rmsds)
 
+def full_inv_dist_mse(x, pred, y):
+    losses = []
+    for lig_coord, rec_data, pred_mat in zip(y.lig_crystal_pose.coord, x.full_rec_data, pred.inv_dist_mat):
+        true_mat = 1.0/torch.cdist(lig_coord, rec_data.ndata.coord)
+        pred_mat = pred_mat[:true_mat.shape[0], :true_mat.shape[1]]
+        losses.append(F.mse_loss(pred_mat, true_mat))
+    return torch.stack(losses).mean()
+
 def get_single_loss(loss_cfg, x, pred, y):
     loss_fn = {
         "bce": bce_loss,
@@ -139,6 +147,7 @@ def get_single_loss(loss_cfg, x, pred, y):
         "worse_pose_atn_ce": worst_pose_atn_ce_loss,
         "best_docked_ce": best_docked_ce_loss,
         "act_mse": act_mse_loss,
+        "full_inv_dist_mse": full_inv_dist_mse,
     }[loss_cfg.func]
     if "x" in loss_cfg:
         x = getattr(x, loss_cfg["x"])
