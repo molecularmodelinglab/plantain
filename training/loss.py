@@ -120,7 +120,7 @@ def diffused_rmsd_mse(x, pred, y):
 def full_inv_dist_mse(x, pred, y):
     losses = []
     for lig_coord, rec_data, pred_mat in zip(y.lig_crystal_pose.coord, x.full_rec_data, pred.inv_dist_mat):
-        true_mat = 1.0/torch.cdist(lig_coord, rec_data.ndata.coord)
+        true_mat = 1.0/(1.0 + torch.cdist(lig_coord, rec_data.ndata.coord))
         pred_mat = pred_mat[:true_mat.shape[0], :true_mat.shape[1]]
         losses.append(F.mse_loss(pred_mat, true_mat))
     return torch.stack(losses).mean()

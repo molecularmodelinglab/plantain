@@ -49,7 +49,7 @@ def profile(task):
         # cfg.profile_max_batches = 250
         # trainer = Trainer(cfg)
         # fn = lambda: trainer.fit(None, [])
-        cfg = get_config("diffusion")
+        cfg = get_config("twister_v2")
         cfg.profile_max_batches = 50
         trainer = Trainer(cfg)
         fn = lambda: trainer.fit(None, [])
