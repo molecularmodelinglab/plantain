@@ -3,7 +3,7 @@ import numpy as np
 import torch
 import random
 from datasets.base_datasets import Dataset
-from datasets.combo_dataset import ComboDataset
+from datasets.combo_dataloader import ComboDataloader
 from terrace import DataLoader
 
 # import all the files in the directory so we can create
@@ -71,19 +71,8 @@ def make_train_dataloader(cfg, transform, force_no_shuffle=False):
         return make_dataloader(cfg, cfg.train_dataset, "train", transform, force_no_shuffle)
     else:
         assert "combo" in cfg.train_dataset
-        datasets = []
+        loaders = []
         for name in cfg.train_dataset.combo:
-            datasets.append(make_dataset(cfg, name, "train", transform))
-        combo = ComboDataset(datasets)
-        n_workers = cfg.platform.num_workers
-        if force_no_shuffle:
-            shuffle = False
-        else:
-            shuffle = True
-        return DataLoader(combo,
-                        batch_size=cfg.batch_size,
-                        num_workers=n_workers,
-                        pin_memory=True,
-                        shuffle=shuffle,
-                        worker_init_fn=seed_worker)
+            loaders.append(make_dataloader(cfg, name, "train", transform, force_no_shuffle=force_no_shuffle))
+        return ComboDataloader(loaders)
 

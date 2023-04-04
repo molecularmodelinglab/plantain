@@ -79,7 +79,7 @@ optimizer: adamw
 learn_rate: 1e-5
 max_epochs: 5000
 
-batch_size: 3
+batch_size: 12
 
 test_inference: true
 
@@ -135,7 +135,7 @@ model:
   l_rf_expand_heads: 4
   l_rf_expand_feat: 4
 
-  updates_per_block: 2
+  updates_per_block: 1
 
   lig_scal_hid: 64
   rec_scal_hid: 64
@@ -150,4 +150,4 @@ model:
 
   scal_hid: 256
 
-  num_blocks: 8
+  num_blocks: 4

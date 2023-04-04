@@ -3,7 +3,7 @@ import torch.nn as nn
 import pytorch_lightning as pl
 from pytorch_lightning.trainer.supporters import CombinedDataset
 from common.utils import flatten_dict
-from datasets.combo_dataset import ComboDataset
+from datasets.combo_dataloader import ComboDataloader
 from terrace import collate
 from git_timewarp import GitTimeWarp
 
@@ -62,7 +62,7 @@ class Trainer(pl.LightningModule):
         
     def get_dataloader(self, prefix):
         if prefix == 'train':
-            return self.trainer.train_dataloader
+            return self.trainer.train_dataloader.loaders
         elif prefix == 'val':
             return self.trainer.val_dataloaders
 
@@ -73,13 +73,13 @@ class Trainer(pl.LightningModule):
                 dataset_idx = 0
             loader = loader[dataset_idx]
 
+        if isinstance(loader, ComboDataloader) and dataset_idx is not None:
+            return loader.loaders[dataset_idx].dataset
+
         if isinstance(loader.dataset, CombinedDataset):
             dataset = loader.dataset.datasets
         else:
             dataset = loader.dataset
-
-        if isinstance(dataset, ComboDataset) and dataset_idx is not None:
-            dataset = dataset.datasets[dataset_idx]
 
         return dataset
 
@@ -91,11 +91,6 @@ class Trainer(pl.LightningModule):
 
         pred = self.model.predict_train(x, y, tasks, prefix, batch_idx)
         loss, loss_dict = get_losses(self.cfg, tasks, x, pred, y)
-
-        # if "profile_max_batches" in self.cfg and batch_idx >= self.cfg.profile_max_batches:
-        #     raise RuntimeError("Stop the process!")
-
-        # return loss
 
         if dataset_idx is not None:
             self.log(f"{prefix}/loss", loss, prog_bar=True, batch_size=len(x))
@@ -128,11 +123,10 @@ class Trainer(pl.LightningModule):
         return loss
 
     def training_step(self, batch, batch_idx):
-        if isinstance(self.get_dataset("train", None), ComboDataset):
-            loss = 0.0
-            for i, item in enumerate(batch):
-                loss += self.shared_eval("train", item, batch_idx, i)
-            return loss
+        loader = self.get_dataloader("train")
+        if isinstance(loader, ComboDataloader):
+            dataset_idx = loader.get_dataset_index(batch_idx)
+            return self.shared_eval("train", batch, batch_idx, dataset_idx)
         return self.shared_eval('train', batch, batch_idx)
     
     def validation_step(self, batch, batch_idx, dataset_idx=None):
