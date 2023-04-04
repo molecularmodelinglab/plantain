@@ -92,10 +92,10 @@ class Trainer(pl.LightningModule):
         pred = self.model.predict_train(x, y, tasks, prefix, batch_idx)
         loss, loss_dict = get_losses(self.cfg, tasks, x, pred, y)
 
-        if "profile_max_batches" in self.cfg and batch_idx >= self.cfg.profile_max_batches:
-            raise RuntimeError("Stop the process!")
+        # if "profile_max_batches" in self.cfg and batch_idx >= self.cfg.profile_max_batches:
+        #     raise RuntimeError("Stop the process!")
 
-        return loss
+        # return loss
 
         if dataset_idx is not None:
             self.log(f"{prefix}/loss", loss, prog_bar=True, batch_size=len(x))
