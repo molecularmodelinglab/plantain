@@ -5,6 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import dgl.backend as dF
 from dgl.nn import WeightAndSum
+from dgl.nn.pytorch import EGATConv
 from common.pose_transform import MultiPose, Pose
 from models.attention_gnn import MPNN
 from terrace import Module
@@ -15,6 +16,23 @@ from .model import ClassifyActivityModel
 from .cat_scal_embedding import CatScalEmbedding
 from .graph_embedding import GraphEmbedding
 from .force_field import ScaleOutput, rbf_encode, cdist_diff
+
+class EGATMPNN(Module):
+    """ Very basic message passing step"""
+
+    def __init__(self, out_node_feats, out_edge_feats, num_heads):
+        super().__init__()
+        self.out_node_feats = out_node_feats
+        self.out_edge_feats = out_edge_feats
+        self.num_heads = num_heads
+
+    def forward(self, g, node_feats, edge_feats):
+        self.start_forward()
+        node_size = node_feats.shape[-1]
+        edge_size = edge_feats.shape[-1]
+        gnn = self.make(EGATConv, node_size, edge_size, self.out_node_feats, self.out_edge_feats, self.num_heads)
+        ndata, edata = gnn(g.dgl(), F.leaky_relu(node_feats), F.leaky_relu(edge_feats))
+        return ndata.reshape(ndata.shape[0], -1), edata.reshape(edata.shape[0], -1)
 
 def is_tensor(obj):
     return isinstance(obj, torch.Tensor)
@@ -300,9 +318,19 @@ class TwistBlock(TwistModule):
         rec_packed = pad_packed_tensor_with_index(td.rec_feat, twist_index.rec_lens, twist_index.Ram, twist_index.rec_pad_index,  0.0)
         full_rec_packed = pad_packed_tensor_with_index(td.full_rec_feat, twist_index.full_rec_lens, twist_index.Rfm, twist_index.full_rec_pad_index,  0.0)
 
+        mpnn_type = self.cfg.get("mpnn_type", "default")
+        if mpnn_type == "default":
+            lig_mpnn_hid = self.make(MPNN)(x.lig_graph, td.lig_feat, td.lig_edge_feat)
+            rec_mpnn_hid = self.make(MPNN)(x.rec_graph, td.rec_feat, td.rec_edge_feat)
+            lig_edge_mpnn_hid = None
+            rec_edge_mpnn_hid = None
+        elif mpnn_type == "egat":
+            lig_mpnn_hid, lig_edge_mpnn_hid = self.make(EGATMPNN, self.cfg.lig_mpnn_node_size, self.cfg.lig_mpnn_edge_size, self.cfg.lig_mpnn_heads)(x.lig_graph, td.lig_feat, td.lig_edge_feat)
+            rec_mpnn_hid, rec_edge_mpnn_hid = self.make(EGATMPNN, self.cfg.rec_mpnn_node_size, self.cfg.rec_mpnn_edge_size, self.cfg.rec_mpnn_heads)(x.rec_graph, td.rec_feat, td.rec_edge_feat)
+
         # lig_feat, lig_edge_feat, ll_feat, l_ra_feat, l_rf_feat -> lig_feat
         lig_hid = [ td.lig_feat ] 
-        lig_hid.append(self.make(MPNN)(x.lig_graph, td.lig_feat, td.lig_edge_feat))
+        lig_hid.append(lig_mpnn_hid)
         lig_hid.append(self.full_attention_contract(td.ll_feat, self.cfg.ll_atn_heads, self.cfg.ll_atn_feat, twist_index.lig_pad_index, eye_mask=True))
         lig_hid.append(self.full_attention_contract(td.l_ra_feat, self.cfg.l_ra_atn_heads, self.cfg.l_ra_atn_feat, twist_index.lig_pad_index))
         lig_hid.append(self.full_attention_contract(td.l_rf_feat, self.cfg.l_rf_atn_heads, self.cfg.l_rf_atn_feat, twist_index.lig_pad_index))
@@ -312,7 +340,7 @@ class TwistBlock(TwistModule):
         
         # rec_feat, rec_edge_feat, l_ra_feat, rf_feat -> rec_feat
         rec_hid = [ td.rec_feat ]
-        rec_hid.append(self.make(MPNN)(x.rec_graph, td.rec_feat, td.rec_edge_feat))
+        rec_hid.append(rec_mpnn_hid)
         rec_hid.append(self.full_attention_contract(td.l_ra_feat, self.cfg.l_ra_atn_heads, self.cfg.l_ra_atn_feat, twist_index.rec_pad_index, transpose=True))
         rec_hid.append(self.make(FullRecContract, self.cfg)(td.full_rec_feat, twist_index.res_index, self.cfg.rf_ra_hid_size))
 
@@ -333,6 +361,8 @@ class TwistBlock(TwistModule):
         lig_2_lig_edge = self.make(NormAndLinear, self.cfg, self.cfg.lig_feat_lig_edge_hid_size)(td.lig_feat)
 
         lig_edge_hid = [ td.lig_edge_feat ]
+        if lig_edge_mpnn_hid is not None:
+            lig_edge_hid.append(lig_edge_mpnn_hid)
         lig_edge_hid.append(feat_to_edge_feat(lig_2_lig_edge, twist_index.lig_edge_index))
         lig_edge_hid.append(ll_feat_to_lig_edges(ll_2_lig_edge, twist_index.lig_edge_pad_index))
         
@@ -344,6 +374,8 @@ class TwistBlock(TwistModule):
         rec_2_rec_edge = self.make(NormAndLinear, self.cfg, self.cfg.rec_feat_rec_edge_hid_size)(td.rec_feat)
 
         rec_edge_hid = [ td.rec_edge_feat ]
+        if rec_edge_mpnn_hid is not None:
+            rec_edge_hid.append(rec_edge_mpnn_hid)
         rec_edge_hid.append(feat_to_edge_feat(rec_2_rec_edge, twist_index.rec_edge_index))        
 
         rec_edge_hid = torch.cat(rec_edge_hid, -1)
@@ -505,6 +537,51 @@ class TwistForceField(TwistModule):
             l_rf_coef = self.make(LazyLinear, self.cfg.rbf_steps)(F.leaky_relu(td.l_rf_feat)),
             ll_coef = self.make(LazyLinear, self.cfg.rbf_steps)(F.leaky_relu(td.ll_feat)),
         )
+
+    # @staticmethod
+    # def static_get_energy(mcfg,
+    #                     coef,
+    #                     lig_pose,
+    #                     lig_graph,
+    #                     full_rec_data,
+    #                     weight,
+    #                     bias):
+
+    #     l_rf_coef = coef.l_rf_coef
+    #     ll_coef = coef.ll_coef
+
+    #     lig_coord = torch.cat(lig_pose.coord, -2)
+    #     if lig_coord.dim() == 3:
+    #         lig_coord = lig_coord.transpose(0,1)
+    #     lig_coord = dF.pad_packed_tensor(lig_coord, lig_graph.dgl().batch_num_nodes(), 0.0)
+    #     rec_coord = dF.pad_packed_tensor(full_rec_data.ndata.coord, full_rec_data.dgl().batch_num_nodes(), 0.0)
+    #     if lig_coord.dim() == 4:
+    #         lig_coord = lig_coord.transpose(1,2)
+    #         rec_coord = rec_coord.unsqueeze(1)
+    #         l_rf_coef = l_rf_coef.unsqueeze(1)
+    #         ll_coef = ll_coef.unsqueeze(1)
+
+    #     l_rf_dist = cdist_diff(lig_coord, rec_coord)
+    #     ll_dist = cdist_diff(lig_coord, lig_coord)
+
+    #     l_rf_mask = (lig_coord[...,0] != 0.0).unsqueeze(-1) & (rec_coord[...,0] != 0.0).unsqueeze(-2)
+    #     ll_mask =  (lig_coord[...,0] != 0.0).unsqueeze(-1) & (lig_coord[...,0] != 0.0).unsqueeze(-2)
+
+    #     extra_ll = ~torch.eye(ll_mask.shape[-1], dtype=bool, device=ll_mask.device).unsqueeze(0)
+    #     if lig_coord.dim() == 4:
+    #         extra_ll = extra_ll.unsqueeze(1)
+    #     ll_mask = ll_mask & extra_ll
+
+    #     l_rf_rbfs = rbf_encode(l_rf_dist[l_rf_mask], mcfg.rbf_start,mcfg.rbf_end,mcfg.rbf_steps)
+    #     ll_rbfs = rbf_encode(ll_dist[ll_mask], mcfg.rbf_start,mcfg.rbf_end,mcfg.rbf_steps)
+
+    #     l_rf_U = torch.zeros(l_rf_coef.shape[:-1], device=ll_mask.device)
+    #     ll_U = torch.zeros(ll_coef.shape[:-1], device=ll_mask.device)
+
+    #     l_rf_U[l_rf_mask] = (l_rf_rbfs*(l_rf_coef[l_rf_mask])).sum(-1)
+    #     ll_U[ll_mask] = (ll_rbfs*(ll_coef[ll_mask])).sum(-1)
+
+    #     return (l_rf_U.sum((-1,-2,-3)) + ll_U.sum((-1,-2,-3)))*weight + bias
 
     @staticmethod
     def static_get_energy(mcfg,

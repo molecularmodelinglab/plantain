@@ -24,8 +24,8 @@ class ScaleOutput(nn.Module):
 def rbf_encode(dists, start, end, steps):
     mu = torch.linspace(start, end, steps, device=dists.device)
     sigma = (start - end)/steps
-    dists_expanded = dists.unsqueeze(-1)# .repeat(1,1,mu.size(0))
-    mu_expanded = mu.view(1,1,-1)
+    dists_expanded = dists.unsqueeze(-1)
+    mu_expanded = mu.view(*[1 for i in range(dists.dim())],-1)
     diff = ((dists_expanded - mu_expanded)/sigma)**2
     return torch.exp(-diff)
 
