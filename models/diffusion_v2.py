@@ -176,7 +176,7 @@ class DiffusionV2(nn.Module, Model):
 
         if init_pose_override is None:
             # print("running init energy")
-            num_rand_poses = self.cfg.model.diffusion.get("num_init_poses", 1024)
+            num_rand_poses = self.cfg.model.diffusion.get("num_init_poses", 64)
             init_pose = DiffusionV2.get_init_pose(x)
             rand_transforms = PoseTransform.make_initial(self.cfg.model.diffusion, x, device, num_rand_poses)
             rand_poses = rand_transforms.apply(init_pose, x.lig_torsion_data).cpu()
