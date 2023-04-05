@@ -328,6 +328,5 @@ def get_full_dist_matrix(lig_graph, lig_pose, full_rec_data):
     dist = torch.cdist(lig_coord, rec_coord)
     lm = (lig_coord[:,:,0] != 0.0).unsqueeze(2)
     rm = (rec_coord[:,:,0] != 0.0).unsqueeze(1)
-    lm.shape, rm.shape
     mask = lm & rm
     return dist, mask
