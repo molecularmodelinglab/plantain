@@ -41,6 +41,9 @@ class AttrDict(MutableMapping):
     def __repr__(self) -> str:
         return f"AttrDict({repr(self.__dict__)})"
 
+    def __hash__(self) -> int:
+        return object.__hash__(self)
+
     def keys(self):
         return self.__dict__.keys()
 

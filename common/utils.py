@@ -166,4 +166,5 @@ def get_pdb_str(rec):
         io.set_structure(rec)
         io.save(f.name)
         return f.read().decode('ascii')
+
             

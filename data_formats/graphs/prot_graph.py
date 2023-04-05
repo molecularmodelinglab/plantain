@@ -6,8 +6,8 @@ from Bio.PDB.Residue import Residue
 from Bio.PDB.Atom import Atom
 from Bio.PDB.PDBExceptions import PDBConstructionWarning
 from Bio.PDB import PDBParser
+import dgl.backend as dF
 from terrace import CategoricalTensor
-
 from terrace.batch import Batch, Batchable, NoStackTensor
 from terrace.dataframe import DFRow
 from terrace import NoStackCatTensor
@@ -318,3 +318,16 @@ def get_full_rec_data(cfg, rec):
                         cat_feat,
                         scal_feat,
                         res_indexes)
+
+def get_full_dist_matrix(lig_graph, lig_pose, full_rec_data):
+    """ Returns (padded) distance matrix between lig and full rec.
+    Also returns the mask where dist is nonexistant """
+    lig_coord = torch.cat(lig_pose.coord, 0)
+    lig_coord = dF.pad_packed_tensor(lig_coord, lig_graph.dgl().batch_num_nodes(), 0.0)
+    rec_coord = dF.pad_packed_tensor(full_rec_data.ndata.coord, full_rec_data.dgl().batch_num_nodes(), 0.0)
+    dist = torch.cdist(lig_coord, rec_coord)
+    lm = (lig_coord[:,:,0] != 0.0).unsqueeze(2)
+    rm = (rec_coord[:,:,0] != 0.0).unsqueeze(1)
+    lm.shape, rm.shape
+    mask = lm & rm
+    return dist, mask

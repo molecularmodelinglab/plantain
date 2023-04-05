@@ -475,8 +475,108 @@ class TwisterV2(Module, ClassifyActivityModel):
                      score=is_act,
                      activity=act,
                      activity_score=act,
-                     inv_dist_mat=inv_dist_mat
-                     )
+                     inv_dist_mat=inv_dist_mat,
+                    )
                     #  final_l_rf_hid=td.l_rf_feat,
                     #  final_l_ra_hid=td.l_ra_feat,
                     #  final_ll_hid=td.ll_feat)
+
+class TwistFFCoef(Batchable):
+    l_rf_coef: torch.Tensor
+    ll_coef: torch.Tensor
+
+class TwistForceField(TwistModule):
+
+    def get_input_feats(self):
+        return [ "lig_graph", "rec_graph", "full_rec_data" ]
+
+    def get_hidden_feat(self, x):
+        self.start_forward()
+
+        twist_index = TwistIndex(x)
+
+        td = self.make(TwistEncoder, self.cfg)(x, twist_index)
+        for i in range(self.cfg.num_blocks):
+            td = td + self.make(TwistBlock, self.cfg)(x, twist_index, td)
+
+        self.scale_output = self.make(ScaleOutput, self.cfg.energy_bias)
+
+        return Batch(TwistFFCoef,
+            l_rf_coef = self.make(LazyLinear, self.cfg.rbf_steps)(F.leaky_relu(td.l_rf_feat)),
+            ll_coef = self.make(LazyLinear, self.cfg.rbf_steps)(F.leaky_relu(td.ll_feat)),
+        )
+
+    @staticmethod
+    def static_get_energy(mcfg,
+                        coef,
+                        lig_pose,
+                        lig_graph,
+                        full_rec_data,
+                        weight,
+                        bias):
+
+        l_rf_coef = coef.l_rf_coef
+        ll_coef = coef.ll_coef
+
+        lig_coord = torch.cat(lig_pose.coord, -2)
+        if lig_coord.dim() == 3:
+            lig_coord = lig_coord.transpose(0,1)
+        lig_coord = dF.pad_packed_tensor(lig_coord, lig_graph.dgl().batch_num_nodes(), 0.0)
+        rec_coord = dF.pad_packed_tensor(full_rec_data.ndata.coord, full_rec_data.dgl().batch_num_nodes(), 0.0)
+        if lig_coord.dim() == 4:
+            lig_coord = lig_coord.transpose(1,2)
+            rec_coord = rec_coord.unsqueeze(1)
+            l_rf_coef = l_rf_coef.unsqueeze(1)
+            ll_coef = ll_coef.unsqueeze(1)
+
+        l_rf_dist = cdist_diff(lig_coord, rec_coord)
+        ll_dist = cdist_diff(lig_coord, lig_coord)
+
+        l_rf_mask = (lig_coord[...,0] != 0.0).unsqueeze(-1) & (rec_coord[...,0] != 0.0).unsqueeze(-2)
+        ll_mask =  (lig_coord[...,0] != 0.0).unsqueeze(-1) & (lig_coord[...,0] != 0.0).unsqueeze(-2)
+
+        extra_ll = ~torch.eye(ll_mask.shape[-1], dtype=bool, device=ll_mask.device).unsqueeze(0)
+        if lig_coord.dim() == 4:
+            extra_ll = extra_ll.unsqueeze(1)
+        ll_mask = ll_mask & extra_ll
+
+        l_rf_rbfs = rbf_encode(l_rf_dist, mcfg.rbf_start,mcfg.rbf_end,mcfg.rbf_steps)
+        ll_rbfs = rbf_encode(ll_dist, mcfg.rbf_start,mcfg.rbf_end,mcfg.rbf_steps)
+
+        l_rf_U = (l_rf_rbfs*l_rf_coef)
+        l_rf_U[~l_rf_mask] = 0.0
+        ll_U = (ll_rbfs*ll_coef)
+        ll_U[~ll_mask] = 0.0
+
+        return (l_rf_U.sum((-1,-2,-3)) + ll_U.sum((-1,-2,-3)))*weight + bias
+
+    @staticmethod
+    def get_energy_single(mcfg,
+                        ll_coef,
+                        l_rf_coef,
+                        rec_coord,
+                        lig_coord,
+                        weight,
+                        bias):
+        l_rf_dist = cdist_diff(lig_coord, rec_coord)
+        ll_dist = cdist_diff(lig_coord, lig_coord)
+        ll_mask = ~torch.eye(ll_dist.shape[0], dtype=bool, device=ll_dist.device).unsqueeze(-1)
+        
+
+        l_rf_rbfs = rbf_encode(l_rf_dist, mcfg.rbf_start,mcfg.rbf_end,mcfg.rbf_steps)
+        ll_rbfs = rbf_encode(ll_dist, mcfg.rbf_start,mcfg.rbf_end,mcfg.rbf_steps)
+
+        ll_coef = ll_coef[:ll_rbfs.shape[0],:ll_rbfs.shape[1]]
+        l_rf_coef = l_rf_coef[:l_rf_rbfs.shape[0],:l_rf_rbfs.shape[1]]
+
+        l_rf_U = (l_rf_rbfs*l_rf_coef)
+        ll_U = (ll_rbfs*ll_coef).where(~ll_mask, torch.tensor(0.0, device=l_rf_dist.device))
+
+        return (l_rf_U.sum() + ll_U.sum())*weight + bias
+
+    def get_energy(self, x, coef, lig_pose):
+        bias, weight = self.scale_output.parameters()
+        return TwistForceField.static_get_energy(self.cfg, coef, lig_pose, x.lig_graph, x.full_rec_data, weight, bias)
+
+
+        

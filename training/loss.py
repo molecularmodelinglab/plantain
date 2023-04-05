@@ -1,6 +1,6 @@
 import torch
 import torch.nn.functional as F
-import dgl.backend as dF
+from data_formats.graphs.prot_graph import get_full_dist_matrix
 
 def bce_loss(x, pred, y):
     return F.binary_cross_entropy_with_logits(pred, y.float())
@@ -119,11 +119,7 @@ def diffused_rmsd_mse(x, pred, y):
     return F.mse_loss(pred.diffused_energy, pred.diffused_rmsds)
 
 def full_inv_dist_mse(x, pred, y):
-    lig_coord = torch.cat(y.lig_crystal_pose.coord, 0)
-    lig_coord = dF.pad_packed_tensor(lig_coord, x.lig_graph.dgl().batch_num_nodes(), 0.0)
-    rec_coord = dF.pad_packed_tensor(x.full_rec_data.ndata.coord, x.full_rec_data.dgl().batch_num_nodes(), 0.0)
-    dist = torch.cdist(lig_coord, rec_coord)
-    mask = dist != 0.0
+    dist, mask = get_full_dist_matrix(x.lig_graph, y.lig_crystal_pose, x.full_rec_data)
     true_mat = 1.0/(1.0 + dist)
     return F.mse_loss(pred.inv_dist_mat, true_mat, reduction='none')[mask].mean()
 
