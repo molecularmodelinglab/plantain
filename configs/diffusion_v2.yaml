@@ -147,6 +147,16 @@ model:
   full_atom_embed_size: 16
   normalization: layer
 
+  mpnn_type: egat  
+
+  lig_mpnn_node_size: 16
+  lig_mpnn_edge_size: 16
+  lig_mpnn_heads: 4
+
+  rec_mpnn_node_size: 16
+  rec_mpnn_edge_size: 16
+  rec_mpnn_heads: 4
+
   ll_atn_heads: 4
   ll_atn_feat: 8
 
