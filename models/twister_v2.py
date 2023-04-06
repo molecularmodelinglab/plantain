@@ -345,9 +345,9 @@ class TwistBlock(TwistModule):
         # lig_feat, lig_edge_feat, ll_feat, l_ra_feat, l_rf_feat -> lig_feat
         lig_hid = [ td.lig_feat ] 
         lig_hid.append(lig_mpnn_hid)
-        # lig_hid.append(self.full_attention_contract(td.ll_feat, self.cfg.ll_atn_heads, self.cfg.ll_atn_feat, twist_index.lig_pad_index, twist_index.ll_mask))
+        lig_hid.append(self.full_attention_contract(td.ll_feat, self.cfg.ll_atn_heads, self.cfg.ll_atn_feat, twist_index.lig_pad_index, twist_index.ll_mask))
         lig_hid.append(self.full_attention_contract(td.l_ra_feat, self.cfg.l_ra_atn_heads, self.cfg.l_ra_atn_feat, twist_index.lig_pad_index, twist_index.l_ra_mask))
-        # lig_hid.append(self.full_attention_contract(td.l_rf_feat, self.cfg.l_rf_atn_heads, self.cfg.l_rf_atn_feat, twist_index.lig_pad_index, twist_index.l_rf_mask))
+        lig_hid.append(self.full_attention_contract(td.l_rf_feat, self.cfg.l_rf_atn_heads, self.cfg.l_rf_atn_feat, twist_index.lig_pad_index, twist_index.l_rf_mask))
 
         lig_hid = torch.cat(lig_hid, -1)
         lig_feat = self.make(LazyLinear, td_cfg.lig_feat)(lig_hid)
@@ -355,7 +355,7 @@ class TwistBlock(TwistModule):
         # rec_feat, rec_edge_feat, l_ra_feat, rf_feat -> rec_feat
         rec_hid = [ td.rec_feat ]
         rec_hid.append(rec_mpnn_hid)
-        # rec_hid.append(self.full_attention_contract(td.l_ra_feat, self.cfg.l_ra_atn_heads, self.cfg.l_ra_atn_feat, twist_index.rec_pad_index, twist_index.l_ra_mask, transpose=True))
+        rec_hid.append(self.full_attention_contract(td.l_ra_feat, self.cfg.l_ra_atn_heads, self.cfg.l_ra_atn_feat, twist_index.rec_pad_index, twist_index.l_ra_mask, transpose=True))
         rec_hid.append(self.make(FullRecContract, self.cfg)(td.full_rec_feat, twist_index.res_index, self.cfg.rf_ra_hid_size))
 
         rec_hid = torch.cat(rec_hid, -1)
@@ -363,7 +363,7 @@ class TwistBlock(TwistModule):
 
         # full_rec_feat, l_rf_feat, ra_feat -> full_rec_feat
         full_rec_hid = [ td.full_rec_feat ]
-        # full_rec_hid.append(self.full_attention_contract(td.l_rf_feat, self.cfg.l_rf_atn_heads, self.cfg.l_rf_atn_feat, twist_index.full_rec_pad_index, twist_index.l_rf_mask, transpose=True))
+        full_rec_hid.append(self.full_attention_contract(td.l_rf_feat, self.cfg.l_rf_atn_heads, self.cfg.l_rf_atn_feat, twist_index.full_rec_pad_index, twist_index.l_rf_mask, transpose=True))
         full_rec_hid.append(self.make(FullRecExpand, self.cfg)(td.rec_feat, twist_index.res_index, self.cfg.rf_ra_hid_size))
 
         full_rec_hid = torch.cat(full_rec_hid, -1)
