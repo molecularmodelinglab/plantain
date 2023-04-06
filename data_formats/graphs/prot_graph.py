@@ -199,7 +199,7 @@ def get_nodes_and_edges_from_model(cfg: DictConfig, prot: Model):
     else:
         raise AssertionError()
 
-    edata = DistEdge.make_from_dists(dists)
+    edata = DistEdge.make_from_dists(cfg, dists)
 
     return nodes, edges, edata
 

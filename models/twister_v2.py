@@ -77,6 +77,12 @@ def get_padded_edge_indexes(graph):
         dst[edge_slice] = cur_dst
     return batch, src, dst
 
+def softmax_with_mask(x, mask, dim):
+    # return torch.softmax(x, dim)
+    x_exp = torch.exp(x - torch.max(x,dim=dim,keepdim=True)[0])
+    x_exp = x_exp.masked_fill(~mask, 0.0)
+    return x_exp / x_exp.sum(dim,keepdim=True)
+
 class TwistIndex:
     """ Used to store precomputed indexes for padding/packing tensors """
 
@@ -102,6 +108,22 @@ class TwistIndex:
 
         rec_src, rec_dst = x.rec_graph.dgl().edges()
         self.rec_edge_index = rec_src.long(), rec_dst.long()
+
+
+        device = x.lig_graph.ndata.cat_feat.device
+        l_mask = dF.pad_packed_tensor(torch.ones((len(x.lig_graph.ndata,)), dtype=bool, device=device), x.lig_graph.dgl().batch_num_nodes(), 0.0)
+        ra_mask = dF.pad_packed_tensor(torch.ones((len(x.rec_graph.ndata,)), dtype=bool, device=device), x.rec_graph.dgl().batch_num_nodes(), 0.0)
+        rf_mask = dF.pad_packed_tensor(torch.ones((len(x.full_rec_data.ndata,)), dtype=bool, device=device), x.full_rec_data.dgl().batch_num_nodes(), 0.0)
+
+        ll_mask = l_mask.unsqueeze(-1) & l_mask.unsqueeze(-2)
+        ll_mask = ll_mask & ~torch.eye(ll_mask.shape[-1], dtype=bool, device=ll_mask.device).unsqueeze(0)
+
+        l_ra_mask = l_mask.unsqueeze(-1) & ra_mask.unsqueeze(-2)
+        l_rf_mask = l_mask.unsqueeze(-1) & rf_mask.unsqueeze(-2)
+
+        self.ll_mask = ll_mask.unsqueeze(-1)
+        self.l_ra_mask = l_ra_mask.unsqueeze(-1)
+        self.l_rf_mask = l_rf_mask.unsqueeze(-1)
 
 # L = number of atoms in ligand
 # Ra = number of rec residues (nodes in Ca graph)
@@ -200,19 +222,13 @@ class TwistEncoder(TwistModule):
 
 class AttentionContract(TwistModule):
 
-    def forward(self, xy_feat, n_heads, n_feat, mask=None):
+    def forward(self, xy_feat, n_heads, n_feat, mask):
         self.start_forward()
         """ uses a sort of multi-head attention to contract an (X, Y, F) tensor and get
         a (X, n_heads*n_feat) tensor"""
         out_feat = self.make(NormAndLinear, self.cfg, n_heads*n_feat)(xy_feat).reshape((*xy_feat.shape[:-1], n_heads, n_feat))
         atn_coefs = self.make(LazyLinear, n_heads)(F.leaky_relu(xy_feat)).unsqueeze(-1)
-        if mask is not None:
-            atn_coefs = atn_coefs.masked_fill(mask.unsqueeze(-1), 0)
-
-        atn_coefs = F.softmax(atn_coefs, -3)
-        if mask is not None and self.cfg.get("correct_attention_mask", False):
-            atn_coefs = atn_coefs.masked_fill(mask.unsqueeze(-1), 0)
-
+        atn_coefs = softmax_with_mask(atn_coefs, mask.unsqueeze(-1), -3)
         out = (atn_coefs*out_feat).sum(-3).reshape((*atn_coefs.shape[:-3], -1))
         return out
 
@@ -264,11 +280,8 @@ class FlattenXYData(TwistModule):
         xy_feat = xy_feat.reshape((B, -1, xy_feat.shape[-1]))
         feat = self.make(NormAndLinear, self.cfg, n_heads*n_feat)(xy_feat).reshape((B, -1, n_heads, n_feat))
         atn = self.make(LazyLinear, n_heads)(F.leaky_relu(xy_feat)).unsqueeze(-1)
-        if mask is not None:
-            atn = atn.masked_fill(mask.reshape((1, -1, 1, 1)), 1)
-        atn = atn.softmax(1)
-        if mask is not None and self.cfg.get("correct_attention_mask", False):
-            atn = atn.masked_fill(mask.reshape((1, -1, 1, 1)), 1)
+        atn = softmax_with_mask(atn, mask.reshape((1, -1, 1, 1)), 1)
+        raise Exception("debug me!")
         return (feat*atn).sum(1).reshape(B, -1)
 
 def ll_feat_to_lig_edges(ll_feat, lig_edge_index):
@@ -289,11 +302,10 @@ def cat_feat_list_list(feats):
 
 class TwistBlock(TwistModule):
 
-    def full_attention_contract(self, xy_feat, n_heads, n_feat, graph_index, transpose=False, eye_mask=False):
-        device = xy_feat.device
+    def full_attention_contract(self, xy_feat, n_heads, n_feat, graph_index, mask, transpose=False):
         if transpose:
             xy_feat = xy_feat.transpose(-3,-2)
-        mask = torch.eye(xy_feat.shape[1], device=device, dtype=bool).unsqueeze(-1).unsqueeze(0) if eye_mask else None
+            mask = mask.transpose(-3,-2)
         ret = self.make(AttentionContract, self.cfg)(xy_feat, n_heads, n_feat, mask)
         return pack_padded_tensor_with_index(ret, graph_index)
 
@@ -331,9 +343,9 @@ class TwistBlock(TwistModule):
         # lig_feat, lig_edge_feat, ll_feat, l_ra_feat, l_rf_feat -> lig_feat
         lig_hid = [ td.lig_feat ] 
         lig_hid.append(lig_mpnn_hid)
-        lig_hid.append(self.full_attention_contract(td.ll_feat, self.cfg.ll_atn_heads, self.cfg.ll_atn_feat, twist_index.lig_pad_index, eye_mask=True))
-        lig_hid.append(self.full_attention_contract(td.l_ra_feat, self.cfg.l_ra_atn_heads, self.cfg.l_ra_atn_feat, twist_index.lig_pad_index))
-        lig_hid.append(self.full_attention_contract(td.l_rf_feat, self.cfg.l_rf_atn_heads, self.cfg.l_rf_atn_feat, twist_index.lig_pad_index))
+        lig_hid.append(self.full_attention_contract(td.ll_feat, self.cfg.ll_atn_heads, self.cfg.ll_atn_feat, twist_index.lig_pad_index, twist_index.ll_mask))
+        lig_hid.append(self.full_attention_contract(td.l_ra_feat, self.cfg.l_ra_atn_heads, self.cfg.l_ra_atn_feat, twist_index.lig_pad_index, twist_index.l_ra_mask))
+        lig_hid.append(self.full_attention_contract(td.l_rf_feat, self.cfg.l_rf_atn_heads, self.cfg.l_rf_atn_feat, twist_index.lig_pad_index, twist_index.l_rf_mask))
 
         lig_hid = torch.cat(lig_hid, -1)
         lig_feat = self.make(LazyLinear, td_cfg.lig_feat)(lig_hid)
@@ -341,7 +353,7 @@ class TwistBlock(TwistModule):
         # rec_feat, rec_edge_feat, l_ra_feat, rf_feat -> rec_feat
         rec_hid = [ td.rec_feat ]
         rec_hid.append(rec_mpnn_hid)
-        rec_hid.append(self.full_attention_contract(td.l_ra_feat, self.cfg.l_ra_atn_heads, self.cfg.l_ra_atn_feat, twist_index.rec_pad_index, transpose=True))
+        rec_hid.append(self.full_attention_contract(td.l_ra_feat, self.cfg.l_ra_atn_heads, self.cfg.l_ra_atn_feat, twist_index.rec_pad_index, twist_index.l_ra_mask, transpose=True))
         rec_hid.append(self.make(FullRecContract, self.cfg)(td.full_rec_feat, twist_index.res_index, self.cfg.rf_ra_hid_size))
 
         rec_hid = torch.cat(rec_hid, -1)
@@ -349,7 +361,7 @@ class TwistBlock(TwistModule):
 
         # full_rec_feat, l_rf_feat, ra_feat -> full_rec_feat
         full_rec_hid = [ td.full_rec_feat ]
-        full_rec_hid.append(self.full_attention_contract(td.l_rf_feat, self.cfg.l_rf_atn_heads, self.cfg.l_rf_atn_feat, twist_index.full_rec_pad_index, transpose=True))
+        full_rec_hid.append(self.full_attention_contract(td.l_rf_feat, self.cfg.l_rf_atn_heads, self.cfg.l_rf_atn_feat, twist_index.full_rec_pad_index, twist_index.l_rf_mask, transpose=True))
         full_rec_hid.append(self.make(FullRecExpand, self.cfg)(td.rec_feat, twist_index.res_index, self.cfg.rf_ra_hid_size))
 
         full_rec_hid = torch.cat(full_rec_hid, -1)
@@ -537,51 +549,6 @@ class TwistForceField(TwistModule):
             l_rf_coef = self.make(LazyLinear, self.cfg.rbf_steps)(F.leaky_relu(td.l_rf_feat)),
             ll_coef = self.make(LazyLinear, self.cfg.rbf_steps)(F.leaky_relu(td.ll_feat)),
         )
-
-    # @staticmethod
-    # def static_get_energy(mcfg,
-    #                     coef,
-    #                     lig_pose,
-    #                     lig_graph,
-    #                     full_rec_data,
-    #                     weight,
-    #                     bias):
-
-    #     l_rf_coef = coef.l_rf_coef
-    #     ll_coef = coef.ll_coef
-
-    #     lig_coord = torch.cat(lig_pose.coord, -2)
-    #     if lig_coord.dim() == 3:
-    #         lig_coord = lig_coord.transpose(0,1)
-    #     lig_coord = dF.pad_packed_tensor(lig_coord, lig_graph.dgl().batch_num_nodes(), 0.0)
-    #     rec_coord = dF.pad_packed_tensor(full_rec_data.ndata.coord, full_rec_data.dgl().batch_num_nodes(), 0.0)
-    #     if lig_coord.dim() == 4:
-    #         lig_coord = lig_coord.transpose(1,2)
-    #         rec_coord = rec_coord.unsqueeze(1)
-    #         l_rf_coef = l_rf_coef.unsqueeze(1)
-    #         ll_coef = ll_coef.unsqueeze(1)
-
-    #     l_rf_dist = cdist_diff(lig_coord, rec_coord)
-    #     ll_dist = cdist_diff(lig_coord, lig_coord)
-
-    #     l_rf_mask = (lig_coord[...,0] != 0.0).unsqueeze(-1) & (rec_coord[...,0] != 0.0).unsqueeze(-2)
-    #     ll_mask =  (lig_coord[...,0] != 0.0).unsqueeze(-1) & (lig_coord[...,0] != 0.0).unsqueeze(-2)
-
-    #     extra_ll = ~torch.eye(ll_mask.shape[-1], dtype=bool, device=ll_mask.device).unsqueeze(0)
-    #     if lig_coord.dim() == 4:
-    #         extra_ll = extra_ll.unsqueeze(1)
-    #     ll_mask = ll_mask & extra_ll
-
-    #     l_rf_rbfs = rbf_encode(l_rf_dist[l_rf_mask], mcfg.rbf_start,mcfg.rbf_end,mcfg.rbf_steps)
-    #     ll_rbfs = rbf_encode(ll_dist[ll_mask], mcfg.rbf_start,mcfg.rbf_end,mcfg.rbf_steps)
-
-    #     l_rf_U = torch.zeros(l_rf_coef.shape[:-1], device=ll_mask.device)
-    #     ll_U = torch.zeros(ll_coef.shape[:-1], device=ll_mask.device)
-
-    #     l_rf_U[l_rf_mask] = (l_rf_rbfs*(l_rf_coef[l_rf_mask])).sum(-1)
-    #     ll_U[ll_mask] = (ll_rbfs*(ll_coef[ll_mask])).sum(-1)
-
-    #     return (l_rf_U.sum((-1,-2,-3)) + ll_U.sum((-1,-2,-3)))*weight + bias
 
     @staticmethod
     def static_get_energy(mcfg,

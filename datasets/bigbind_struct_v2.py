@@ -44,6 +44,10 @@ class BigBindStructV2Dataset(Dataset):
         if max_residues is not None:
             self.structures = self.structures.query("num_pocket_residues <= @max_residues").reset_index(drop=True)
 
+        # smhhhh why are there disconnected fragments???
+
+        self.structures = self.structures.loc[~self.structures.lig_smiles.str.contains("\.")].reset_index(drop=True)
+
         self.dir = cfg.platform.bigbind_struct_v2_dir
         self.split = split
         self.rec_prefix = self.cfg.data.dock_strategy

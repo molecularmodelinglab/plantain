@@ -1,5 +1,6 @@
 from omegaconf import DictConfig
 import torch
+from models.force_field import rbf_encode
 
 from terrace import Batch, CategoricalTensor
 from .graph3d import Graph3d, Node3d, Edge3d
@@ -7,8 +8,13 @@ from .graph3d import Graph3d, Node3d, Edge3d
 class DistEdge(Edge3d):
 
     @staticmethod
-    def make_from_dists(dists):
-        scal_feat = torch.tensor(dists, dtype=torch.float32).unsqueeze(-1)
+    def make_from_dists(cfg, dists):
+        dists = torch.tensor(dists, dtype=torch.float32)
+        if "edge_rbf" in cfg.data.rec_graph:
+            rbf_cfg = cfg.data.rec_graph.edge_rbf
+            scal_feat = rbf_encode(dists, rbf_cfg.start, rbf_cfg.stop, rbf_cfg.step)
+        else:
+            scal_feat = dists.unsqueeze(-1)
         cat_feat = torch.zeros((len(scal_feat), 0), dtype=torch.long)
         cat_feat = CategoricalTensor(cat_feat, num_classes=[])
         edata = Batch(DistEdge,
