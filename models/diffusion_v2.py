@@ -122,13 +122,19 @@ class DiffusionV2(nn.Module, Model):
                                  true_pose,
                                  transform)
 
-        if self.cfg.model.diffusion.pred == "rank":
+        if self.cfg.model.diffusion.pred == "atom_dist":
+            diff_pose = transform.apply(true_pose, batch.lig_torsion_data)
+            diff_coord = torch.cat(diff_pose.coord, 1)
+            true_coord= torch.cat(true_pose.coord, 0).unsqueeze(0)
+            dists = torch.linalg.norm(diff_coord - true_coord, dim=-1)
+            rmsds = dists
+        elif self.cfg.model.diffusion.pred == "rank":
             rmsds = torch.linspace(0,1,energy.shape[1], device=energy.device).unsqueeze(0).repeat(energy.shape[0], 1)
         else:
             assert self.cfg.model.diffusion.pred == "rmsd"
             rmsds = get_transform_rmsds(batch, true_pose, transform)
 
-        return energy, rmsds
+        return energy, rmsds, hid_feat.inv_dist_mat
 
     def forward(self, batch, hid_feat=None, init_pose_override=None):
         optim = "bfgs"
@@ -139,8 +145,8 @@ class DiffusionV2(nn.Module, Model):
 
     def predict_train(self, x, y, task_names, split, batch_idx):
         hid_feat = self.get_hidden_feat(x)
-        diff_energy, diff_rmsds = self.diffuse_energy(x, y, hid_feat)
-        ret_dif = Batch(DFRow, diffused_energy=diff_energy, diffused_rmsds=diff_rmsds)
+        diff_energy, diff_rmsds, inv_dist_mat = self.diffuse_energy(x, y, hid_feat)
+        ret_dif = Batch(DFRow, diffused_energy=diff_energy, diffused_rmsds=diff_rmsds, inv_dist_mat=inv_dist_mat)
         if "predict_lig_pose" in task_names and (split != "train" or batch_idx % self.cfg.metric_reset_interval == 0):
             with torch.no_grad():
                 ret_pred = self(x, hid_feat)
@@ -186,7 +192,9 @@ class DiffusionV2(nn.Module, Model):
             rand_poses = [None]*len(x)
             init_energy = [None]*len(x)
 
-        hid_feat = hid_feat.cpu()
+        hid_feat = Batch(DFRow, 
+                         l_rf_coef=hid_feat.l_rf_coef.detach().cpu(),
+                         ll_coef=hid_feat.ll_coef.detach().cpu())
         x = x.cpu()
         ret = []
         args = []

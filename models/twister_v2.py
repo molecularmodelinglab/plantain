@@ -51,7 +51,7 @@ def get_padded_index(lengths):
     return index
 
 def pack_padded_tensor_with_index(input, index):
-    input = input.view(-1, *input.shape[2:])
+    input = input.reshape(-1, *input.shape[2:])
     return input[index]
 
 def pad_packed_tensor_with_index(input, lengths, max_len, index, value):
@@ -530,6 +530,7 @@ class TwisterV2(Module, ClassifyActivityModel):
 class TwistFFCoef(Batchable):
     l_rf_coef: torch.Tensor
     ll_coef: torch.Tensor
+    inv_dist_mat: torch.Tensor
 
 class TwistForceField(TwistModule):
 
@@ -546,10 +547,12 @@ class TwistForceField(TwistModule):
             td = td + self.make(TwistBlock, self.cfg)(x, twist_index, td)
 
         self.scale_output = self.make(ScaleOutput, self.cfg.energy_bias)
+        self.inv_dist_out = self.make(LazyLinear, 1)
 
         return Batch(TwistFFCoef,
             l_rf_coef = self.make(LazyLinear, self.cfg.rbf_steps)(F.leaky_relu(td.l_rf_feat)),
             ll_coef = self.make(LazyLinear, self.cfg.rbf_steps)(F.leaky_relu(td.ll_feat)),
+            inv_dist_mat = self.make(LazyLinear, 1)(F.leaky_relu(td.l_rf_feat))[...,0]
         )
 
     @staticmethod
@@ -593,6 +596,16 @@ class TwistForceField(TwistModule):
         l_rf_U[~l_rf_mask] = 0.0
         ll_U = (ll_rbfs*ll_coef)
         ll_U[~ll_mask] = 0.0
+
+        if mcfg.diffusion.pred == "atom_dist":
+            ret = (l_rf_U.sum((-1,-2)) + ll_U.sum((-1,-2)))*weight + bias
+            if ret.dim() == 3:
+                ret = ret.transpose(-1,-2)
+            idx = get_padded_index(lig_graph.dgl().batch_num_nodes())
+            ret = pack_padded_tensor_with_index(ret,idx)
+            if ret.dim() == 2:
+                ret = ret.transpose(-1,-2)
+            return ret
 
         return (l_rf_U.sum((-1,-2,-3)) + ll_U.sum((-1,-2,-3)))*weight + bias
 
