@@ -562,7 +562,8 @@ class TwistForceField(TwistModule):
                         lig_graph,
                         full_rec_data,
                         weight,
-                        bias):
+                        bias,
+                        per_atom_energy):
 
         l_rf_coef = coef.l_rf_coef
         ll_coef = coef.ll_coef
@@ -597,7 +598,7 @@ class TwistForceField(TwistModule):
         ll_U = (ll_rbfs*ll_coef)
         ll_U[~ll_mask] = 0.0
 
-        if mcfg.diffusion.pred == "atom_dist":
+        if per_atom_energy:
             ret = (l_rf_U.sum((-1,-2)) + ll_U.sum((-1,-2)))*weight + bias
             if ret.dim() == 3:
                 ret = ret.transpose(-1,-2)
@@ -633,9 +634,9 @@ class TwistForceField(TwistModule):
 
         return (l_rf_U.sum() + ll_U.sum())*weight + bias
 
-    def get_energy(self, x, coef, lig_pose):
+    def get_energy(self, x, coef, lig_pose, per_atom_energy):
         bias, weight = self.scale_output.parameters()
-        return TwistForceField.static_get_energy(self.cfg, coef, lig_pose, x.lig_graph, x.full_rec_data, weight, bias)
+        return TwistForceField.static_get_energy(self.cfg, coef, lig_pose, x.lig_graph, x.full_rec_data, weight, bias, per_atom_energy)
 
 
         

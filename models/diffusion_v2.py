@@ -47,11 +47,13 @@ class DiffusionV2(nn.Module, Model):
                    batch,
                    hid_feat,
                    batch_lig_pose,
-                   batch_transform):
+                   batch_transform,
+                   per_atom_energy=False):
         lig_poses = batch_transform.apply(batch_lig_pose, batch.lig_torsion_data)
         return self.force_field.get_energy(batch,
                                            hid_feat,
-                                           lig_poses)
+                                           lig_poses,
+                                           per_atom_energy)
 
     @staticmethod
     def energy_raw(t_raw,
@@ -117,10 +119,12 @@ class DiffusionV2(nn.Module, Model):
         else:
             true_pose = collate([Pose(p.coord[0]) for p in batch.lig_docked_poses])
 
+        per_atom_energy = self.cfg.model.diffusion.pred == "atom_dist"
         energy = self.get_energy(batch,
                                  hid_feat,
                                  true_pose,
-                                 transform)
+                                 transform,
+                                 per_atom_energy)
 
         if self.cfg.model.diffusion.pred == "atom_dist":
             diff_pose = transform.apply(true_pose, batch.lig_torsion_data)
