@@ -46,10 +46,8 @@ class DiffusionV2(nn.Module, Model):
     def get_energy(self,
                    batch,
                    hid_feat,
-                   batch_lig_pose,
-                   batch_transform,
+                   lig_poses,
                    per_atom_energy=False):
-        lig_poses = batch_transform.apply(batch_lig_pose, batch.lig_torsion_data)
         return self.force_field.get_energy(batch,
                                            hid_feat,
                                            lig_poses,
@@ -112,22 +110,21 @@ class DiffusionV2(nn.Module, Model):
             hid_feat= self.get_hidden_feat(batch)
         device = batch.lig_graph.ndata.cat_feat.device
 
-        transform = self.get_diffused_transforms(batch, device)
-
         if hasattr(y, "lig_crystal_pose"):
             true_pose = y.lig_crystal_pose
         else:
             true_pose = collate([Pose(p.coord[0]) for p in batch.lig_docked_poses])
 
+        transform = self.get_diffused_transforms(batch, device)
+        diff_pose = transform.apply(true_pose, batch.lig_torsion_data)
+
         per_atom_energy = self.cfg.model.diffusion.pred == "atom_dist"
         energy = self.get_energy(batch,
                                  hid_feat,
-                                 true_pose,
-                                 transform,
+                                 diff_pose,
                                  per_atom_energy)
 
         if self.cfg.model.diffusion.pred == "atom_dist":
-            diff_pose = transform.apply(true_pose, batch.lig_torsion_data)
             diff_coord = torch.cat(diff_pose.coord, 1)
             true_coord= torch.cat(true_pose.coord, 0).unsqueeze(0)
             dists = torch.linalg.norm(diff_coord - true_coord, dim=-1)
@@ -189,8 +186,9 @@ class DiffusionV2(nn.Module, Model):
             num_rand_poses = self.cfg.model.diffusion.get("num_init_poses", 64)
             init_pose = DiffusionV2.get_init_pose(x)
             rand_transforms = PoseTransform.make_initial(self.cfg.model.diffusion, x, device, num_rand_poses)
-            rand_poses = rand_transforms.apply(init_pose, x.lig_torsion_data).cpu()
-            init_energy = self.get_energy(x, hid_feat, init_pose, rand_transforms).cpu()
+            rand_poses = rand_transforms.apply(init_pose, x.lig_torsion_data)
+            init_energy = self.get_energy(x, hid_feat, rand_poses).cpu()
+            rand_poses = rand_poses.cpu()
             # print("stopped init energy")
         else:
             rand_poses = [None]*len(x)

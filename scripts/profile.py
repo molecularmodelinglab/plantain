@@ -53,6 +53,32 @@ def profile(task):
         cfg.profile_max_batches = 50
         trainer = Trainer(cfg)
         fn = lambda: trainer.fit(None, [])
+    elif task == "diff_train":
+        cfg = get_config("diffusion_v2")
+        cfg.batch_size = 4
+        # cfg.platform.num_workers = 0
+        model = make_model(cfg)
+        train_dataloader = make_dataloader(cfg, cfg.train_dataset, "train", model.get_input_feats())
+        x, y = next(iter(train_dataloader))
+        model(x)
+
+        model = model.to("cuda")
+        optim = torch.optim.AdamW(model.parameters(), lr=cfg.learn_rate)
+        tasks = set(model.get_tasks()).intersection(train_dataloader.dataset.get_tasks())
+        metrics = get_metrics(cfg, tasks).to("cuda")
+        def train():
+            for i, (x,y) in enumerate(tqdm(train_dataloader)):
+                x = x.to("cuda")
+                y = y.to("cuda")
+                if i > 50:
+                    break
+                optim.zero_grad()
+                pred = model.predict_train(x, y, tasks, "train", i)
+                loss, loss_dict = get_losses(cfg, tasks, x, pred, y)
+                loss.backward()
+                for key, val in metrics.items():
+                    val.update(x, pred, y)
+        fn = train
     elif task == "twist_train":
         cfg = get_config("twist_regr")
         # cfg.platform.batch_size = 8

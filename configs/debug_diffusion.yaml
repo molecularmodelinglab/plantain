@@ -57,9 +57,12 @@ data:
   interaction_graph:
     dist_cutoff: 10
     max_neighbors: null
-    edge_feats: [ "dist"]
+    edge_feats: ["dist"]
 
 losses:
+  # pose_mse:
+  #   func: diffused_pose_mse
+  #   weight: 1.0
 
   dist_mse:
     func: diffused_dist_mse
@@ -73,7 +76,7 @@ optimizer: adamw
 learn_rate: 1e-4
 max_epochs: 5000
 
-batch_size: 2
+batch_size: 4
 
 test_inference: true
 
@@ -139,70 +142,12 @@ model:
   l_rf_expand_heads: 4
   l_rf_expand_feat: 8
 
-  # rec_encoder:
-  #   node_embed_size: 64
-  #   edge_embed_size: 64
-
-  # lig_encoder:
-  #   node_embed_size: 16
-  #   edge_embed_size: 64
-
-  # twist_data:
-  #   lig_feat: 32
-  #   rec_feat: 32
-  #   full_rec_feat: 16
-
-  #   lig_edge_feat: 32
-  #   rec_edge_feat: 16
-
-  #   ll_feat: 32
-  #   l_ra_feat: 32
-  #   l_rf_feat: 16
-
-  # full_atom_embed_size: 16
-  # normalization: layer
-
-  # mpnn_type: egat
-
-  # lig_mpnn_node_size: 16
-  # lig_mpnn_edge_size: 16
-  # lig_mpnn_heads: 4
-
-  # rec_mpnn_node_size: 16
-  # rec_mpnn_edge_size: 16
-  # rec_mpnn_heads: 4
-
-  # ll_atn_heads: 4
-  # ll_atn_feat: 8
-
-  # l_ra_atn_heads: 4
-  # l_ra_atn_feat: 8
-
-  # l_rf_atn_heads: 2
-  # l_rf_atn_feat: 8
-
-  # rf_ra_hid_size: 8
-
-  # ll_lig_edge_hid_size: 32
-  # lig_feat_lig_edge_hid_size: 16
-
-  # rec_feat_rec_edge_hid_size: 16
-
-  # ll_expand_heads: 4
-  # ll_expand_feat: 8
-
-  # l_ra_expand_heads: 4
-  # l_ra_expand_feat: 8
-
-  # l_rf_expand_heads: 4
-  # l_rf_expand_feat: 4
-
   updates_per_block: 2
 
-  num_blocks: 16
+  num_blocks: 1
 
   diffusion:
-    timesteps: 16
+    timesteps: 1
     max_trans_sigma: 4.0
     max_rot_sigma: 1.5
     max_tor_sigma: 1.5
@@ -210,14 +155,13 @@ model:
     use_rot: true
     use_trans: true
     exponent: 2.0
-    num_init_poses: 32
     pred: atom_dist
     optim: bfgs
 
   fix_infer_torsion: false
 
   rbf_start: 0
-  rbf_end: 24
-  rbf_steps: 32
+  rbf_end: 16
+  rbf_steps: 16
 
   energy_bias: 3.7

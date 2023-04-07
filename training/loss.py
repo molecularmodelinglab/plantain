@@ -1,5 +1,7 @@
 import torch
 import torch.nn.functional as F
+import dgl
+from dgl.ops import segment
 from data_formats.graphs.prot_graph import get_full_dist_matrix
 
 def bce_loss(x, pred, y):
@@ -118,6 +120,11 @@ def diffused_pose_mse(x, pred, y):
 def diffused_rmsd_mse(x, pred, y):
     return F.mse_loss(pred.diffused_energy, pred.diffused_rmsds)
 
+def diffused_dist_mse(x, pred, y):
+    assert pred.diffused_energy.dim() == 2
+    mses = F.mse_loss(pred.diffused_energy.T, pred.diffused_rmsds.T, reduction='none')
+    return segment.segment_reduce(x.lig_graph.dgl().batch_num_nodes(), mses, reducer="mean").mean()
+
 def full_inv_dist_mse(x, pred, y):
     dist, mask = get_full_dist_matrix(x.lig_graph, y.lig_crystal_pose, x.full_rec_data)
     true_mat = 1.0/(1.0 + dist)
@@ -141,6 +148,7 @@ def get_single_loss(loss_cfg, x, pred, y):
         "trans_mse": trans_mse,
         "diffused_pose_mse": diffused_pose_mse,
         "diffused_rmsd_mse": diffused_rmsd_mse,
+        "diffused_dist_mse": diffused_dist_mse,
         "crystal_pose_ce": crystal_pose_ce_loss,
         "worse_pose_atn_ce": worst_pose_atn_ce_loss,
         "best_docked_ce": best_docked_ce_loss,
