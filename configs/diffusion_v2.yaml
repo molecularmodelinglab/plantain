@@ -139,64 +139,6 @@ model:
   l_rf_expand_heads: 4
   l_rf_expand_feat: 8
 
-  # rec_encoder:
-  #   node_embed_size: 64
-  #   edge_embed_size: 64
-
-  # lig_encoder:
-  #   node_embed_size: 16
-  #   edge_embed_size: 64
-
-  # twist_data:
-  #   lig_feat: 32
-  #   rec_feat: 32
-  #   full_rec_feat: 16
-
-  #   lig_edge_feat: 32
-  #   rec_edge_feat: 16
-
-  #   ll_feat: 32
-  #   l_ra_feat: 32
-  #   l_rf_feat: 16
-
-  # full_atom_embed_size: 16
-  # normalization: layer
-
-  # mpnn_type: egat
-
-  # lig_mpnn_node_size: 16
-  # lig_mpnn_edge_size: 16
-  # lig_mpnn_heads: 4
-
-  # rec_mpnn_node_size: 16
-  # rec_mpnn_edge_size: 16
-  # rec_mpnn_heads: 4
-
-  # ll_atn_heads: 4
-  # ll_atn_feat: 8
-
-  # l_ra_atn_heads: 4
-  # l_ra_atn_feat: 8
-
-  # l_rf_atn_heads: 2
-  # l_rf_atn_feat: 8
-
-  # rf_ra_hid_size: 8
-
-  # ll_lig_edge_hid_size: 32
-  # lig_feat_lig_edge_hid_size: 16
-
-  # rec_feat_rec_edge_hid_size: 16
-
-  # ll_expand_heads: 4
-  # ll_expand_feat: 8
-
-  # l_ra_expand_heads: 4
-  # l_ra_expand_feat: 8
-
-  # l_rf_expand_heads: 4
-  # l_rf_expand_feat: 4
-
   updates_per_block: 2
 
   num_blocks: 16

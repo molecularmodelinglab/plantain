@@ -24,6 +24,11 @@ notebooks
 .idea
 .vscode
 *.prof
+*.pdb
+*.pqr
+*.json
+*.log
 terrace
 terrace_tmp
 scripts/sync_longleaf.sh
+

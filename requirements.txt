@@ -1,10 +1,9 @@
 wandb
-biopandas
 joblib
 numpy
 pandas
 tqdm
-pytorch_lightning
+pytorch_lightning==1.9.1
 PyYAML
 biopython
 biopandas
