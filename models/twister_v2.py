@@ -199,7 +199,10 @@ class FullNorm(TwistModule):
         args = {}
         for key in x.__dict__.keys():
             val = getattr(x, key)
-            args[key] = (self.make(self.norm_class)(val.reshape((-1, val.shape[-1])))).reshape(val.shape)
+            if self.cfg.get("norm_after_add", False):
+                args[key] = (self.make(self.norm_class)(val.reshape((-1, val.shape[-1])))).reshape(val.shape)
+            else:
+                args[key] = val
         return TwistData(**args)
 
 class TwistEncoder(TwistModule):
@@ -467,9 +470,9 @@ class TwistBlock(TwistModule):
 
     def forward(self, x, twist_index, td):
         self.start_forward()
-        for i in range(self.cfg.updates_per_block):
+        for i in range(self.cfg.updates_per_block - 1):
             td = self.make(FullNorm, self.cfg)(self.update_once(x, twist_index, td))
-        return td
+        return self.update_once(x, twist_index, td)
 
 class TwisterV2(Module, ClassifyActivityModel):
 

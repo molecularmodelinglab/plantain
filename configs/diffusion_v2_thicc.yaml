@@ -103,6 +103,7 @@ model:
 
   full_atom_embed_size: 32
   normalization: layer
+  norm_after_add: true
 
   mpnn_type: egat
 
