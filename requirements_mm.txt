@@ -1,15 +1,1 @@
-joblib
-numpy
-pandas
-tqdm
-PyYAML
-biopython
-biopandas
-scipy
-seaborn
-meeko
-mmtf-python
-omegaconf
-rdkit
-py3Dmol
 pdb2pqr

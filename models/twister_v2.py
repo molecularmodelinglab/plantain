@@ -184,6 +184,24 @@ class TwistModule(Module):
         super().__init__()
         self.cfg = cfg
 
+class FullNorm(TwistModule):
+
+    def __init__(self, cfg):
+        super().__init__(cfg)
+        if cfg.normalization == "layer":
+            self.norm_class = LazyLayerNorm
+        else:
+            raise ValueError(f"Unsupported normalization {self.cfg.normalization}")
+
+
+    def forward(self, x):
+        self.start_forward()
+        args = {}
+        for key in x.__dict__.keys():
+            val = getattr(x, key)
+            args[key] = (self.make(self.norm_class)(val.reshape((-1, val.shape[-1])))).reshape(val.shape)
+        return TwistData(**args)
+
 class TwistEncoder(TwistModule):
     """ Returns the initial TwistData object from the lig and rec graphs """
 
@@ -450,7 +468,7 @@ class TwistBlock(TwistModule):
     def forward(self, x, twist_index, td):
         self.start_forward()
         for i in range(self.cfg.updates_per_block):
-            td = self.update_once(x, twist_index, td)
+            td = self.make(FullNorm, self.cfg)(self.update_once(x, twist_index, td))
         return td
 
 class TwisterV2(Module, ClassifyActivityModel):
@@ -544,7 +562,7 @@ class TwistForceField(TwistModule):
 
         td = self.make(TwistEncoder, self.cfg)(x, twist_index)
         for i in range(self.cfg.num_blocks):
-            td = td + self.make(TwistBlock, self.cfg)(x, twist_index, td)
+            td = self.make(FullNorm, self.cfg)(td + self.make(TwistBlock, self.cfg)(x, twist_index, td))
 
         self.scale_output = self.make(ScaleOutput, self.cfg.energy_bias)
         self.inv_dist_out = self.make(LazyLinear, 1)

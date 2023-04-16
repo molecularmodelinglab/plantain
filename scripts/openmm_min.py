@@ -22,7 +22,6 @@ with open(poc_file, "r") as f:
 # Load the protein from a PDB file
 pdb = app.PDBFile(rec_file)
 lig = Molecule.from_file(lig_file)
-lig.compute_partial_charges()
 
 lig_coord = lig.conformers[0] + 2*np.random.randn(*lig.conformers[0].shape)*unit.angstrom
 
@@ -36,9 +35,7 @@ forcefield_kwargs = {
     "constraints": "HBonds"
 }
 ffs = ['amber/ff14SB.xml', 'amber/tip3p_standard.xml']
- #ffs = [ "charmm36.xml" ]
 system_generator = SystemGenerator(forcefields=ffs, small_molecule_forcefield='gaff-2.11', molecules=[lig], forcefield_kwargs=forcefield_kwargs, cache='db.json')
-# Create an OpenMM System from an Open Force Field toolkit Topology object
 system = system_generator.create_system(mergedTopology)
 
 for r in modeller.topology.residues():
@@ -55,6 +52,38 @@ integrator = mm.VerletIntegrator(0.001*unit.picoseconds)
 # Set up the simulation context with the system, integrator, and positions from the PDB file
 context = mm.Context(system, integrator)
 context.setPositions(mergedPositions)
+
+# todo: no lol
+system.removeForce(0)
+system.removeForce(0)
+system.removeForce(0)
+system.removeForce(1)
+
+force = system.getForce(0)
+
+for r in modeller.topology.residues():
+    if r.chain.index == 1:
+        lig_atoms = r.atoms()
+        break
+
+integrator = mm.VerletIntegrator(0.001*unit.picoseconds)
+context = mm.Context(system, integrator)
+context.setPositions(mergedPositions)
+state = context.getState(getEnergy=True)
+baseline_energy = state.getPotentialEnergy()
+
+for atom in lig_atoms:
+    p = force.getParticleParameters(atom.index)
+    force.setParticleParameters(atom.index, 0, 0, 0)
+    integrator = mm.VerletIntegrator(0.001*unit.picoseconds)
+    context = mm.Context(system, integrator)
+    context.setPositions(mergedPositions)
+    state = context.getState(getEnergy=True)
+    energy = state.getPotentialEnergy() - baseline_energy
+    print(atom, energy)
+    force.setParticleParameters(atom.index, *p)
+
+assert False
 
 # Minimize the energy of the system
 print('Minimizing energy...')

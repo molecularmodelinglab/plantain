@@ -106,12 +106,12 @@ model:
 
   mpnn_type: egat
 
-  lig_mpnn_node_size: 32
-  lig_mpnn_edge_size: 32
+  lig_mpnn_node_size: 64
+  lig_mpnn_edge_size: 64
   lig_mpnn_heads: 4
 
-  rec_mpnn_node_size: 32
-  rec_mpnn_edge_size: 32
+  rec_mpnn_node_size: 64
+  rec_mpnn_edge_size: 64
   rec_mpnn_heads: 4
 
   ll_atn_heads: 4
@@ -159,7 +159,7 @@ model:
   fix_infer_torsion: false
 
   rbf_start: 0
-  rbf_end: 24
-  rbf_steps: 32
+  rbf_end: 32
+  rbf_steps: 48
 
   energy_bias: 3.7
