@@ -160,7 +160,7 @@ model:
   fix_infer_torsion: false
 
   rbf_start: 0
-  rbf_end: 32
-  rbf_steps: 48
+  rbf_end: 24
+  rbf_steps: 32
 
   energy_bias: 3.7
