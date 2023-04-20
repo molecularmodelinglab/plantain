@@ -28,7 +28,7 @@ def get_lig_and_poses(cfg, lig_file):
     diff_poses = diff_transforms[0].apply(lig_crystal_pose, lig_tor_data)
     return lig, diff_poses
 
-def setup_openmm(lig, pqr_file, poc_file):
+def setup_openmm(lig, pqr_file, poc_file, worker):
 
     # find all the pocket residues so we can freeze all the non-pocket residues
     poc_res_ids = set()
@@ -51,7 +51,11 @@ def setup_openmm(lig, pqr_file, poc_file):
         "constraints": "HBonds"
     }
     ffs = ['amber/ff14SB.xml', 'amber/tip3p_standard.xml']
-    system_generator = SystemGenerator(forcefields=ffs, small_molecule_forcefield='gaff-2.11', molecules=[oflig], forcefield_kwargs=forcefield_kwargs, cache='db.json')
+    system_generator = SystemGenerator(forcefields=ffs, 
+                                       small_molecule_forcefield='gaff-2.11',
+                                       molecules=[oflig],
+                                       forcefield_kwargs=forcefield_kwargs,
+                                       cache=f'db_{worker}.json')
     system = system_generator.create_system(mergedTopology)
 
     for r in modeller.topology.residues():
@@ -68,7 +72,7 @@ def setup_openmm(lig, pqr_file, poc_file):
 
     return context, mergedTopology, mergedPositions
 
-def process_row(cfg, row):
+def process_row(cfg, row, worker):
     lig_file = cfg.platform.bigbind_struct_v2_dir + "/" + row.lig_crystal_file
     rec_file = cfg.platform.bigbind_struct_v2_dir + "/" + row.redock_rec_file
     poc_file = cfg.platform.bigbind_struct_v2_dir + "/" + row.redock_rec_pocket_file
@@ -90,7 +94,7 @@ def process_row(cfg, row):
     lig, poses = get_lig_and_poses(cfg, lig_file)
 
     # set up openmm system
-    context, mergedTopology, mergedPositions = setup_openmm(lig, pqr_file, poc_file)
+    context, mergedTopology, mergedPositions = setup_openmm(lig, pqr_file, poc_file, worker)
 
     energies = []
     for p in range(n_poses):
@@ -134,7 +138,7 @@ def main(cfg):
     
     out = []
     for i, row in tqdm(df.iterrows(), total=len(df)):
-        diff_file_prefix, lig_diff_prefix, energies = process_row(cfg, row)
+        diff_file_prefix, lig_diff_prefix, energies = process_row(cfg, row, cur_worker)
         out_row = row.to_dict()
         out_row["diff_rec_prefix"] = diff_file_prefix
         out_row["diff_lig_prefix"] = lig_diff_prefix
