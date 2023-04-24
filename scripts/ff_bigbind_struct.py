@@ -1,6 +1,7 @@
 import os
 import subprocess
 import sys
+from traceback import print_exc
 import pandas as pd
 from rdkit import Chem
 from tqdm import tqdm
@@ -226,7 +227,14 @@ def main(cfg):
     
     out = []
     for i, row in tqdm(df.iterrows(), total=len(df)):
-        apo_filename, apo_energy, diff_file_prefix, lig_diff_prefix, energies = process_row(cfg, row, cur_worker)
+        try:
+            apo_filename, apo_energy, diff_file_prefix, lig_diff_prefix, energies = process_row(cfg, row, cur_worker)
+        except KeyboardInterrupt:
+            raise
+        except:
+            print(f"Error processing {i}")
+            print_exc()
+            continue
         out_row = row.to_dict()
         out_row["apo_filename"] = apo_filename
         out_row["apo_energy"] = apo_energy
