@@ -22,6 +22,7 @@ from terrace.dataframe import DFRow
 def get_lig_and_poses(cfg, lig_file):
     lig = get_mol_from_file(lig_file)
     lig = Chem.AddHs(lig, addCoords=True)
+    Chem.AssignStereochemistryFrom3D(lig)
     lig_crystal_pose = Pose(get_mol_coords(lig, 0))
     lig_tor_data = TorsionData.from_mol(lig)
     x = collate([DFRow(lig=lig, lig_crystal_pose=lig_crystal_pose, lig_torsion_data=lig_tor_data)])
