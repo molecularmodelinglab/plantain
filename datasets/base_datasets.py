@@ -57,5 +57,5 @@ class Dataset(data.Dataset):
         except KeyboardInterrupt:
             raise
         except:
-            print(f"Error proccessing item at {index=}")
+            print(f"Error proccessing item at {index}")
             raise

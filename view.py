@@ -2,6 +2,7 @@ from pymol import cmd
 import pickle
 import random
 import os
+import sys
 
 DEBUG=1
 
@@ -165,7 +166,8 @@ def show_contacts(selection,selection2,result="contacts",cutoff=3.6, bigcutoff =
     
     return True
 
-with open("test.pkl", "rb") as f:
+folder = sys.argv[2]
+with open(folder + "/files.pkl", "rb") as f:
     lig_files, rec_files, pred_files = pickle.load(f)
 
 idx2idx = list(range(len(lig_files)))
@@ -199,11 +201,13 @@ def reload():
 def next():
     global cur_idx
     cur_idx += 1
+    cur_idx %= len(idx2idx)
     reload()
 
 def prev():
     global cur_idx
     cur_idx -= 1
+    cur_idx %= len(idx2idx)
     reload()
 
 reload()

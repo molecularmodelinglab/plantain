@@ -121,6 +121,7 @@ def diffused_rmsd_mse(x, pred, y):
     return F.mse_loss(pred.diffused_energy, pred.diffused_rmsds)
 
 def diffused_dist_mse(x, pred, y):
+    raise NotImplementedError
     assert pred.diffused_energy.dim() == 2
     mses = F.mse_loss(pred.diffused_energy.T, pred.diffused_rmsds.T, reduction='none')
     return segment.segment_reduce(x.lig_graph.dgl().batch_num_nodes(), mses, reducer="mean").mean()

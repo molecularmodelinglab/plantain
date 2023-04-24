@@ -199,10 +199,8 @@ class FullNorm(TwistModule):
         args = {}
         for key in x.__dict__.keys():
             val = getattr(x, key)
-            if self.cfg.get("norm_after_add", False):
-                args[key] = (self.make(self.norm_class)(val.reshape((-1, val.shape[-1])))).reshape(val.shape)
-            else:
-                args[key] = val
+            args[key] = (self.make(self.norm_class)(val.reshape((-1, val.shape[-1])))).reshape(val.shape)
+
         return TwistData(**args)
 
 class TwistEncoder(TwistModule):
@@ -471,7 +469,9 @@ class TwistBlock(TwistModule):
     def forward(self, x, twist_index, td):
         self.start_forward()
         for i in range(self.cfg.updates_per_block - 1):
-            td = self.make(FullNorm, self.cfg)(self.update_once(x, twist_index, td))
+            td = self.update_once(x, twist_index, td)
+            if self.cfg.get("norm_after_add", False):
+                td = self.make(FullNorm, self.cfg)(td)
         return self.update_once(x, twist_index, td)
 
 class TwisterV2(Module, ClassifyActivityModel):
@@ -565,7 +565,9 @@ class TwistForceField(TwistModule):
 
         td = self.make(TwistEncoder, self.cfg)(x, twist_index)
         for i in range(self.cfg.num_blocks):
-            td = self.make(FullNorm, self.cfg)(td + self.make(TwistBlock, self.cfg)(x, twist_index, td))
+            td = td + self.make(TwistBlock, self.cfg)(x, twist_index, td)
+            if self.cfg.get("norm_after_add", False):
+                td = self.make(FullNorm, self.cfg)(td)
 
         self.scale_output = self.make(ScaleOutput, self.cfg.energy_bias)
         self.inv_dist_out = self.make(LazyLinear, 1)

@@ -15,18 +15,18 @@ from datasets.make_dataset import make_dataloader, seed_worker
 from validation.metrics import get_metrics
 from common.utils import flatten_dict
 
-def pred_key(cfg, model, dataset_name, split, num_batches):
-    return (model.cache_key, dataset_name, split, num_batches)
+def pred_key(cfg, model, dataset_name, split, num_batches, shuffle_val):
+    return (model.cache_key, dataset_name, split, num_batches, shuffle_val)
 
-@cache(pred_key, disable=True)
+@cache(pred_key, disable=False)
 @torch.no_grad()
-def get_preds(cfg, model, dataset_name, split, num_batches):
+def get_preds(cfg, model, dataset_name, split, num_batches, shuffle_val=True):
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model = model.to(device)
 
     loader = make_dataloader(cfg, dataset_name, split, model.get_input_feats())
-    if num_batches is not None:
+    if num_batches is not None and shuffle_val:
         # shuffle to get better sample
         loader = DataLoader(loader.dataset,
                             batch_size=cfg.batch_size,
@@ -54,10 +54,14 @@ def get_preds(cfg, model, dataset_name, split, num_batches):
             ys.append(y0)
             preds.append(pred0)
 
-    return collate(xs), collate(ys), collate(preds)
+    x = collate(xs)
+    y = collate(ys)
+    pred = collate(preds)
+
+    return x, y, pred
 
 @torch.no_grad()
-def validate(cfg, model, dataset_name, split, num_batches=None):
+def validate(cfg, model, dataset_name, split, num_batches=None, shuffle_val=True):
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model = model.to(device)
@@ -66,7 +70,7 @@ def validate(cfg, model, dataset_name, split, num_batches=None):
     tasks = set(model.get_tasks()).intersection(loader.dataset.get_tasks())
     metrics = get_metrics(cfg, tasks, offline=True).to(device)
 
-    x, y, pred = get_preds(cfg, model, dataset_name, split, num_batches)
+    x, y, pred = get_preds(cfg, model, dataset_name, split, num_batches, shuffle_val)
     for metric in metrics.values():
         metric.update(x, pred, y)
 

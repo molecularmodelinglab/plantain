@@ -4,12 +4,13 @@ import torch
 import numpy as np
 import torch.nn as nn
 import torch.nn.functional as F
+import dgl.backend as dF
 import jax
 from common.pose_transform import MultiPose, PoseTransform, Pose
 from common.torsion import TorsionData
 from common.jorch import to_jax
 from models.twister_v2 import TwistFFCoef, TwistForceField
-from terrace.batch import Batch, collate
+from terrace.batch import Batch, Batchable, collate
 from terrace.dataframe import DFRow, merge
 from .model import Model
 from .diffusion import get_transform_rmsds
@@ -18,6 +19,36 @@ from multiprocessing import Pool
 import multiprocessing as mp
 
 from scipy.optimize import minimize, basinhopping
+
+class DiffPred(Batchable):
+    """ Need custom collates for padded tensors. Todo: make this a more general class 
+    (possible put in Terrace)"""
+    diffused_energy: torch.Tensor
+    diffused_rmsds: torch.Tensor
+    inv_dist_mat: torch.Tensor
+
+    @staticmethod
+    def collate_diffused_energy(tensor_list, dims=[0]):
+        max_xs = [ max([t.shape[dim] for t in tensor_list]) for dim in dims ]
+        padded_tensors = []
+        for t in tensor_list:
+            padded_tensor = t
+            for max_x, dim in zip(max_xs, dims):
+                pad_length = max_x - t.shape[dim]
+                # yes, this is a cursed line
+                # but it's not my fault F.pad has a horrible api
+                padded_tensor = F.pad(padded_tensor, (*([0,0]*(t.dim()-dim-1)), 0, pad_length))
+            padded_tensors.append(padded_tensor)
+        stacked_tensors = torch.stack(padded_tensors)
+        return stacked_tensors
+
+    @staticmethod
+    def collate_diffused_rmsds(tensor_list):
+        return DiffPred.collate_diffused_energy(tensor_list)
+
+    @staticmethod
+    def collate_inv_dist_mat(tensor_list):
+        return DiffPred.collate_diffused_energy(tensor_list, [0,1])
 
 class DiffusionV2(nn.Module, Model):
     
@@ -135,6 +166,10 @@ class DiffusionV2(nn.Module, Model):
             assert self.cfg.model.diffusion.pred == "rmsd"
             rmsds = get_transform_rmsds(batch, true_pose, transform)
 
+        # padding energy and rmsds so we can properly index and recollate preds
+        energy = dF.pad_packed_tensor(energy.T, batch.lig_graph.dgl().batch_num_nodes(), 0.0)[...,0]
+        rmsds = dF.pad_packed_tensor(rmsds.T, batch.lig_graph.dgl().batch_num_nodes(), 0.0)[...,0]
+
         return energy, rmsds, hid_feat.inv_dist_mat
 
     def forward(self, batch, hid_feat=None, init_pose_override=None):
@@ -147,7 +182,7 @@ class DiffusionV2(nn.Module, Model):
     def predict_train(self, x, y, task_names, split, batch_idx):
         hid_feat = self.get_hidden_feat(x)
         diff_energy, diff_rmsds, inv_dist_mat = self.diffuse_energy(x, y, hid_feat)
-        ret_dif = Batch(DFRow, diffused_energy=diff_energy, diffused_rmsds=diff_rmsds, inv_dist_mat=inv_dist_mat)
+        ret_dif = Batch(DiffPred, diffused_energy=diff_energy, diffused_rmsds=diff_rmsds, inv_dist_mat=inv_dist_mat)
         if "predict_lig_pose" in task_names and (split != "train" or batch_idx % self.cfg.metric_reset_interval == 0):
             with torch.no_grad():
                 ret_pred = self(x, hid_feat)
@@ -158,7 +193,11 @@ class DiffusionV2(nn.Module, Model):
                 # else:
                 #     ret_pred = self(x, hid_feat)
                 #     ret_pred = merge([ret_pred, pred_crystal])
-            return merge([ret_dif, ret_pred])
+            # oo now this is cursed. CLearly we need to change some of terrace's API
+            # to do what I want to do
+            ret = merge([ret_dif, ret_pred])
+            ret._batch_type = DiffPred
+            return ret
         else:
             return ret_dif
 
