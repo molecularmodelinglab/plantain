@@ -1,3 +1,4 @@
+flask
 ipykernel
 ipywidgets
 plotly

@@ -28,14 +28,7 @@ def get_lig_and_poses(cfg, lig_file):
     diff_poses = diff_transforms[0].apply(lig_crystal_pose, lig_tor_data)
     return lig, diff_poses
 
-def setup_openmm(lig, pqr_file, poc_file, worker):
-
-    # find all the pocket residues so we can freeze all the non-pocket residues
-    poc_res_ids = set()
-    with open(poc_file, "r") as f:
-        for line in f.readlines():
-            if line.startswith("ATOM"):
-                poc_res_ids.add(int(line[22:26]))
+def setup_openmm(lig, pqr_file, poc_res_ids, worker):
 
     # Load the protein from a PDB file
     rec = app.PDBFile(pqr_file)
@@ -72,6 +65,76 @@ def setup_openmm(lig, pqr_file, poc_file, worker):
 
     return context, mergedTopology, mergedPositions
 
+def setup_apo_openmm(pqr_file, poc_res_ids, worker):
+
+    # Load the protein from a PDB file
+    rec = app.PDBFile(pqr_file)
+    modeller = rec
+    mergedTopology = modeller.topology
+    mergedPositions = modeller.positions
+
+    forcefield_kwargs = {
+        "nonbondedCutoff": 1*unit.nanometer,
+        "constraints": "HBonds"
+    }
+    ffs = ['amber/ff14SB.xml', 'amber/tip3p_standard.xml']
+    system_generator = SystemGenerator(forcefields=ffs, 
+                                       small_molecule_forcefield='gaff-2.11',
+                                       molecules=[],
+                                       forcefield_kwargs=forcefield_kwargs,
+                                       cache=f'db_{worker}.json')
+    system = system_generator.create_system(mergedTopology)
+
+    for r in modeller.topology.residues():
+        if int(r.id) in poc_res_ids or r.chain.index == 1:
+            continue
+        for a in r.atoms():
+            system.setParticleMass(a.index, 0.0)
+
+    # Set up the integrator for energy minimization
+    integrator = mm.VerletIntegrator(0.001*unit.picoseconds)
+
+    # Set up the simulation context with the system, integrator, and positions from the PDB file
+    context = mm.Context(system, integrator)
+
+    return context, mergedTopology, mergedPositions
+
+def setup_openmm_from_pdb(lig, pdb_file, poc_res_ids, worker):
+    print(f"{pdb_file} already exists, no need to minimize")
+
+    # Load the protein from a PDB file
+    modeller = app.PDBFile(pdb_file)
+    oflig = Molecule.from_rdkit(lig)
+    mergedTopology = modeller.topology
+    mergedPositions = modeller.positions
+
+    forcefield_kwargs = {
+        "nonbondedCutoff": 1*unit.nanometer,
+        "constraints": "HBonds"
+    }
+    ffs = ['amber/ff14SB.xml', 'amber/tip3p_standard.xml']
+    system_generator = SystemGenerator(forcefields=ffs, 
+                                       small_molecule_forcefield='gaff-2.11',
+                                       molecules=[oflig],
+                                       forcefield_kwargs=forcefield_kwargs,
+                                       cache=f'db_{worker}.json')
+    system = system_generator.create_system(mergedTopology)
+
+    for r in modeller.topology.residues():
+        if int(r.id) in poc_res_ids or r.chain.index == 1:
+            continue
+        for a in r.atoms():
+            system.setParticleMass(a.index, 0.0)
+
+    # Set up the integrator for energy minimization
+    integrator = mm.VerletIntegrator(0.001*unit.picoseconds)
+
+    # Set up the simulation context with the system, integrator, and positions from the PDB file
+    context = mm.Context(system, integrator)
+    context.setPositions(mergedPositions)
+
+    return context
+
 def process_row(cfg, row, worker):
     lig_file = cfg.platform.bigbind_struct_v2_dir + "/" + row.lig_crystal_file
     rec_file = cfg.platform.bigbind_struct_v2_dir + "/" + row.redock_rec_file
@@ -93,8 +156,31 @@ def process_row(cfg, row, worker):
     n_poses = cfg.model.diffusion.timesteps
     lig, poses = get_lig_and_poses(cfg, lig_file)
 
+
+    # find all the pocket residues so we can freeze all the non-pocket residues
+    poc_res_ids = set()
+    with open(poc_file, "r") as f:
+        for line in f.readlines():
+            if line.startswith("ATOM"):
+                poc_res_ids.add(int(line[22:26]))
+
+    # get apo energy and structure
+    apo_filename = ".".join(pqr_file.split(".")[:-1]) + "_apo.pdb"
+    if os.path.exists(apo_filename):
+        context = setup_openmm_from_pdb(lig, pqr_file, poc_res_ids, worker)
+    else:
+        context, mergedTopology, mergedPositions = setup_apo_openmm(pqr_file, poc_res_ids, worker)
+        context.setPositions(mergedPositions)
+        mm.LocalEnergyMinimizer.minimize(context)
+        positions = context.getState(getPositions=True).getPositions()
+        app.PDBFile.writeFile(mergedTopology, positions, open(apo_filename, 'w'))
+
+    state = context.getState(getEnergy=True, getForces=True)
+    energy = state.getPotentialEnergy()
+    apo_energy = energy.value_in_unit(unit.kilojoule_per_mole)
+
     # set up openmm system
-    context, mergedTopology, mergedPositions = setup_openmm(lig, pqr_file, poc_file, worker)
+    context, mergedTopology, mergedPositions = setup_openmm(lig, apo_filename, poc_res_ids, worker)
 
     energies = []
     for p in range(n_poses):
@@ -104,27 +190,29 @@ def process_row(cfg, row, worker):
             # print(p, i, mergedPositions[merged_idx] - coord*unit.angstrom)
             mergedPositions[merged_idx] = coord*unit.angstrom
         
-        context.setPositions(mergedPositions)
-        mm.LocalEnergyMinimizer.minimize(context)
+        diff_filename = diff_file_prefix + str(p) + ".pdb"
+        lig_diff_filename = lig_diff_prefix + str(p) + ".sdf"
+        if os.path.exists(diff_filename) and os.path.exists(lig_diff_filename):
+            context = setup_openmm_from_pdb(lig, diff_filename, poc_res_ids, worker)
+        else:
+            context.setPositions(mergedPositions)
+            mm.LocalEnergyMinimizer.minimize(context)
+            
+            # Get the minimized positions and save them to a PDB file
+            positions = context.getState(getPositions=True).getPositions()
+            app.PDBFile.writeFile(mergedTopology, positions, open(diff_filename, 'w'))
+
+            add_pose_to_mol(lig, poses.get(p))
+            
+            writer = Chem.SDWriter(lig_diff_filename)
+            writer.write(lig)
+            writer.close()
 
         state = context.getState(getEnergy=True, getForces=True)
         energy = state.getPotentialEnergy()
         energies.append(energy.value_in_unit(unit.kilojoule_per_mole))
 
-        diff_filename = diff_file_prefix + str(p) + ".pdb"
-        lig_diff_filename = lig_diff_prefix + str(p) + ".sdf"
-
-        # Get the minimized positions and save them to a PDB file
-        positions = context.getState(getPositions=True).getPositions()
-        app.PDBFile.writeFile(mergedTopology, positions, open(diff_filename, 'w'))
-
-        add_pose_to_mol(lig, poses.get(p))
-        
-        writer = Chem.SDWriter(lig_diff_filename)
-        writer.write(lig)
-        writer.close()
-
-    return diff_file_prefix, lig_diff_prefix, energies
+    return apo_filename, apo_energy, diff_file_prefix, lig_diff_prefix, energies
 
 def main(cfg):
     df = pd.read_csv(f"{cfg.platform.bigbind_struct_v2_dir}/structures_all.csv")
@@ -138,8 +226,10 @@ def main(cfg):
     
     out = []
     for i, row in tqdm(df.iterrows(), total=len(df)):
-        diff_file_prefix, lig_diff_prefix, energies = process_row(cfg, row, cur_worker)
+        apo_filename, apo_energy, diff_file_prefix, lig_diff_prefix, energies = process_row(cfg, row, cur_worker)
         out_row = row.to_dict()
+        out_row["apo_filename"] = apo_filename
+        out_row["apo_energy"] = apo_energy
         out_row["diff_rec_prefix"] = diff_file_prefix
         out_row["diff_lig_prefix"] = lig_diff_prefix
         for i, energy in enumerate(energies):
