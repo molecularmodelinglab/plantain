@@ -1,4 +1,5 @@
 import os
+import shutil
 import pickle
 from rdkit import Chem
 from tqdm import tqdm
@@ -22,7 +23,10 @@ for key, val in flatten_dict(metrics).items():
 
 dataset = BigBindStructDataset(cfg, "val", [])
 out_folder = f"outputs/pose_preds/{model.cache_key}/"
+
+shutil.rmtree(out_folder, ignore_errors=True)
 os.makedirs(out_folder, exist_ok=True)
+
 x, y, p = get_preds(cfg, model, "bigbind_struct", "val", num_preds, False)
 lig_files = []
 rec_files = []

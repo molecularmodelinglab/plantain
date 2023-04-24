@@ -37,6 +37,17 @@ class MetricWrapper(FullMetric):
     def compute(self):
         return self.metric.compute()
 
+def dict_stack(items):
+    if isinstance(items, list):
+        ex = items[0]
+        if isinstance(ex, dict):
+            return {key: dict_stack([item[key] for item in items]) for key in ex.keys()}
+    return torch.stack(items)
+
+def dict_apply(f, d):
+    if isinstance(d, dict):
+        return {key: f(val) for key, val in d.items()}
+    return f(d)
 
 class PerPocketMetric(FullMetric):
     """ Computes a specific metric for every pocket and returns the 
@@ -79,11 +90,11 @@ class PerPocketMetric(FullMetric):
                 "all": self.metric.compute()
             }
         else:
-            results = torch.stack(results)
+            results = dict_stack(results)
             return {
                 "all": self.metric.compute(),
-                "mean": results.mean(),
-                "median": results.median()
+                "mean": dict_apply(lambda r: r.mean(), results),
+                "median": dict_apply(lambda r: r.median(), results)
             }
 
 # needed because the pickle can't handle lambdas
@@ -390,9 +401,9 @@ def get_single_task_metrics(task: str):
             "acc_5": PoseRankAcc(5.0)
         }),
         "predict_lig_pose": nn.ModuleDict({
-            "rmsd": PoseRMSD(),
-            "acc_2": PoseAcc(2.0),
-            "acc_5": PoseAcc(5.0),
+            "rmsd": PerPocketMetric(PoseRMSD),
+            "acc_2": PerPocketMetric(PoseAcc, 2.0),
+            "acc_5": PerPocketMetric(PoseAcc, 5.0),
             "crystal_2": CrystalEnergy(2.0),
             "crystal_5": CrystalEnergy(5.0)
         }),
