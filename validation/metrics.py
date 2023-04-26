@@ -3,6 +3,8 @@ from copy import deepcopy
 import warnings
 from rdkit.Chem.rdMolAlign import CalcRMS, GetBestRMS
 import random
+
+from tqdm import tqdm
 from terrace import Batch, collate
 from typing import Callable, Dict, List, Set, Type
 import torch
@@ -70,9 +72,9 @@ class PerPocketMetric(FullMetric):
             self.metric.update(x_b, pred_b, label_b)
             for x, pred, label in zip(x_b, pred_b, label_b):
                 poc_id = x.pocket_id
-                xi = collate([x])
-                predi = collate([pred])
-                labeli = collate([label])
+                xi = collate([x], lazy=True)
+                predi = collate([pred], lazy=True)
+                labeli = collate([label], lazy=True)
                 if poc_id not in self.pocket_metrics:
                     self.pocket_metrics[poc_id] = self.metric_maker().to(self.device)
                 self.pocket_metrics[poc_id].update(xi, predi, labeli)
@@ -206,6 +208,8 @@ class PoseRMSD(FullMetric):
         self.total += len(x)
 
     def compute(self):
+        # if self.total == 0:
+        #     print("Something is wrong with PoseRMSD metric. I haven't been updated.")
         assert self.total > 0
         return self.rmsd_sum / self.total
 

@@ -177,23 +177,24 @@ cur_idx = 0
 def reload():
 
     idx = idx2idx[cur_idx]
+    print(f"Viewing index {idx}")
     docked_file = f'/home/boris/Data/BigBindGnina/structures_val/{idx}.pdbqt'
 
     cmd.delete("all")
     cmd.load(lig_files[idx2idx[cur_idx]], "crystal")
     # cmd.color("red", "crystal")
 
-    if os.path.exists(docked_file):
-        cmd.load(docked_file, "gnina")
-        # cmd.color("yellow", "gnina")
+    # if os.path.exists(docked_file):
+    # cmd.load(docked_file, "gnina")
+    # cmd.color("yellow", "gnina")
     
     cmd.load(pred_files[idx2idx[cur_idx]], "plantain")
     # cmd.color("green", "plantain")
     cmd.load(rec_files[idx2idx[cur_idx]], "rec")
     
-    show_contacts("plantain", "rec", "plan_con")
-    show_contacts("crystal", "rec", "crys_con")
-    show_contacts("gnina", "rec", "gnina_con")
+    # show_contacts("plantain", "rec", "plan_con")
+    # show_contacts("crystal", "rec", "crys_con")
+    # show_contacts("gnina", "rec", "gnina_con")
     
     # cmd.show("surface", "rec")
     cmd.show("sticks", "rec")

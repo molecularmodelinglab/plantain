@@ -182,7 +182,7 @@ class DiffusionV2(nn.Module, Model):
     def predict_train(self, x, y, task_names, split, batch_idx):
         hid_feat = self.get_hidden_feat(x)
         diff_energy, diff_rmsds, inv_dist_mat = self.diffuse_energy(x, y, hid_feat)
-        ret_dif = Batch(DiffPred, diffused_energy=diff_energy, diffused_rmsds=diff_rmsds, inv_dist_mat=inv_dist_mat)
+        ret_dif = Batch(DiffPred, diffused_energy=diff_energy, diffused_rmsds=diff_rmsds, inv_dist_mat=inv_dist_mat, hid_feat=hid_feat)
         if "predict_lig_pose" in task_names and (split != "train" or batch_idx % self.cfg.metric_reset_interval == 0):
             with torch.no_grad():
                 ret_pred = self(x, hid_feat)
