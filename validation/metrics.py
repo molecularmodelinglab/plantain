@@ -99,6 +99,12 @@ class PerPocketMetric(FullMetric):
                 "median": dict_apply(lambda r: r.median(), results)
             }
 
+class PosePerPocketMetric(PerPocketMetric):
+
+    def update(self, x, pred, y):
+        if not hasattr(pred, "lig_pose"): return
+        super().update(x, pred, y)
+
 # needed because the pickle can't handle lambdas
 def get_is_active(b):
     return b.is_active
@@ -200,7 +206,7 @@ class PoseRMSD(FullMetric):
         self.add_state("total", default=torch.tensor(0))
 
     def update(self, x, pred, y):
-        if not hasattr(pred, "lig_pose"): return
+        # if not hasattr(pred, "lig_pose"): return
         rmsds = get_rmsds(x.lig, pred.lig_pose, y.lig_crystal_pose)
         if rmsds.dim() == 2:
             rmsds = rmsds[:,0]
@@ -226,7 +232,7 @@ class PoseAcc(FullMetric):
         self.total_n = defaultdict(int)
 
     def update(self, x, pred, y):
-        if not hasattr(pred, "lig_pose"): return
+        # if not hasattr(pred, "lig_pose"): return
         rmsds = get_rmsds(x.lig, pred.lig_pose, y.lig_crystal_pose)
         if rmsds.dim() == 1:
             rmsds = rmsds.unsqueeze(1)
@@ -405,9 +411,9 @@ def get_single_task_metrics(task: str):
             "acc_5": PoseRankAcc(5.0)
         }),
         "predict_lig_pose": nn.ModuleDict({
-            "rmsd": PerPocketMetric(PoseRMSD),
-            "acc_2": PerPocketMetric(PoseAcc, 2.0),
-            "acc_5": PerPocketMetric(PoseAcc, 5.0),
+            "rmsd": PosePerPocketMetric(PoseRMSD),
+            "acc_2": PosePerPocketMetric(PoseAcc, 2.0),
+            "acc_5": PosePerPocketMetric(PoseAcc, 5.0),
             "crystal_2": CrystalEnergy(2.0),
             "crystal_5": CrystalEnergy(5.0)
         }),

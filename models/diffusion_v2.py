@@ -286,9 +286,9 @@ class DiffusionV2(nn.Module, Model):
     @staticmethod
     def infer_bfgs_single(args):
         cfg, x, hid_feat, params, init_pose_override, rand_poses, init_energy = args
-        f = jax.value_and_grad(to_jax(DiffusionV2.energy_raw))
+        # f = jax.value_and_grad(to_jax(DiffusionV2.energy_raw))
         # f = jax.jit(jax.value_and_grad(to_jax(DiffusionV2.energy_raw)), static_argnums=1) # deepcopy(DiffusionV2.jit_infer)
-        # f = DiffusionV2.jit_infer
+        f = DiffusionV2.jit_infer
 
         method = "BFGS"
         options = {
