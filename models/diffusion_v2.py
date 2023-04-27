@@ -93,8 +93,7 @@ class DiffusionV2(nn.Module, Model):
                    l_rf_coef,
                    init_lig_coord,
                    rec_coord,
-                   weight,
-                   bias):
+                   *params):
         # tor_data = tor_data_wrap.obj
         transform = PoseTransform.from_raw(t_raw)
         tor_data = TorsionData(rot_edges, rot_masks)
@@ -104,8 +103,7 @@ class DiffusionV2(nn.Module, Model):
                                         l_rf_coef,
                                         rec_coord,
                                         lig_pose.coord,
-                                        weight,
-                                        bias)
+                                        *params)
         return U
 
     def get_diffused_transforms(self, batch, device, timesteps=None):
@@ -155,20 +153,25 @@ class DiffusionV2(nn.Module, Model):
                                  diff_pose,
                                  per_atom_energy)
 
+        # V1 energy returns packed, V2 energy returns padded
+        if "energy" in self.cfg.model:
+            energy = energy.transpose(1,2).contiguous()
+        else:
+            energy = dF.pad_packed_tensor(energy.transpose(0,2), batch.lig_graph.dgl().batch_num_nodes(), 0.0)[...,0]
+
+
         if self.cfg.model.diffusion.pred == "atom_dist":
             diff_coord = torch.cat(diff_pose.coord, 1)
             true_coord= torch.cat(true_pose.coord, 0).unsqueeze(0)
             dists = torch.linalg.norm(diff_coord - true_coord, dim=-1)
             rmsds = dists
+            rmsds = dF.pad_packed_tensor(rmsds.transpose(0,1), batch.lig_graph.dgl().batch_num_nodes(), 0.0)
+
         elif self.cfg.model.diffusion.pred == "rank":
             rmsds = torch.linspace(0,1,energy.shape[1], device=energy.device).unsqueeze(0).repeat(energy.shape[0], 1)
         else:
             assert self.cfg.model.diffusion.pred == "rmsd"
             rmsds = get_transform_rmsds(batch, true_pose, transform)
-
-        # padding energy and rmsds so we can properly index and recollate preds
-        energy = dF.pad_packed_tensor(energy.T, batch.lig_graph.dgl().batch_num_nodes(), 0.0)[...,0]
-        rmsds = dF.pad_packed_tensor(rmsds.T, batch.lig_graph.dgl().batch_num_nodes(), 0.0)[...,0]
 
         return energy, rmsds, hid_feat.inv_dist_mat
 
@@ -218,7 +221,14 @@ class DiffusionV2(nn.Module, Model):
             hid_feat = self.get_hidden_feat(x)
         device = x.lig_graph.ndata.cat_feat.device
 
-        bias, weight = self.force_field.scale_output.parameters()
+        per_atom_energy = self.cfg.model.diffusion.pred == "atom_dist"
+
+        if "energy" in self.cfg.model:
+            params = self.force_field.get_energy_v2_params()
+        else:
+            bias, weight = self.force_field.scale_output.parameters()
+            params = [ weight, bias ]
+        params = [ p.detach().cpu() for p in params ]
 
         if init_pose_override is None:
             # print("running init energy")
@@ -227,26 +237,33 @@ class DiffusionV2(nn.Module, Model):
             rand_transforms = PoseTransform.make_initial(self.cfg.model.diffusion, x, device, num_rand_poses)
             rand_poses = rand_transforms.apply(init_pose, x.lig_torsion_data)
             init_energy = self.get_energy(x, hid_feat, rand_poses).cpu()
+            if per_atom_energy:
+                init_energy = init_energy.sum(-1)
             rand_poses = rand_poses.cpu()
             # print("stopped init energy")
         else:
             rand_poses = [None]*len(x)
             init_energy = [None]*len(x)
 
-        hid_feat = Batch(DFRow, 
-                         l_rf_coef=hid_feat.l_rf_coef.detach().cpu(),
-                         ll_coef=hid_feat.ll_coef.detach().cpu())
         x = x.cpu()
         ret = []
         args = []
-        for i in range(len(x)):
+        for i, (L, Rf) in enumerate(zip(x.lig_graph.dgl().batch_num_nodes(),
+                                        x.full_rec_data.dgl().batch_num_nodes())):
 
             if init_pose_override is not None:
                 pose_override = init_pose_override.cpu()[i]
             else:
                 pose_override = None
 
-            args.append((self.cfg, x[i], hid_feat[i], weight.detach().cpu(), bias.detach().cpu(), pose_override, rand_poses[i], init_energy[i]))
+            # ensure we unpad hid_feat before sending to the bfgs
+            # todo: this should be done automagically upon indexing...
+            hid_feati = DFRow(
+                        l_rf_coef=hid_feat.l_rf_coef.detach().cpu()[0,:L,:Rf],
+                        ll_coef=hid_feat.ll_coef.detach().cpu()[0,:L,:L]
+                        )
+
+            args.append((self.cfg, x[i], hid_feati, params, pose_override, rand_poses[i], init_energy[i]))
         
         if not hasattr(DiffusionV2, "jit_infer"):
             if self.cfg.model.diffusion.get("use_jit", True):
@@ -268,9 +285,10 @@ class DiffusionV2(nn.Module, Model):
 
     @staticmethod
     def infer_bfgs_single(args):
-        cfg, x, hid_feat, weight, bias, init_pose_override, rand_poses, init_energy = args
+        cfg, x, hid_feat, params, init_pose_override, rand_poses, init_energy = args
+        f = jax.value_and_grad(to_jax(DiffusionV2.energy_raw))
         # f = jax.jit(jax.value_and_grad(to_jax(DiffusionV2.energy_raw)), static_argnums=1) # deepcopy(DiffusionV2.jit_infer)
-        f = DiffusionV2.jit_infer
+        # f = DiffusionV2.jit_infer
 
         method = "BFGS"
         options = {
@@ -313,8 +331,7 @@ class DiffusionV2(nn.Module, Model):
                 hid_feat.l_rf_coef.numpy(),
                 init_pose.coord.detach().cpu().numpy(),
                 x.full_rec_data.ndata.coord.detach().cpu().numpy(),
-                weight.detach().cpu().numpy(),
-                bias.detach().cpu().numpy(),
+                *[ p.detach().cpu().numpy() for p in params ]
             )
 
 
@@ -323,6 +340,8 @@ class DiffusionV2(nn.Module, Model):
             if init_pose_override is not None:
                 raw = torch.zeros_like(raw) + torch.randn_like(raw)*0.1
             raw = raw.numpy()
+
+            # raise Exception(raw, extra_args)
 
             res = minimize(f, raw, extra_args, method=method, jac=True, options=options)
             # res = basinhopping(f, raw, niter=32, T=3.0, stepsize=3.0, minimizer_kwargs={"method": method, "jac": True, "args": extra_args, "options": options})

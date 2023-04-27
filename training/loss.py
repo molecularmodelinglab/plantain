@@ -1,6 +1,7 @@
 import torch
 import torch.nn.functional as F
 import dgl
+import dgl.backend as dF
 from dgl.ops import segment
 from data_formats.graphs.prot_graph import get_full_dist_matrix
 
@@ -121,10 +122,15 @@ def diffused_rmsd_mse(x, pred, y):
     return F.mse_loss(pred.diffused_energy, pred.diffused_rmsds)
 
 def diffused_dist_mse(x, pred, y):
-    raise NotImplementedError
-    assert pred.diffused_energy.dim() == 2
-    mses = F.mse_loss(pred.diffused_energy.T, pred.diffused_rmsds.T, reduction='none')
-    return segment.segment_reduce(x.lig_graph.dgl().batch_num_nodes(), mses, reducer="mean").mean()
+    lig_num_nodes = x.lig_graph.dgl().batch_num_nodes()
+    yp = dF.pack_padded_tensor(pred.diffused_energy, lig_num_nodes)
+    yt = dF.pack_padded_tensor(pred.diffused_rmsds, lig_num_nodes)
+    mses = F.mse_loss(yp, yt, reduction='none')
+    return segment.segment_reduce(lig_num_nodes, mses, reducer="mean").mean()
+
+    # assert pred.diffused_energy.dim() == 2
+    # mses = F.mse_loss(pred.diffused_energy.T, pred.diffused_rmsds.T, reduction='none')
+    # return segment.segment_reduce(x.lig_graph.dgl().batch_num_nodes(), mses, reducer="mean").mean()
 
 def full_inv_dist_mse(x, pred, y):
     dist, mask = get_full_dist_matrix(x.lig_graph, y.lig_crystal_pose, x.full_rec_data)

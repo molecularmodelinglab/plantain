@@ -65,9 +65,9 @@ losses:
     func: diffused_dist_mse
     weight: 1.0
 
-  inv_dist_mse:
-    func: full_inv_dist_mse
-    weight: 100.0
+  # inv_dist_mse:
+  #   func: full_inv_dist_mse
+  #   weight: 100.0
 
 optimizer: adamw
 learn_rate: 1e-4
@@ -140,8 +140,15 @@ model:
   l_rf_expand_feat: 8
 
   updates_per_block: 2
-
   num_blocks: 16
+
+  norm_after_add: true
+
+  energy:
+    ll_heads: 4
+    ll_feat: 8
+    l_rf_heads: 4
+    l_rf_feat: 8
 
   diffusion:
     timesteps: 16
@@ -159,7 +166,7 @@ model:
   fix_infer_torsion: false
 
   rbf_start: 0
-  rbf_end: 32
-  rbf_steps: 48
+  rbf_end: 24
+  rbf_steps: 32
 
   energy_bias: 3.7

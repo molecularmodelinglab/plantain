@@ -77,10 +77,15 @@ def get_padded_edge_indexes(graph):
         dst[edge_slice] = cur_dst
     return batch, src, dst
 
+def my_masked_fill(x, mask, val):
+    """ super inefficient but works with torch"""
+    # return torch.masked_fill(x, mask, val)
+    return x*(~mask) + ((torch.zeros_like(x)+val)*(mask))
+
 def softmax_with_mask(x, mask, dim):
     # return torch.softmax(x, dim)
     x_exp = torch.exp(x - torch.max(x,dim=dim,keepdim=True)[0])
-    x_exp = x_exp.masked_fill(~mask, 0.0)
+    x_exp = my_masked_fill(x, ~mask, 0.0)
     ret = x_exp / (x_exp.sum(dim,keepdim=True) + 1e-10)
     return ret
 
@@ -548,6 +553,23 @@ class TwisterV2(Module, ClassifyActivityModel):
                     #  final_l_ra_hid=td.l_ra_feat,
                     #  final_ll_hid=td.ll_feat)
 
+# need to redefine some basic pytorch functions so we can automagically jaxify them
+def run_relu(x):
+    return my_masked_fill(x, x < 0, 0.0)
+
+def run_linear(x, wb):
+    weight, bias = wb
+    og_shape = x.shape[:-1]
+    out = bias + x.reshape((-1, x.shape[-1])).matmul(weight.T)
+    return out.reshape((*og_shape, -1))
+
+def run_attention_collapse(x, heads, y_wb, atn_wb, mask):
+    y = run_linear(x, y_wb).reshape((*x.shape[:-1], -1, heads))
+    atn = run_linear(x, atn_wb).reshape((*x.shape[:-1], 1, heads))
+    atn = softmax_with_mask(atn, mask.unsqueeze(-1).unsqueeze(-1), -3)
+    ret = (y*atn).sum(-3)
+    return run_relu(ret.reshape((*ret.shape[:-2], -1)))
+
 class TwistFFCoef(Batchable):
     l_rf_coef: torch.Tensor
     ll_coef: torch.Tensor
@@ -557,6 +579,18 @@ class TwistForceField(TwistModule):
 
     def get_input_feats(self):
         return [ "lig_graph", "rec_graph", "full_rec_data" ]
+
+    def __init__(self, cfg):
+        super().__init__(cfg)
+        if "energy" in self.cfg:
+            self.l_rf_out = nn.Linear(self.cfg.rbf_steps, self.cfg.energy.l_rf_heads*self.cfg.energy.l_rf_feat)
+            self.l_rf_atn = nn.Linear(self.cfg.rbf_steps, self.cfg.energy.l_rf_heads)
+
+            self.ll_out = nn.Linear(self.cfg.rbf_steps, self.cfg.energy.ll_heads*self.cfg.energy.ll_feat)
+            self.ll_atn = nn.Linear(self.cfg.rbf_steps, self.cfg.energy.ll_heads)
+
+            self.out_lin = nn.Linear(self.cfg.energy.ll_heads*self.cfg.energy.ll_feat + self.cfg.energy.l_rf_heads*self.cfg.energy.l_rf_feat, 1)
+
 
     def get_hidden_feat(self, x):
         self.start_forward()
@@ -634,13 +668,62 @@ class TwistForceField(TwistModule):
         return (l_rf_U.sum((-1,-2,-3)) + ll_U.sum((-1,-2,-3)))*weight + bias
 
     @staticmethod
-    def get_energy_single(mcfg,
+    def static_get_energy_v2(mcfg,
+                            coef,
+                            lig_pose,
+                            lig_graph,
+                            full_rec_data,
+                            *params):
+
+        params = TwistForceField.unflatten_params(params)
+
+        l_rf_coef = coef.l_rf_coef
+        ll_coef = coef.ll_coef
+
+        lig_coord = torch.cat(lig_pose.coord, -2)
+        if lig_coord.dim() == 3:
+            lig_coord = lig_coord.transpose(0,1)
+        lig_coord = dF.pad_packed_tensor(lig_coord, lig_graph.dgl().batch_num_nodes(), 0.0)
+        rec_coord = dF.pad_packed_tensor(full_rec_data.ndata.coord, full_rec_data.dgl().batch_num_nodes(), 0.0)
+        if lig_coord.dim() == 4:
+            lig_coord = lig_coord.transpose(1,2)
+            rec_coord = rec_coord.unsqueeze(1)
+            l_rf_coef = l_rf_coef.unsqueeze(1)
+            ll_coef = ll_coef.unsqueeze(1)
+
+        l_rf_dist = cdist_diff(lig_coord, rec_coord)
+        ll_dist = cdist_diff(lig_coord, lig_coord)
+
+        l_rf_mask = (lig_coord[...,0] != 0.0).unsqueeze(-1) & (rec_coord[...,0] != 0.0).unsqueeze(-2)
+        ll_mask =  (lig_coord[...,0] != 0.0).unsqueeze(-1) & (lig_coord[...,0] != 0.0).unsqueeze(-2)
+
+        extra_ll = ~torch.eye(ll_mask.shape[-1], dtype=bool, device=ll_mask.device).unsqueeze(0)
+        if lig_coord.dim() == 4:
+            extra_ll = extra_ll.unsqueeze(1)
+        ll_mask = ll_mask & extra_ll
+
+        l_rf_rbfs = rbf_encode(l_rf_dist, mcfg.rbf_start,mcfg.rbf_end,mcfg.rbf_steps)
+        ll_rbfs = rbf_encode(ll_dist, mcfg.rbf_start,mcfg.rbf_end,mcfg.rbf_steps)
+
+        l_rf_data = l_rf_rbfs*l_rf_coef
+        ll_data = ll_rbfs*ll_coef
+
+        l_rf_col = run_attention_collapse(l_rf_data, mcfg.energy.l_rf_heads, params.l_rf_y_wb, params.l_rf_atn_wb, l_rf_mask)
+        ll_col = run_attention_collapse(ll_data, mcfg.energy.ll_heads, params.ll_y_wb, params.ll_atn_wb, ll_mask)
+        comb = torch.cat((ll_col, l_rf_col), -1)
+
+        out = run_linear(comb, params.out_wb).squeeze(-1)
+        return out*params.final_weight + params.final_bias
+
+    @staticmethod
+    def get_energy_single_v1(mcfg,
                         ll_coef,
                         l_rf_coef,
                         rec_coord,
                         lig_coord,
                         weight,
                         bias):
+        
         l_rf_dist = cdist_diff(lig_coord, rec_coord)
         ll_dist = cdist_diff(lig_coord, lig_coord)
         ll_mask = ~torch.eye(ll_dist.shape[0], dtype=bool, device=ll_dist.device).unsqueeze(-1)
@@ -657,9 +740,71 @@ class TwistForceField(TwistModule):
 
         return (l_rf_U.sum() + ll_U.sum())*weight + bias
 
+    @staticmethod
+    def get_energy_single_v2(mcfg,
+                        ll_coef,
+                        l_rf_coef,
+                        rec_coord,
+                        lig_coord,
+                        *params):
+        
+        params = TwistForceField.unflatten_params(params)
+
+        l_rf_dist = cdist_diff(lig_coord, rec_coord)
+        ll_dist = cdist_diff(lig_coord, lig_coord)
+
+        ll_mask = ~torch.eye(ll_dist.shape[0], dtype=bool, device=ll_dist.device)# .unsqueeze(-1)
+        l_rf_mask = torch.zeros((*l_rf_dist.shape,), dtype=bool, device=ll_dist.device)
+
+        l_rf_rbfs = rbf_encode(l_rf_dist, mcfg.rbf_start,mcfg.rbf_end,mcfg.rbf_steps)
+        ll_rbfs = rbf_encode(ll_dist, mcfg.rbf_start,mcfg.rbf_end,mcfg.rbf_steps)
+
+        l_rf_data = l_rf_rbfs*l_rf_coef
+        ll_data = ll_rbfs*ll_coef
+
+        l_rf_col = run_attention_collapse(l_rf_data, mcfg.energy.l_rf_heads, params.l_rf_y_wb, params.l_rf_atn_wb, l_rf_mask)
+        ll_col = run_attention_collapse(ll_data, mcfg.energy.ll_heads, params.ll_y_wb, params.ll_atn_wb, ll_mask)
+        comb = torch.cat((ll_col, l_rf_col), -1)
+
+        out = run_linear(comb, params.out_wb).squeeze(-1)
+        return (out*params.final_weight + params.final_bias).sum()
+
+    @staticmethod
+    def get_energy_single(mcfg, *args):
+        if "energy" in mcfg:
+            return TwistForceField.get_energy_single_v2(mcfg, *args)
+        else:
+            return TwistForceField.get_energy_single_v1(mcfg, *args)
+
     def get_energy(self, x, coef, lig_pose, per_atom_energy):
+        if "energy" in self.cfg:
+            return self.get_energy_v2(x, coef, lig_pose, per_atom_energy)
         bias, weight = self.scale_output.parameters()
         return TwistForceField.static_get_energy(self.cfg, coef, lig_pose, x.lig_graph, x.full_rec_data, weight, bias, per_atom_energy)
 
+    def get_energy_v2_params(self):
+        return [
+           *tuple(self.l_rf_out.parameters()),
+           *tuple(self.l_rf_atn.parameters()),
+           *tuple(self.ll_out.parameters()),
+           *tuple(self.ll_atn.parameters()),
+           *tuple(self.out_lin.parameters()),
+           *tuple(self.scale_output.parameters()),
+        ]
 
-        
+    @staticmethod
+    def unflatten_params(params):
+        it = iter(params)
+        return DFRow(
+            l_rf_y_wb=(next(it), next(it)),
+            l_rf_atn_wb=(next(it), next(it)),
+            ll_y_wb=(next(it), next(it)),
+            ll_atn_wb=(next(it), next(it)),
+            out_wb=(next(it), next(it)),
+            final_bias=next(it),
+            final_weight=next(it),
+        )
+
+    def get_energy_v2(self, x, coef, lig_pose, per_atom_energy):
+        params = self.get_energy_v2_params()
+        return TwistForceField.static_get_energy_v2(self.cfg, coef, lig_pose, x.lig_graph, x.full_rec_data, *params)
