@@ -144,6 +144,12 @@ model:
 
   norm_after_add: true
 
+  energy:
+    ll_heads: 4
+    ll_feat: 8
+    l_rf_heads: 4
+    l_rf_feat: 8
+
   diffusion:
     timesteps: 16
     max_trans_sigma: 4.0
