@@ -79,10 +79,18 @@ class DiffusionV2(nn.Module, Model):
                    hid_feat,
                    lig_poses,
                    per_atom_energy=False):
-        return self.force_field.get_energy(batch,
-                                           hid_feat,
-                                           lig_poses,
-                                           per_atom_energy)
+        energy = self.force_field.get_energy(batch,
+                                            hid_feat,
+                                            lig_poses,
+                                            per_atom_energy)
+        assert per_atom_energy
+        # V1 energy returns packed, V2 energy returns padded
+        if "energy" in self.cfg.model:
+            energy = energy.transpose(1,2).contiguous()
+        else:
+            energy = dF.pad_packed_tensor(energy.transpose(0,1), batch.lig_graph.dgl().batch_num_nodes(), 0.0)
+
+        return energy
 
     @staticmethod
     def energy_raw(t_raw,
@@ -152,13 +160,6 @@ class DiffusionV2(nn.Module, Model):
                                  hid_feat,
                                  diff_pose,
                                  per_atom_energy)
-
-        # V1 energy returns packed, V2 energy returns padded
-        if "energy" in self.cfg.model:
-            energy = energy.transpose(1,2).contiguous()
-        else:
-            energy = dF.pad_packed_tensor(energy.transpose(0,2), batch.lig_graph.dgl().batch_num_nodes(), 0.0)[...,0]
-
 
         if self.cfg.model.diffusion.pred == "atom_dist":
             diff_coord = torch.cat(diff_pose.coord, 1)
@@ -236,9 +237,9 @@ class DiffusionV2(nn.Module, Model):
             init_pose = DiffusionV2.get_init_pose(x)
             rand_transforms = PoseTransform.make_initial(self.cfg.model.diffusion, x, device, num_rand_poses)
             rand_poses = rand_transforms.apply(init_pose, x.lig_torsion_data)
-            init_energy = self.get_energy(x, hid_feat, rand_poses).cpu()
+            init_energy = self.get_energy(x, hid_feat, rand_poses, per_atom_energy).cpu()
             if per_atom_energy:
-                init_energy = init_energy.sum(-1)
+                init_energy = init_energy.sum(1)
             rand_poses = rand_poses.cpu()
             # print("stopped init energy")
         else:

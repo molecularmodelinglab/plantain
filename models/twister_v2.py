@@ -78,14 +78,14 @@ def get_padded_edge_indexes(graph):
     return batch, src, dst
 
 def my_masked_fill(x, mask, val):
-    """ super inefficient but works with torch"""
+    """ super inefficient but works with jorch"""
     # return torch.masked_fill(x, mask, val)
     return x*(~mask) + ((torch.zeros_like(x)+val)*(mask))
 
 def softmax_with_mask(x, mask, dim):
     # return torch.softmax(x, dim)
     x_exp = torch.exp(x - torch.max(x,dim=dim,keepdim=True)[0])
-    x_exp = my_masked_fill(x, ~mask, 0.0)
+    x_exp = my_masked_fill(x_exp, ~mask, 0.0)
     ret = x_exp / (x_exp.sum(dim,keepdim=True) + 1e-10)
     return ret
 
@@ -479,6 +479,7 @@ class TwistBlock(TwistModule):
                 td = self.make(FullNorm, self.cfg)(td)
         return self.update_once(x, twist_index, td)
 
+
 class TwisterV2(Module, ClassifyActivityModel):
 
     def __init__(self, cfg):
@@ -536,6 +537,8 @@ class TwisterV2(Module, ClassifyActivityModel):
         td = self.make(TwistEncoder, self.cfg)(x, twist_index)
         for i in range(self.cfg.num_blocks):
             td = td + self.make(TwistBlock, self.cfg)(x, twist_index, td)
+            if self.cfg.get("norm_after_add", False):
+                td = self.make(FullNorm, self.cfg)(td)
 
         scal_outputs = self.get_scal_outputs(td, x, 2)
         act = scal_outputs[:,0]
@@ -554,8 +557,9 @@ class TwisterV2(Module, ClassifyActivityModel):
                     #  final_ll_hid=td.ll_feat)
 
 # need to redefine some basic pytorch functions so we can automagically jaxify them
-def run_relu(x):
-    return my_masked_fill(x, x < 0, 0.0)
+def run_leaky_relu(x, neg_slope=0.01):
+    mask = x > 0
+    return x*mask + neg_slope*x*(~mask)
 
 def run_linear(x, wb):
     weight, bias = wb
@@ -568,7 +572,7 @@ def run_attention_collapse(x, heads, y_wb, atn_wb, mask):
     atn = run_linear(x, atn_wb).reshape((*x.shape[:-1], 1, heads))
     atn = softmax_with_mask(atn, mask.unsqueeze(-1).unsqueeze(-1), -3)
     ret = (y*atn).sum(-3)
-    return run_relu(ret.reshape((*ret.shape[:-2], -1)))
+    return run_leaky_relu(ret.reshape((*ret.shape[:-2], -1)))
 
 class TwistFFCoef(Batchable):
     l_rf_coef: torch.Tensor
