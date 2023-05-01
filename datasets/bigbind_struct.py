@@ -3,6 +3,8 @@ import torch
 from typing import Set, Type
 import pandas as pd
 from rdkit import Chem
+from rdkit.Chem import PandasTools
+from common.cache import cache
 from common.pose_transform import Pose
 from data_formats.graphs.mol_graph import get_mol_coords
 from data_formats.transforms import lig_crystal_pose
@@ -11,12 +13,24 @@ from data_formats.tasks import Task
 from datasets.base_datasets import Dataset
 from terrace.dataframe import DFRow
 
+@cache(lambda cfg, x: x)
+def get_refined_mask(cfg, csv):
+    """ Returns a mask for the 'refined' version of the dataset. That is,
+    all the datapoints where the ligand has a QED score of greater than 0.5
+    and doesn't contain phosphorus """
+    df = pd.read_csv(csv)
+    PandasTools.AddMoleculeColumnToFrame(df, "lig_smiles", "lig", includeFingerprints=False)
+    qed_score = df.lig.apply(Chem.Descriptors.qed)
+    mask = (qed_score > 0.5) & (~df.lig_smiles.str.contains("P"))
+    return mask
+
 class BigBindStructDataset(Dataset):
 
     def __init__(self, cfg, split, transform):
         super().__init__(cfg, transform)
         csv = cfg.platform.bigbind_dir + f"/structures_{split}.csv"
         self.structures = pd.read_csv(csv)
+        self.refined_mask = get_refined_mask(cfg, csv)
 
         max_residues = self.cfg.data.get("max_rec_residues", None)
         if max_residues is not None:
@@ -98,7 +112,14 @@ class BigBindStructDataset(Dataset):
         if self.cfg.get("debug_crystal_pose_cheat", False):
             lig = lig_crystal
 
-        x = DFRow(lig=lig, rec=rec, pocket_id=poc_id, rec_file=rec_file, lig_crystal_file=lig_crystal_file)
+        refined = torch.tensor(self.refined_mask[index], dtype=torch.bool)
+
+        x = DFRow(lig=lig,
+                  rec=rec,
+                  pocket_id=poc_id,
+                  refined=refined,
+                  rec_file=rec_file,
+                  lig_crystal_file=lig_crystal_file)
         y = DFRow(lig_crystal_pose=lig_crystal_pose, lig_embed_crystal_pose=lig_embed_crystal_pose)
 
         return x, y

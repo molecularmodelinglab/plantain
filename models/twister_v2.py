@@ -3,6 +3,7 @@ from dataclassy import dataclass
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.cuda.amp import autocast
 import dgl.backend as dF
 from dgl.nn import WeightAndSum
 from dgl.nn.pytorch import EGATConv
@@ -597,6 +598,8 @@ class TwistForceField(TwistModule):
 
 
     def get_hidden_feat(self, x):
+        # smh autocast causes NaNs!
+        # with autocast():
         self.start_forward()
 
         twist_index = TwistIndex(x)

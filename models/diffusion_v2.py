@@ -88,7 +88,7 @@ class DiffusionV2(nn.Module, Model):
         if "energy" in self.cfg.model:
             energy = energy.transpose(1,2).contiguous()
         else:
-            energy = dF.pad_packed_tensor(energy.transpose(0,1), batch.lig_graph.dgl().batch_num_nodes(), 0.0)
+            energy = dF.pad_packed_tensor(energy if energy.dim() == 1 else energy.transpose(0,1), batch.lig_graph.dgl().batch_num_nodes(), 0.0)
 
         return energy
 
@@ -186,7 +186,7 @@ class DiffusionV2(nn.Module, Model):
     def predict_train(self, x, y, task_names, split, batch_idx):
         hid_feat = self.get_hidden_feat(x)
         diff_energy, diff_rmsds, inv_dist_mat = self.diffuse_energy(x, y, hid_feat)
-        ret_dif = Batch(DiffPred, diffused_energy=diff_energy, diffused_rmsds=diff_rmsds, inv_dist_mat=inv_dist_mat, hid_feat=hid_feat)
+        ret_dif = Batch(DiffPred, diffused_energy=diff_energy, diffused_rmsds=diff_rmsds, inv_dist_mat=inv_dist_mat) #, hid_feat=hid_feat)
         if "predict_lig_pose" in task_names and (split != "train" or batch_idx % self.cfg.metric_reset_interval == 0):
             with torch.no_grad():
                 ret_pred = self(x, hid_feat)
@@ -260,8 +260,8 @@ class DiffusionV2(nn.Module, Model):
             # ensure we unpad hid_feat before sending to the bfgs
             # todo: this should be done automagically upon indexing...
             hid_feati = DFRow(
-                        l_rf_coef=hid_feat.l_rf_coef.detach().cpu()[0,:L,:Rf],
-                        ll_coef=hid_feat.ll_coef.detach().cpu()[0,:L,:L]
+                        l_rf_coef=hid_feat.l_rf_coef.detach().cpu()[i,:L,:Rf],
+                        ll_coef=hid_feat.ll_coef.detach().cpu()[i,:L,:L]
                         )
 
             args.append((self.cfg, x[i], hid_feati, params, pose_override, rand_poses[i], init_energy[i]))
@@ -341,8 +341,6 @@ class DiffusionV2(nn.Module, Model):
             if init_pose_override is not None:
                 raw = torch.zeros_like(raw) + torch.randn_like(raw)*0.1
             raw = raw.numpy()
-
-            # raise Exception(raw, extra_args)
 
             res = minimize(f, raw, extra_args, method=method, jac=True, options=options)
             # res = basinhopping(f, raw, niter=32, T=3.0, stepsize=3.0, minimizer_kwargs={"method": method, "jac": True, "args": extra_args, "options": options})

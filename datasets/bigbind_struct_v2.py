@@ -10,6 +10,7 @@ from data_formats.graphs.mol_graph import get_mol_coords
 from common.utils import get_mol_from_file, get_mol_from_file_no_cache, get_prot_from_file
 from data_formats.tasks import Task
 from datasets.base_datasets import Dataset
+from datasets.bigbind_struct import get_refined_mask
 from terrace.dataframe import DFRow
 from validation.metrics import get_rmsds
 
@@ -39,6 +40,7 @@ class BigBindStructV2Dataset(Dataset):
         super().__init__(cfg, transform)
         csv = cfg.platform.bigbind_struct_v2_dir + f"/structures_{split}.csv"
         self.structures = pd.read_csv(csv)
+        self.refined_mask = get_refined_mask(cfg, csv)
 
         max_residues = self.cfg.data.get("max_rec_residues", None)
         if max_residues is not None:
@@ -93,7 +95,8 @@ class BigBindStructV2Dataset(Dataset):
 
         rec_file = self.get_rec_file(index)
 
-        lig_crystal = get_mol_from_file(self.get_lig_crystal_file(index))
+        lig_crystal_file = self.get_lig_crystal_file(index)
+        lig_crystal = get_mol_from_file(lig_crystal_file)
         lig_crystal = Chem.RemoveHs(lig_crystal)
         lig_crystal_pose = Pose(get_mol_coords(lig_crystal, 0))
 
@@ -138,7 +141,13 @@ class BigBindStructV2Dataset(Dataset):
         if self.cfg.get("debug_crystal_pose_cheat", False):
             lig = lig_crystal
 
-        x = DFRow(lig=lig, lig_crystal=lig_crystal, rec=rec, pocket_id=poc_id)
+        refined = torch.tensor(self.refined_mask[index], dtype=torch.bool)
+        x = DFRow(lig=lig,
+                  rec=rec,
+                  pocket_id=poc_id,
+                  refined=refined,
+                  rec_file=rec_file,
+                  lig_crystal_file=lig_crystal_file)
         
         y = DFRow(lig_crystal_pose=lig_crystal_pose, lig_embed_crystal_pose=lig_embed_crystal_pose)
 

@@ -9,6 +9,7 @@ from common.cfg_utils import get_config
 from common.pose_transform import MultiPose, add_pose_to_mol
 from common.wandb_utils import get_old_model
 from datasets.bigbind_struct import BigBindStructDataset
+from datasets.make_dataset import make_dataset
 from models.gnina import GninaPose
 from models.sym_diffusion import SymDiffusion
 from terrace.batch import Batch
@@ -51,6 +52,7 @@ def eval_combo(cfg, num_preds, shuffle_val):
 def main(name):
     num_preds = None
     shuffle_val = False
+    dataset_name = "bigbind_struct"
 
     cfg = get_config("diffusion_v2")
 
@@ -63,17 +65,17 @@ def main(name):
         model = get_old_model(cfg, name, "best_k")
         cfg = model.cfg
 
-    metrics, plots = validate(cfg, model, "bigbind_struct", "val", num_preds, shuffle_val)
+    metrics, plots = validate(cfg, model, dataset_name, "val", num_preds, shuffle_val)
     for key, val in flatten_dict(metrics).items():
         print(f"{key}: {val:.3f}")
 
-    dataset = BigBindStructDataset(cfg, "val", [])
+    dataset = make_dataset(cfg, dataset_name, "val", [])
     out_folder = f"outputs/pose_preds/{model.cache_key}/"
 
     shutil.rmtree(out_folder, ignore_errors=True)
     os.makedirs(out_folder, exist_ok=True)
 
-    x, y, p = get_preds(cfg, model, "bigbind_struct", "val", num_preds, shuffle_val)
+    x, y, p = get_preds(cfg, model, dataset_name, "val", num_preds, shuffle_val)
     lig_files = []
     rec_files = []
     pred_files = []
