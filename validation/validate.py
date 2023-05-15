@@ -18,7 +18,7 @@ from common.utils import flatten_dict
 def pred_key(cfg, model, dataset_name, split, num_batches, shuffle_val):
     return (model.cache_key, dataset_name, split, num_batches, shuffle_val)
 
-@cache(pred_key, disable=False, version=1.0)
+@cache(pred_key, disable=False, version=3.0)
 @torch.no_grad()
 def get_preds(cfg, model, dataset_name, split, num_batches, shuffle_val=True):
 
@@ -61,7 +61,13 @@ def get_preds(cfg, model, dataset_name, split, num_batches, shuffle_val=True):
     return x, y, pred
 
 @torch.no_grad()
-def validate(cfg, model, dataset_name, split, num_batches=None, shuffle_val=True):
+def validate(cfg, model, dataset_name, split, num_batches=None, shuffle_val=True, subset_indexes=None):
+
+    is_shuffled = num_batches is not None and shuffle_val
+    # with the way I'm currently taking a subset of the dataset, 
+    # we must assume its not shuffled
+    if subset_indexes is not None:
+        assert not is_shuffled
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model = model.to(device)
@@ -71,13 +77,16 @@ def validate(cfg, model, dataset_name, split, num_batches=None, shuffle_val=True
     metrics = get_metrics(cfg, tasks, offline=True).to(device)
 
     x, y, pred = get_preds(cfg, model, dataset_name, split, num_batches, shuffle_val)
+    if subset_indexes is not None:
+        x, y, pred = collate([(xi, yi, pi) for i, (xi, yi, pi) in enumerate(zip(x, y, pred)) if i in subset_indexes], lazy=True)
+
     for metric in metrics.values():
         metric.update(x, pred, y)
 
     comp_mets = {
         key: val.cpu().compute() for key, val in metrics.items()
     }
-    plots = make_plots(cfg, tasks, x.cpu(), y.cpu(), pred.cpu(), comp_mets)
+    plots = None # make_plots(cfg, tasks, x.cpu(), y.cpu(), pred.cpu(), comp_mets)
     return comp_mets, plots # flatten_dict(ret)
 
 def save_validation(cfg, model, dataset_name, split, num_batches=None):

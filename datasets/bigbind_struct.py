@@ -31,6 +31,12 @@ class BigBindStructDataset(Dataset):
         csv = cfg.platform.bigbind_dir + f"/structures_{split}.csv"
         self.structures = pd.read_csv(csv)
         self.refined_mask = get_refined_mask(cfg, csv)
+        
+        # if split == "val":
+        #     bb_diffdock_csv = cfg.platform.diffdock_dir + "/data/bb_struct_val.csv"
+        #     self.diffdock_indexes = set(pd.read_csv(bb_diffdock_csv)["Unnamed: 0"])
+        # else:
+        #     self.diffdock_indexes = set()
 
         max_residues = self.cfg.data.get("max_rec_residues", None)
         if max_residues is not None:
@@ -113,11 +119,14 @@ class BigBindStructDataset(Dataset):
             lig = lig_crystal
 
         refined = torch.tensor(self.refined_mask[index], dtype=torch.bool)
+        # in_diffdock = torch.tensor(index in self.diffdock_indexes, dtype=torch.bool)
 
         x = DFRow(lig=lig,
                   rec=rec,
+                  index=torch.tensor(index, dtype=torch.long),
                   pocket_id=poc_id,
                   refined=refined,
+                  # in_diffdock=in_diffdock,
                   rec_file=rec_file,
                   lig_crystal_file=lig_crystal_file)
         y = DFRow(lig_crystal_pose=lig_crystal_pose, lig_embed_crystal_pose=lig_embed_crystal_pose)

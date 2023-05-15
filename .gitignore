@@ -28,7 +28,9 @@ notebooks
 *.pqr
 *.json
 *.log
+*.pse
 terrace
 terrace_tmp
+terrace_moveme
 scripts/sync_longleaf.sh
 

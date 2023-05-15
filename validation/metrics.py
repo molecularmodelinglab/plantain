@@ -105,14 +105,6 @@ class PosePerPocketMetric(PerPocketMetric):
         if not hasattr(pred, "lig_pose"): return
         super().update(x, pred, y)
 
-class PosePerPocketMetricRefined(PosePerPocketMetric):
-    """ Only records data from the refined set """
-
-    def update(self, x, pred, y):
-        if not hasattr(pred, "lig_pose"): return
-        r_x, r_y, r_pred = collate([(xi, yi, pi) for xi, yi, pi in zip(x, y, pred) if xi.refined ], lazy=True)
-        super().update(r_x, r_pred, r_y)
-
 # needed because the pickle can't handle lambdas
 def get_is_active(b):
     return b.is_active
@@ -422,9 +414,6 @@ def get_single_task_metrics(task: str):
             "rmsd": PosePerPocketMetric(PoseRMSD),
             "acc_2": PosePerPocketMetric(PoseAcc, 2.0),
             "acc_5": PosePerPocketMetric(PoseAcc, 5.0),
-            "rmsd_refined": PosePerPocketMetricRefined(PoseRMSD),
-            "acc_2_refined": PosePerPocketMetricRefined(PoseAcc, 2.0),
-            "acc_5_refined": PosePerPocketMetricRefined(PoseAcc, 5.0),
             "crystal_2": CrystalEnergy(2.0),
             "crystal_5": CrystalEnergy(5.0)
         }),

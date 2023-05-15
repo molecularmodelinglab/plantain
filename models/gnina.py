@@ -1,7 +1,8 @@
 import pandas as pd
 from rdkit import Chem
+import torch
 from common.pose_transform import MultiPose
-from common.utils import get_mol_from_file
+from common.utils import get_gnina_scores_from_pdbqt, get_mol_from_file
 from data_formats.transforms import lig_docked_poses
 from models.model import Model, ScoreActivityModel
 from terrace.batch import Batch
@@ -53,11 +54,21 @@ class GninaPose(Model):
         lig_file = "/".join(x.lig_crystal_file.split("/")[-2:])
         rec_file = "/".join(x.rec_file.split("/")[-2:])
         results = self.df.query("ex_rec_pocket_file == @rec_file and lig_file == @lig_file")
+        
+        all_pose_scores = torch.zeros((self.cfg.data.num_poses,), device=self.device)
+        
         if len(results) == 0:
-            return DFRow(lig_pose=x.lig_docked_poses)
+            return DFRow(lig_pose=x.lig_docked_poses,
+                         pose_scores=all_pose_scores)
         assert len(results) == 1
         
         docked_file = self.cfg.platform.bigbind_gnina_dir + "/" + next(iter(results.docked_lig_file))
+        pose_scores, affinities = get_gnina_scores_from_pdbqt(docked_file)
+
+        for i, score in enumerate(pose_scores):
+            if i >= len(all_pose_scores): break
+            all_pose_scores[i] = score
+
         lig = get_mol_from_file(docked_file)
         lig = Chem.RemoveHs(lig)
         order = lig.GetSubstructMatch(x.lig)
@@ -66,4 +77,5 @@ class GninaPose(Model):
         
         pose = lig_docked_poses(self.cfg, DFRow(lig=lig))
         pose = MultiPose(coord=pose.coord.to(self.device))
-        return DFRow(lig_pose=pose)
+        return DFRow(lig_pose=pose,
+                     pose_scores=all_pose_scores)

@@ -186,7 +186,8 @@ class DiffusionV2(nn.Module, Model):
     def predict_train(self, x, y, task_names, split, batch_idx):
         hid_feat = self.get_hidden_feat(x)
         diff_energy, diff_rmsds, inv_dist_mat = self.diffuse_energy(x, y, hid_feat)
-        ret_dif = Batch(DiffPred, diffused_energy=diff_energy, diffused_rmsds=diff_rmsds, inv_dist_mat=inv_dist_mat) #, hid_feat=hid_feat)
+        ret_dif = Batch(DiffPred, diffused_energy=diff_energy, diffused_rmsds=diff_rmsds, inv_dist_mat=inv_dist_mat)
+        # ret_dif = Batch(DiffPred, diffused_energy=diff_energy, diffused_rmsds=diff_rmsds, inv_dist_mat=inv_dist_mat, hid_feat=hid_feat)
         if "predict_lig_pose" in task_names and (split != "train" or batch_idx % self.cfg.metric_reset_interval == 0):
             with torch.no_grad():
                 ret_pred = self(x, hid_feat)
@@ -298,7 +299,7 @@ class DiffusionV2(nn.Module, Model):
         }
 
         pose_and_energies = []
-        n_tries = cfg.model.diffusion.get("optim_tries", 16)
+        n_tries = cfg.model.diffusion.get("optim_tries", 32) # 16)
         if init_pose_override is not None:
             n_tries = 1
         if cfg.model.get("fix_infer_torsion", False):
@@ -342,6 +343,7 @@ class DiffusionV2(nn.Module, Model):
                 raw = torch.zeros_like(raw) + torch.randn_like(raw)*0.1
             raw = raw.numpy()
 
+            to_jax(DiffusionV2.energy_raw)(raw, *extra_args)
             res = minimize(f, raw, extra_args, method=method, jac=True, options=options)
             # res = basinhopping(f, raw, niter=32, T=3.0, stepsize=3.0, minimizer_kwargs={"method": method, "jac": True, "args": extra_args, "options": options})
             opt_raw = torch.tensor(res.x, dtype=torch.float32, device='cpu')

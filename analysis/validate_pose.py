@@ -2,6 +2,7 @@ import os
 import shutil
 import pickle
 import sys
+import pandas as pd
 from rdkit import Chem
 import torch
 from tqdm import tqdm
@@ -10,9 +11,11 @@ from common.pose_transform import MultiPose, add_pose_to_mol
 from common.wandb_utils import get_old_model
 from datasets.bigbind_struct import BigBindStructDataset
 from datasets.make_dataset import make_dataset
+from models.diffdock import DiffDock
 from models.gnina import GninaPose
 from models.sym_diffusion import SymDiffusion
-from terrace.batch import Batch
+from models.vina import VinaPose
+from terrace.batch import Batch, collate
 from terrace.dataframe import DFRow
 from validation.metrics import get_metrics
 from validation.validate import get_preds, validate
@@ -23,7 +26,7 @@ def eval_combo(cfg, num_preds, shuffle_val):
     device = "cpu"
     cfg.data.num_poses = 9
     gnina = GninaPose(cfg)
-    twist = get_old_model(cfg, "twist_thicc", "best_k")
+    twist = get_old_model(cfg, "even_more_tor", "best_k")
 
     x, y, gnina_pred = get_preds(cfg, gnina, "bigbind_struct", "val", num_preds, shuffle_val)
     *_, twist_pred = get_preds(cfg, twist, "bigbind_struct", "val", num_preds, shuffle_val)
@@ -49,25 +52,42 @@ def eval_combo(cfg, num_preds, shuffle_val):
         print(f"{key}: {val:.3f}")
 
 
-def main(name):
+def main(name, tag):
+    print(f"Evaluating {name}:{tag}")
     num_preds = None
     shuffle_val = False
     dataset_name = "bigbind_struct"
+    subset = None # "diffdock"
 
     cfg = get_config("diffusion_v2")
+
+    if subset is None:
+        subset_indexes = None
+    elif subset == "diffdock":
+        bb_diffdock_csv = cfg.platform.diffdock_dir + "/data/bb_struct_val.csv"
+        subset_indexes = set(pd.read_csv(bb_diffdock_csv)["Unnamed: 0"])
 
     if name == "gnina":
         cfg.data.num_poses = 9
         model = GninaPose(cfg)
+    elif name == "vina":
+        cfg.data.num_poses = 9
+        model = VinaPose(cfg)
+    elif name == "diffdock":
+        cfg.data.num_poses = 40
+        model = DiffDock(cfg)
     elif name == "combo":
         return eval_combo(cfg, num_preds, shuffle_val)
     else:
-        model = get_old_model(cfg, name, "best_k")
+        model = get_old_model(cfg, name, tag)
         cfg = model.cfg
 
-    metrics, plots = validate(cfg, model, dataset_name, "val", num_preds, shuffle_val)
+    prefix = "" if subset is None else subset
+    metrics, plots = validate(cfg, model, dataset_name, "val", num_preds, shuffle_val, subset_indexes)
     for key, val in flatten_dict(metrics).items():
-        print(f"{key}: {val:.3f}")
+        print(f"{prefix}_{key}: {val:.3f}")
+
+    if subset is not None: return
 
     dataset = make_dataset(cfg, dataset_name, "val", [])
     out_folder = f"outputs/pose_preds/{model.cache_key}/"
@@ -75,7 +95,8 @@ def main(name):
     shutil.rmtree(out_folder, ignore_errors=True)
     os.makedirs(out_folder, exist_ok=True)
 
-    x, y, p = get_preds(cfg, model, dataset_name, "val", num_preds, shuffle_val)
+    x, y, p = get_preds(cfg, model, dataset_name, "val", num_preds, shuffle_val, subset_indexes)
+
     lig_files = []
     rec_files = []
     pred_files = []
@@ -97,4 +118,8 @@ def main(name):
     print(f"Saved output pose files to '{out_folder}'")
 
 if __name__ == "__main__":
-    main(sys.argv[1])
+    try:
+        tag = sys.argv[2]
+    except IndexError:
+        tag = "best_k"
+    main(sys.argv[1], tag)

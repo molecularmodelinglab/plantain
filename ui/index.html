@@ -1,36 +1,45 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>3DMol.js Flask App</title>
+    <title>Molecule Editor</title>
     <script src="https://3dmol.csb.pitt.edu/build/3Dmol-min.js"></script>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
   </head>
   <body>
     <div id="molViewer" style="width: 100%; height: 800px;"></div>
     <script>
-      // Load the molecule data from the server
-      $.getJSON('/moldata', function(data) {
-        // Create a new viewer object
-        var viewer = $3Dmol.createViewer($('#molViewer'), {defaultcolors: $3Dmol.rasmolElementColors});
-        
-        console.log(data.moldata)
 
-        // Add the molecule data to the viewer
-        viewer.addModel(data.moldata, 'sdf');
-        
-        // Zoom and center the molecule
-        viewer.zoomTo();
-        
-        // Enable editing and moving of the molecule
-        viewer.setStyle({stick:{radius:0.2}});
-        
-        viewer.setClickable({},true,function(atom,viewer,event,container) {
-            console.log(atom);
-            viewer.render();
+      var viewer = $3Dmol.createViewer($('#molViewer'), {defaultcolors: $3Dmol.rasmolElementColors});
+      viewer.setBackgroundColor("black");
+
+      var cur_sdf = null;
+
+      const atom_click = (atom,viewer,event,container) => {
+        $.post("/add_methyl", {moldata: cur_sdf, atom_index: atom.index }, (data) => {
+          reload_model(data);
+          viewer.render();
         });
-        // Render the molecule
+      };
+
+      const reload_model = (data) => {
+        cur_sdf = data.moldata;
+        viewer.removeAllModels();
+        viewer.addModel(data.moldata, 'sdf');
+        viewer.setStyle({stick:{radius:0.2}});
+        viewer.setClickable({},true,atom_click);
+      };
+
+      $.getJSON('/init_mol', function(data) {
+        reload_model(data);
+        viewer.zoomTo();
         viewer.render();
       });
+
+      // add a callback that prints "hello" whenever the space key is pressed
+      viewer.addCallback( "mouseDown", (viewer,event) => {
+        console.log("hello");
+      });
+
     </script>
   </body>
 </html>

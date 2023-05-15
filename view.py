@@ -1,4 +1,5 @@
 from pymol import cmd
+from glob import glob
 import pickle
 import random
 import os
@@ -177,27 +178,45 @@ cur_idx = 0
 def reload():
 
     idx = idx2idx[cur_idx]
-    print(f"Viewing index {idx}")
-    docked_file = f'/home/boris/Data/BigBindGnina/structures_val/{idx}.pdbqt'
+    print(f"Viewing index {idx}, {lig_files[idx2idx[cur_idx]]}, {rec_files[idx2idx[cur_idx]]}")
+    # docked_file = f'/home/boris/Data/BigBindGnina/structures_val/{idx}.pdbqt'
 
     cmd.delete("all")
-    cmd.load(lig_files[idx2idx[cur_idx]], "crystal")
-    # cmd.color("red", "crystal")
+
+    lf = lig_files[idx2idx[cur_idx]]
+
+    cmd.load(lf, "crystal")
+
+    cmd.util.cbag("crystal")
 
     # if os.path.exists(docked_file):
     # cmd.load(docked_file, "gnina")
     # cmd.color("yellow", "gnina")
     
-    cmd.load(pred_files[idx2idx[cur_idx]], "plantain")
-    # cmd.color("green", "plantain")
-    cmd.load(rec_files[idx2idx[cur_idx]], "rec")
+    cmd.load(pred_files[idx2idx[cur_idx]], "pred")
+    cmd.util.cbay("pred")
     
-    # show_contacts("plantain", "rec", "plan_con")
-    # show_contacts("crystal", "rec", "crys_con")
+    rf = rec_files[idx2idx[cur_idx]]
+    # rf = "_".join(rf.split("_")[:-1]) + ".pdb"
+
+    # print(pred_files[idx2idx[cur_idx]], rf)
+
+    cmd.load(rf, "rec")
+    cmd.util.cbab("rec")
+    cmd.show("sticks", "rec")
+    
+    redock_rf = glob("_".join(lf.split("_")[:-2]) + "_*_rec_pocket.pdb")[0]
+    cmd.load(redock_rf, "rec_rf")
+    cmd.util.cbak("rec_rf")
+    cmd.show("sticks", "rec_rf")
+
     # show_contacts("gnina", "rec", "gnina_con")
     
     # cmd.show("surface", "rec")
-    cmd.show("sticks", "rec")
+    # print(cmd.get_object_list("all"))
+
+    show_contacts("pred", "rec", "pred_con")
+    show_contacts("crystal", "rec", "crys_con")
 
 def next():
     global cur_idx

@@ -19,11 +19,11 @@ from validation.metrics import get_rmsds
 from multiprocessing import Pool
 import multiprocessing as mp
 
-# @torch.compile(dynamic=True)
+# @torch.compile(dynamic=False)
 def comp_f(model, x, hid_feat, init_pose, transforms):
     poses = transforms.apply(init_pose, x.lig_torsion_data)
     Us = model.get_energy(x, hid_feat, poses, True)
-    U = torch.sqrt((Us**2).mean())
+    U = Us.sum() # torch.sqrt((Us**2).mean())
     return U
 
 class DiffusionV3(nn.Module, Model):
@@ -133,18 +133,18 @@ class DiffusionV3(nn.Module, Model):
         return collate(init_poses)
 
     @torch.no_grad()
-    def infer_bfgs(self, x, hid_feat = None):
+    def infer_bfgs(self, x, hid_feat = None, pose_callback=None):
         if hid_feat is None:
             hid_feat = self.get_hidden_feat(x)
         ret = []
         for i, (L, Rf) in enumerate(zip(x.lig_graph.dgl().batch_num_nodes(),
                                 x.full_rec_data.dgl().batch_num_nodes())):
-            x0 = collate([x[i]], True)
+            x0 = collate([x[i]], lazy=True)
             hf0 = Batch(DFRow,
                 l_rf_coef=hid_feat.l_rf_coef.detach()[i:(i+1),:L,:Rf],
                 ll_coef=hid_feat.ll_coef.detach()[i:(i+1),:L,:L]
             )
-            ret.append(self.infer_bfgs_single(x0, hf0))
+            ret.append(self.infer_bfgs_single(x0, hf0, pose_callback))
         return collate(ret)
     
     # @torch.compile
@@ -156,7 +156,7 @@ class DiffusionV3(nn.Module, Model):
         return comp_f(self, x, hid_feat, init_pose, transforms)
 
     # @torch.compile
-    def infer_bfgs_single(self, x, hid_feat):
+    def infer_bfgs_single(self, x, hid_feat, pose_callback):
         device = hid_feat.ll_coef.device
         inf_cfg = self.cfg.model.inference
         n_poses = inf_cfg.num_optim_poses
@@ -177,7 +177,8 @@ class DiffusionV3(nn.Module, Model):
 
         def closure():
             optimizer.zero_grad()
-            # poses = get_poses()
+            if pose_callback is not None:
+                pose_callback(x, get_poses())
             # Us = self.get_energy(x, hid_feat, poses, True)
             # U = torch.sqrt((Us**2).mean())
             params = optimizer.param_groups[0]["params"]

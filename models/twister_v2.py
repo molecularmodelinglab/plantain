@@ -743,9 +743,16 @@ class TwistForceField(TwistModule):
         l_rf_coef = l_rf_coef[:l_rf_rbfs.shape[0],:l_rf_rbfs.shape[1]]
 
         l_rf_U = (l_rf_rbfs*l_rf_coef)
-        ll_U = (ll_rbfs*ll_coef).where(~ll_mask, torch.tensor(0.0, device=l_rf_dist.device))
+        ll_U = (ll_rbfs*ll_coef)# .where(ll_mask, torch.tensor(0.0, device=l_rf_dist.device))
 
-        return (l_rf_U.sum() + ll_U.sum())*weight + bias
+        dist_U = (l_rf_U.sum((-1,-2)) + ll_U.sum((-1,-2)))*weight + bias
+        # dist_U = dist_U.where(dist_U < -100.0, torch.tensor(0.0, device=l_rf_dist.device))
+
+        # print(ll_U[0][1])
+        # print(dist_U.where(dist_U < -100.0, torch.tensor(0.0, device=l_rf_dist.device)))
+
+        # return torch.sqrt((dist_U**2).sum())
+        return dist_U.mean()
 
     @staticmethod
     def get_energy_single_v2(mcfg,
