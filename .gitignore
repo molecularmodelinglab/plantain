@@ -16,7 +16,7 @@ timewarps
 artifacts
 outputs/*
 prior_work
-*.pt
+# *.pt
 notebooks
 .vscode
 *.out

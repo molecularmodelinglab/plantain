@@ -19,21 +19,13 @@ from validation.metrics import get_rmsds
 from multiprocessing import Pool
 import multiprocessing as mp
 
-# e_func = torch.compile(lambda m, *args: m.get_energy(*args), dynamic=True, backend="eager")
-
-
+# so far the best I can do is compile applying transformations (that is,
+# translations, rotations, and torsional updates)to the ligand structure
+# we need dynamic=True when compiling everything because coordinates
+# and angles all have different shapes
 @torch.compile(dynamic=True)
-def apply_comp(transforms, init_pose, x):
-    return transforms.apply(init_pose, x.lig_torsion_data)
-
-# @torch.compile(dynamic=True)
-def comp_f(model, x, hid_feat, init_pose, transforms):
-    # poses = transforms.apply(init_pose, x.lig_torsion_data)
-    poses = apply_comp(transforms, init_pose, x)
-    Us = model.get_energy(x, hid_feat, poses, True)
-    # Us = e_func(model, x, hid_feat, poses, True)
-    U = Us.sum() # torch.sqrt((Us**2).mean())
-    return U
+def apply_transform(transforms, init_pose, lig_torsion_data):
+    return transforms.apply(init_pose, lig_torsion_data)
 
 class DiffusionV3(nn.Module, Model):
     
@@ -48,6 +40,7 @@ class DiffusionV3(nn.Module, Model):
 
     def get_input_feats(self):
         ret = ["lig_embed_pose", "lig_torsion_data"]
+        ret += self.force_field.get_input_feats()
         return ret
 
     def get_tasks(self):
@@ -156,16 +149,19 @@ class DiffusionV3(nn.Module, Model):
             ret.append(self.infer_bfgs_single(x0, hf0, pose_callback))
         return collate(ret)
     
-    # @torch.compile
     def get_inference_energy(self, x, hid_feat, init_pose, transforms):
+        """ This is the function we want to differentiate -- get the
+        predicted 'energy' from the ligand translation, rotation,
+        and torsional angles """
+        poses = apply_transform(transforms, init_pose, x.lig_torsion_data)
         # poses = transforms.apply(init_pose, x.lig_torsion_data)
-        # Us = self.get_energy(x, hid_feat, poses, True)
-        # U = torch.sqrt((Us**2).mean())
-        # return U
-        return comp_f(self, x, hid_feat, init_pose, transforms)
+        Us = self.get_energy(x, hid_feat, poses, True)
+        U = Us.sum()
+        return U
 
-    # @torch.compile
     def infer_bfgs_single(self, x, hid_feat, pose_callback):
+        """ Use Pytorch's L-BFGS optimizer to minimize the predicted score
+        w/r/t the translation, rotation, and torsional angles """
         device = hid_feat.ll_coef.device
         inf_cfg = self.cfg.model.inference
         n_poses = inf_cfg.num_optim_poses
@@ -188,8 +184,6 @@ class DiffusionV3(nn.Module, Model):
             optimizer.zero_grad()
             if pose_callback is not None:
                 pose_callback(x, get_poses())
-            # Us = self.get_energy(x, hid_feat, poses, True)
-            # U = torch.sqrt((Us**2).mean())
             params = optimizer.param_groups[0]["params"]
             transforms = Batch(PoseTransform, trans=params[0], rot=params[1], tor_angles=[params[2]])
             U = self.get_inference_energy(x, hid_feat, init_pose, transforms)

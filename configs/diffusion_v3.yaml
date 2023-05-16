@@ -106,12 +106,12 @@ model:
 
   mpnn_type: egat
 
-  lig_mpnn_node_size: 64
-  lig_mpnn_edge_size: 64
+  lig_mpnn_node_size: 32
+  lig_mpnn_edge_size: 32
   lig_mpnn_heads: 4
 
-  rec_mpnn_node_size: 64
-  rec_mpnn_edge_size: 64
+  rec_mpnn_node_size: 32
+  rec_mpnn_edge_size: 32
   rec_mpnn_heads: 4
 
   ll_atn_heads: 4
@@ -140,9 +140,10 @@ model:
   l_rf_expand_feat: 8
 
   updates_per_block: 2
+
   num_blocks: 16
 
-  norm_after_add: true
+  norm_after_add: false
 
   diffusion:
     timesteps: 16
@@ -152,7 +153,7 @@ model:
     infer_trans_sigma: 4.0
     use_rot: true
     use_trans: true
-    exponent: 2.0
+    exponent: 1.5
     pred: atom_dist
 
   inference:
