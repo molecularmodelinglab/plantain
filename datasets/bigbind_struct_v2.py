@@ -40,7 +40,7 @@ class BigBindStructV2Dataset(Dataset):
         super().__init__(cfg, transform)
         csv = cfg.platform.bigbind_struct_v2_dir + f"/structures_{split}.csv"
         self.structures = pd.read_csv(csv)
-        self.refined_mask = get_refined_mask(cfg, csv)
+        # self.refined_mask = get_refined_mask(cfg, csv)
 
         max_residues = self.cfg.data.get("max_rec_residues", None)
         if max_residues is not None:
@@ -141,11 +141,11 @@ class BigBindStructV2Dataset(Dataset):
         if self.cfg.get("debug_crystal_pose_cheat", False):
             lig = lig_crystal
 
-        refined = torch.tensor(self.refined_mask[index], dtype=torch.bool)
+        # refined = torch.tensor(self.refined_mask[index], dtype=torch.bool)
         x = DFRow(lig=lig,
                   rec=rec,
                   pocket_id=poc_id,
-                  refined=refined,
+                  # refined=refined,
                   rec_file=rec_file,
                   lig_crystal_file=lig_crystal_file)
         

@@ -21,9 +21,12 @@ from tqdm import tqdm
 from common.cfg_utils import get_config
 from common.utils import get_mol_from_file, get_prot_from_file
 
+def get_bigbind_dir(cfg):
+    return cfg.platform.bigbind_struct_v2_dir 
+
 def prepare_rec(cfg, rec_file):
     """ Use ADFR to produce a pdbqt file from the receptor pdb file """
-    rec = cfg.platform.bigbind_dir + "/" + rec_file
+    rec = get_bigbind_dir(cfg) + "/" + rec_file
     rec_folder, imm_rec_file = rec.split("/")[-2:]
     out_folder = cfg.platform.bigbind_vina_dir + "/" + rec_folder
     out_file = out_folder + "/" + imm_rec_file + "qt"
@@ -92,7 +95,7 @@ def run_vina(cfg, program, out_folder, i, row, lig_file, rec_file, exhaust=16):
         return out_file
 
     if program == "gnina":
-        cmd = [ "apptainer", "run", "--bind", cfg.platform.bigbind_dir+","+cfg.platform.bigbind_vina_dir+","+cfg.platform.bigbind_gnina_dir+","+cfg.platform.cache_dir, cfg.platform.gnina_sif, "gnina", "--cnn", "crossdock_default2018" ]
+        cmd = [ "apptainer", "run", "--bind", get_bigbind_dir(cfg)+","+cfg.platform.bigbind_vina_dir+","+cfg.platform.bigbind_gnina_dir+","+cfg.platform.cache_dir, cfg.platform.gnina_sif, "gnina", "--cnn", "crossdock_default2018" ]
     elif program == "vina":
         cmd = [ cfg.platform.vina_exec ]
     else:
@@ -111,12 +114,19 @@ def run_vina(cfg, program, out_folder, i, row, lig_file, rec_file, exhaust=16):
     out, err = proc.communicate()
     return out_file
 
+def get_lig_file(row):
+    # return row.lig_file
+    return row.lig_uff_file
+
+def get_rec_file(row):
+    # return row.ex_rec_file
+    return row.crossdock_rec_file
 
 def get_vina_score(cfg, program, out_folder, tup):
     i, row = tup
 
-    lig_file = cfg.platform.bigbind_dir + "/" + row.lig_file
-    rec_file = prepare_rec(cfg, row.ex_rec_file)
+    lig_file = get_bigbind_dir(cfg) + "/" + get_lig_file(row)
+    rec_file = prepare_rec(cfg, get_rec_file(row))
     if rec_file is None: return None
 
     # if not os.path.exists(lig_file) or not os.path.exists(rec_file):
@@ -139,7 +149,7 @@ def dock_all(cfg, program, file_prefix):
         out_folder = cfg.platform[f"bigbind_{program}_dir"]+ "/" + file_prefix + "_" + split
         os.makedirs(out_folder, exist_ok=True)
 
-        screen_csv = cfg.platform.bigbind_dir + f"/{file_prefix}_{split}.csv"
+        screen_csv = get_bigbind_dir(cfg) + f"/{file_prefix}_{split}.csv"
         screen_df = pd.read_csv(screen_csv)
         seed = int(os.environ["SLURM_JOB_ID"])  if "SLURM_JOB_ID" in os.environ else 42
         screen_df = screen_df.sample(frac=1, random_state=seed)
@@ -168,7 +178,7 @@ def can_load_docked_file(cfg, program, file_prefix, split, item):
 
 def finalize_bigbind_vina(cfg, program, file_prefix):
     for split in [ "val", "test", "train" ]:
-        screen_csv = cfg.platform.bigbind_dir + f"/{file_prefix}_{split}.csv"
+        screen_csv = get_bigbind_dir(cfg) + f"/{file_prefix}_{split}.csv"
         screen_df = pd.read_csv(screen_csv)
 
         docked_lig_files = []
@@ -189,14 +199,14 @@ def make_activity_csvs(cfg, program):
         sna_csv = cfg.platform[f"bigbind_{program}_dir"] + f"/activities_sna_1_{split}.csv"
         sna_df = pd.read_csv(sna_csv)
 
-        act_csv = cfg.platform.bigbind_dir + f"/activities_{split}.csv"
+        act_csv = get_bigbind_dir(cfg) + f"/activities_{split}.csv"
         act_df = pd.read_csv(act_csv)
         sna_rows = {}
         for i, row in tqdm(sna_df.iterrows(), total=len(sna_df)):
-            sna_rows[(row.lig_file, row.pocket)] = row
+            sna_rows[(get_lig_file(row), row.pocket)] = row
         docked_lig_files = []
         for i, act_row in tqdm(act_df.iterrows(), total=len(act_df)):
-            key = (act_row.lig_file, act_row.pocket)
+            key = (get_lig_file(act_row), act_row.pocket)
             if key in sna_rows:
                 docked_lig_files.append(sna_rows[key].docked_lig_file)
             else:
@@ -212,7 +222,7 @@ if __name__ == "__main__":
 
     cfg = get_config("vina_ff")
     # dock_all(cfg, "gnina", "activities_sna_1")
-    # dock_all(cfg, "gnina", "structures")
+    dock_all(cfg, "gnina", "structures")
     finalize_bigbind_vina(cfg, "gnina", "structures")
-    finalize_bigbind_vina(cfg, "gnina", "activities_sna_1")
-    make_activity_csvs(cfg, "gnina")
+    # finalize_bigbind_vina(cfg, "gnina", "activities_sna_1")
+    # make_activity_csvs(cfg, "gnina")

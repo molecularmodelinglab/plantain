@@ -23,7 +23,7 @@ import multiprocessing as mp
 # translations, rotations, and torsional updates)to the ligand structure
 # we need dynamic=True when compiling everything because coordinates
 # and angles all have different shapes
-@torch.compile(dynamic=True)
+# @torch.compile(dynamic=True)
 def apply_transform(transforms, init_pose, lig_torsion_data):
     return transforms.apply(init_pose, lig_torsion_data)
 
