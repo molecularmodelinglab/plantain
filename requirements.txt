@@ -21,5 +21,4 @@ py3Dmol
 jax
 jaxlib
 terrace
-vina
 # torch_scatter

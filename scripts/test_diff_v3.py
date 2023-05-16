@@ -35,8 +35,13 @@ def main(cfg):
     os.makedirs(out_dir, exist_ok=True)
     idx = 150
 
-    x, y = collate([dataset[idx]])
-    pred_poses = m3.infer_bfgs(x, pose_callback=callback)
+    # x, y = collate([dataset[idx]])
+    # pred_poses = m3.infer_bfgs(x, pose_callback=callback)
+
+    for item in tqdm(dataset):
+        x, y = collate([item])
+        m3.infer_bfgs(x)
+
 
     for i, cur_ligs in enumerate(ligs):
         for j, lig in enumerate(cur_ligs):

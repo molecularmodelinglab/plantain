@@ -19,10 +19,19 @@ from validation.metrics import get_rmsds
 from multiprocessing import Pool
 import multiprocessing as mp
 
-# @torch.compile(dynamic=False)
+# e_func = torch.compile(lambda m, *args: m.get_energy(*args), dynamic=True, backend="eager")
+
+
+@torch.compile(dynamic=True)
+def apply_comp(transforms, init_pose, x):
+    return transforms.apply(init_pose, x.lig_torsion_data)
+
+# @torch.compile(dynamic=True)
 def comp_f(model, x, hid_feat, init_pose, transforms):
-    poses = transforms.apply(init_pose, x.lig_torsion_data)
+    # poses = transforms.apply(init_pose, x.lig_torsion_data)
+    poses = apply_comp(transforms, init_pose, x)
     Us = model.get_energy(x, hid_feat, poses, True)
+    # Us = e_func(model, x, hid_feat, poses, True)
     U = Us.sum() # torch.sqrt((Us**2).mean())
     return U
 
