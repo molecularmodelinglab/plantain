@@ -21,15 +21,15 @@ from validation.metrics import get_metrics
 from validation.validate import get_preds, validate
 from common.utils import flatten_dict, get_mol_from_file
 
-def eval_combo(cfg, num_preds, shuffle_val):
+def eval_combo(cfg, num_preds, split, shuffle_val):
 
     device = "cpu"
     cfg.data.num_poses = 9
     gnina = GninaPose(cfg)
     twist = get_old_model(cfg, "even_more_tor", "best_k")
 
-    x, y, gnina_pred = get_preds(cfg, gnina, "bigbind_struct", "val", num_preds, shuffle_val)
-    *_, twist_pred = get_preds(cfg, twist, "bigbind_struct", "val", num_preds, shuffle_val)
+    x, y, gnina_pred = get_preds(cfg, gnina, "bigbind_struct", split, num_preds, shuffle_val)
+    *_, twist_pred = get_preds(cfg, twist, "bigbind_struct", split, num_preds, shuffle_val)
 
     x = x.to(device)
     y = y.to(device)
@@ -52,8 +52,8 @@ def eval_combo(cfg, num_preds, shuffle_val):
         print(f"{key}: {val:.3f}")
 
 
-def main(name, tag):
-    print(f"Evaluating {name}:{tag}")
+def main(name, split, tag):
+    print(f"Evaluating {name}:{tag} on {split}")
     num_preds = None
     shuffle_val = False
     dataset_name = "bigbind_struct"
@@ -77,25 +77,25 @@ def main(name, tag):
         cfg.data.num_poses = 40
         model = DiffDock(cfg)
     elif name == "combo":
-        return eval_combo(cfg, num_preds, shuffle_val)
+        return eval_combo(cfg, num_preds, split, shuffle_val)
     else:
         model = get_old_model(cfg, name, tag)
         cfg = model.cfg
 
     prefix = "" if subset is None else subset
-    metrics, plots = validate(cfg, model, dataset_name, "val", num_preds, shuffle_val, subset_indexes)
+    metrics, plots = validate(cfg, model, dataset_name, split, num_preds, shuffle_val, subset_indexes)
     for key, val in flatten_dict(metrics).items():
         print(f"{prefix}_{key}: {val:.3f}")
 
     if subset is not None: return
 
-    dataset = make_dataset(cfg, dataset_name, "val", [])
+    dataset = make_dataset(cfg, dataset_name, split, [])
     out_folder = f"outputs/pose_preds/{model.cache_key}/"
 
     shutil.rmtree(out_folder, ignore_errors=True)
     os.makedirs(out_folder, exist_ok=True)
 
-    x, y, p = get_preds(cfg, model, dataset_name, "val", num_preds, shuffle_val, subset_indexes)
+    x, y, p = get_preds(cfg, model, dataset_name, split, num_preds, shuffle_val, subset_indexes)
 
     lig_files = []
     rec_files = []
@@ -122,4 +122,4 @@ if __name__ == "__main__":
         tag = sys.argv[2]
     except IndexError:
         tag = "best_k"
-    main(sys.argv[1], tag)
+    main(sys.argv[1], "test", tag)

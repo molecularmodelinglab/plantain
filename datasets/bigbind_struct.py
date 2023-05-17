@@ -1,5 +1,6 @@
 import os
 import torch
+from tqdm import trange
 from typing import Set, Type
 import pandas as pd
 from rdkit import Chem
@@ -26,6 +27,29 @@ def get_refined_mask(cfg, csv):
 
 class BigBindStructDataset(Dataset):
 
+    def get_bad_indexes(self):
+        # some jank to use the UFF files from the V2 dataset with the V1
+        bad_indexes = []
+        for index in trange(len(self.structures)):
+            uff_file = self.get_lig_uff_file(index)
+            if not os.path.exists(uff_file):
+                bad_indexes.append(index)
+                continue
+
+            # there's some weird stuff going on here...
+            # todo: figure out why there's all these charge issues
+            # and only on the test set! 
+            lig = get_mol_from_file(uff_file)
+            lig = Chem.RemoveHs(lig)
+
+            uff_smiles = Chem.MolToSmiles(lig, False)
+            reg_smiles = Chem.MolToSmiles(Chem.MolFromSmiles(self.structures.lig_smiles[index]), False)
+
+            if uff_smiles != reg_smiles:
+                bad_indexes.append(index)
+
+        return bad_indexes
+
     def __init__(self, cfg, split, transform):
         super().__init__(cfg, transform)
         csv = cfg.platform.bigbind_dir + f"/structures_{split}.csv"
@@ -46,12 +70,7 @@ class BigBindStructDataset(Dataset):
         self.v2_dir = cfg.platform.bigbind_struct_v2_dir
         self.split = split
 
-        # dome jank to use the UFF files from the V2 dataset with the V1
-        bad_indexes = []
-        for index in range(len(self.structures)):
-            uff_file = self.get_lig_uff_file(index)
-            if not os.path.exists(uff_file):
-                bad_indexes.append(index)
+        bad_indexes = self.get_bad_indexes()
 
         self.structures = self.structures.drop(bad_indexes).reset_index(drop=True)
 
@@ -105,9 +124,9 @@ class BigBindStructDataset(Dataset):
         lig_crystal = Chem.RemoveHs(lig_crystal)
         lig_crystal_pose = Pose(get_mol_coords(lig_crystal, 0))
 
-
         lig = get_mol_from_file(self.get_lig_uff_file(index))
         lig = Chem.RemoveHs(lig)
+
         order = lig.GetSubstructMatch(lig_crystal)
         lig = Chem.RenumberAtoms(lig, list(order))
         lig_embed_crystal_pose = lig_crystal_pose

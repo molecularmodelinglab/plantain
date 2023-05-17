@@ -71,9 +71,17 @@ class GninaPose(Model):
 
         lig = get_mol_from_file(docked_file)
         lig = Chem.RemoveHs(lig)
-        order = lig.GetSubstructMatch(x.lig)
-        lig = Chem.RenumberAtoms(lig, list(order))
         assert lig.GetNumAtoms() == x.lig.GetNumAtoms()
+
+        order = lig.GetSubstructMatch(x.lig)
+
+        try:
+            lig = Chem.RenumberAtoms(lig, list(order))
+        except ValueError:
+            print("Getting the charge issue again")
+            return DFRow(lig_pose=x.lig_docked_poses,
+                         pose_scores=all_pose_scores)
+
         
         pose = lig_docked_poses(self.cfg, DFRow(lig=lig))
         pose = MultiPose(coord=pose.coord.to(self.device))
