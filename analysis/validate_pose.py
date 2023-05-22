@@ -11,7 +11,7 @@ from common.pose_transform import MultiPose, add_pose_to_mol
 from common.wandb_utils import get_old_model
 from datasets.bigbind_struct import BigBindStructDataset
 from datasets.make_dataset import make_dataset
-from models.diffdock import DiffDock
+from models.diffdock import DiffDock, get_diffdock_indexes
 from models.gnina import GninaPose
 from models.sym_diffusion import SymDiffusion
 from models.vina import VinaPose
@@ -57,15 +57,17 @@ def main(name, split, tag):
     num_preds = None
     shuffle_val = False
     dataset_name = "bigbind_struct"
-    subset = None # "diffdock"
+    subset = "diffdock"
 
     cfg = get_config("diffusion_v2")
 
     if subset is None:
         subset_indexes = None
     elif subset == "diffdock":
-        bb_diffdock_csv = cfg.platform.diffdock_dir + "/data/bb_struct_val.csv"
-        subset_indexes = set(pd.read_csv(bb_diffdock_csv)["Unnamed: 0"])
+        # bb_diffdock_csv = cfg.platform.diffdock_dir + "/data/bb_struct_val.csv"
+        # subset_indexes = set(pd.read_csv(bb_diffdock_csv)["Unnamed: 0"])
+        dataset = make_dataset(cfg, dataset_name, split, [])
+        subset_indexes = get_diffdock_indexes(cfg, dataset)
 
     if name == "gnina":
         cfg.data.num_poses = 9
@@ -75,12 +77,14 @@ def main(name, split, tag):
         model = VinaPose(cfg)
     elif name == "diffdock":
         cfg.data.num_poses = 40
-        model = DiffDock(cfg)
+        model = DiffDock(cfg, split)
     elif name == "combo":
         return eval_combo(cfg, num_preds, split, shuffle_val)
     else:
         model = get_old_model(cfg, name, tag)
         cfg = model.cfg
+
+    cfg.batch_size = 1
 
     prefix = "" if subset is None else subset
     metrics, plots = validate(cfg, model, dataset_name, split, num_preds, shuffle_val, subset_indexes)
@@ -88,6 +92,7 @@ def main(name, split, tag):
         print(f"{prefix}_{key}: {val:.3f}")
 
     if subset is not None: return
+    return
 
     dataset = make_dataset(cfg, dataset_name, split, [])
     out_folder = f"outputs/pose_preds/{model.cache_key}/"

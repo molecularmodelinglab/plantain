@@ -36,6 +36,8 @@ class BigBindStructDataset(Dataset):
                 bad_indexes.append(index)
                 continue
 
+            if self.split != "test": continue
+
             # there's some weird stuff going on here...
             # todo: figure out why there's all these charge issues
             # and only on the test set! 

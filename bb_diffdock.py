@@ -56,9 +56,15 @@ def main(cfg, split, version):
     smiles = valid_df.lig_smiles
     complex_names = [ f"complex_{i}" for i in range(len(smiles))]
 
+    if version == 2:
+        lig_file =  valid_df.lig_crystal_file
+    else:
+        lig_file =  valid_df.lig_file
+
     out_df = pd.DataFrame({ "complex_name": complex_names,
                         "protein_path": rec_file, 
                         "ligand_description": smiles,
+                        "lig_file": lig_file,
                         "protein_sequence": ["" for i in range(len(smiles))] })
     
     out_file = cfg.platform.diffdock_dir + f"/data/bb_struct_{split}.csv"

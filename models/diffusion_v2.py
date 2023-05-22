@@ -1,5 +1,6 @@
 from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
+import time
 import torch
 import numpy as np
 import torch.nn as nn
@@ -177,10 +178,16 @@ class DiffusionV2(nn.Module, Model):
         return energy, rmsds, hid_feat.inv_dist_mat
 
     def forward(self, batch, hid_feat=None, init_pose_override=None):
+        # todo: remove timer here. This is not a place of benchmarking
+        start = time.time()
         optim = "bfgs"
         if optim == "bfgs":
             lig_pose, energy = self.infer_bfgs(batch, hid_feat, init_pose_override)
             # return Batch(DFRow, lig_pose=lig_pose, energy=energy)
+        end = time.time()
+        if hasattr(batch, "index"):
+            with open("outputs/plantain_timer.txt", "a") as f:
+                f.write(f"{int(batch.index)},{end-start}\n")
         return Batch(DFRow, lig_pose=lig_pose, energy=energy)
 
     def predict_train(self, x, y, task_names, split, batch_idx):
@@ -299,7 +306,7 @@ class DiffusionV2(nn.Module, Model):
         }
 
         pose_and_energies = []
-        n_tries = cfg.model.diffusion.get("optim_tries", 32) # 16)
+        n_tries = cfg.model.diffusion.get("optim_tries", 16)
         if init_pose_override is not None:
             n_tries = 1
         if cfg.model.get("fix_infer_torsion", False):
