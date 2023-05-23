@@ -140,7 +140,6 @@ model:
   l_rf_expand_feat: 8
 
   updates_per_block: 2
-
   num_blocks: 16
 
   norm_after_add: false
@@ -153,7 +152,7 @@ model:
     infer_trans_sigma: 4.0
     use_rot: true
     use_trans: true
-    exponent: 1.5
+    exponent: 2.0
     pred: atom_dist
 
   inference:

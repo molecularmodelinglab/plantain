@@ -142,7 +142,7 @@ model:
   updates_per_block: 2
   num_blocks: 16
 
-  norm_after_add: true
+  norm_after_add: false
 
   diffusion:
     timesteps: 16
