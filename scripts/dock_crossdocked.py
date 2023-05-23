@@ -76,13 +76,13 @@ def run_vina(cfg, program, out_folder, i, row, lig_file, rec_file):
 
     cache_folder = cfg.platform.cache_dir + "/run_vina/"
     lig_pdbqt = cache_folder + name + "_lig.pdbqt"
-    if not os.path.exists(lig_pdbqt) or True:
+    if not os.path.exists(lig_pdbqt):
         lig = next(Chem.SDMolSupplier(lig_file, sanitize=True))
 
-        # this is needed to dock stuff from structures_*.csv
-        lig = Chem.AddHs(lig)
-        AllChem.EmbedMolecule(lig)
-        AllChem.UFFOptimizeMolecule(lig, 500)
+        # # this is needed to dock stuff from structures_*.csv
+        lig = Chem.AddHs(lig, addCoords=True)
+        # AllChem.EmbedMolecule(lig)
+        # AllChem.UFFOptimizeMolecule(lig, 500)
 
         move_lig_to_center(lig, center)
         _, lig_size = get_lig_size(lig)
@@ -94,8 +94,8 @@ def run_vina(cfg, program, out_folder, i, row, lig_file, rec_file):
         preparator.write_pdbqt_file(lig_pdbqt)
 
     out_file = out_folder + f"/{i}.pdbqt"
-    # if os.path.exists(out_file):
-    #     return out_file
+    if os.path.exists(out_file):
+        return out_file
 
     if program == "gnina":
         # todo: remove --nv option when running without gpu
@@ -149,7 +149,7 @@ def get_vina_score(cfg, program, out_folder, tup):
 
 def dock_all(cfg, program, file_prefix):
     """ to be run in parallel on slurm """
-    for split in [ "val", "test" ]:
+    for split in [ "val" ]:#, "test" ]:
         out_folder = cfg.platform[f"crossdocked_{program}_dir"]+ "/" + file_prefix + "_" + split
         os.makedirs(out_folder, exist_ok=True)
 
