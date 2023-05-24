@@ -69,8 +69,6 @@ def make_dataloader(cfg, name, split, transform, force_no_shuffle=False):
         batch_size = cfg.batch_size
         sampler = None
 
-    print(sampler, "!")
-
     return DataLoader(dataset,
                       batch_size=batch_size,
                       batch_sampler=sampler,

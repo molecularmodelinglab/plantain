@@ -73,10 +73,15 @@ optimizer: adamw
 learn_rate: 1e-4
 max_epochs: 5000
 
-batch_size: 1
+# batch_size: 1
 # batch_sampler:
 #   type: lig_times_rec
-#   max_size: 8000
+#   max_size: 6000
+
+batch_sampler:
+  type: rec
+  max_size: 80
+  debug: false
 
 test_inference: true
 
