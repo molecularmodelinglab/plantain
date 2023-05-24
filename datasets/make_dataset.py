@@ -4,6 +4,7 @@ import torch
 import random
 from datasets.base_datasets import Dataset
 from datasets.combo_dataloader import ComboDataloader
+from datasets.samplers import SAMPLERS
 from terrace import DataLoader
 
 # import all the files in the directory so we can create
@@ -51,7 +52,6 @@ def make_dataset(cfg, name, split, transform):
 
     return ret
 
-
 def make_dataloader(cfg, name, split, transform, force_no_shuffle=False):
     dataset = make_dataset(cfg, name, split, transform)
     n_workers = cfg.platform.num_workers
@@ -59,8 +59,21 @@ def make_dataloader(cfg, name, split, transform, force_no_shuffle=False):
         shuffle = False
     else:
         shuffle = (split == "train")
+
+    if "batch_sampler" in cfg:
+        batch_size = 1
+        # the sampler needs to handle shuffling
+        sampler = SAMPLERS[cfg.batch_sampler.type](cfg, dataset, shuffle)
+        shuffle = False
+    else:
+        batch_size = cfg.batch_size
+        sampler = None
+
+    print(sampler, "!")
+
     return DataLoader(dataset,
-                      batch_size=cfg.batch_size,
+                      batch_size=batch_size,
+                      batch_sampler=sampler,
                       num_workers=n_workers,
                       pin_memory=True,
                       shuffle=shuffle,

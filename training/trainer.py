@@ -26,7 +26,7 @@ class Trainer(pl.LightningModule):
         from models.make_model import make_model
         self.model = make_model(cfg)
 
-        self.metrics = nn.ModuleDict()
+        self.metrics = {} # nn.ModuleDict()
 
         for name in self.cfg.val_datasets:
             val_loader = make_dataloader(self.cfg, name, "val", self.model.get_input_feats())
@@ -84,6 +84,9 @@ class Trainer(pl.LightningModule):
         return dataset
 
     def shared_eval(self, prefix, batch, batch_idx, dataset_idx=None):
+        print("")
+        print("Evalling", prefix)
+        print("")
 
         x, y = batch
         tasks = self.get_tasks(prefix, dataset_idx)
@@ -101,21 +104,35 @@ class Trainer(pl.LightningModule):
         on_epoch = not on_step
         computed_metrics = {}
         for key, val in metrics.items():
+            print(key)
             val.update(x, pred, y)
             if prefix == 'train' and batch_idx % self.cfg.metric_reset_interval == 0:
                 computed_metrics[key] = val.compute()
-                val.apply(reset_metrics)
+                # val.apply(reset_metrics)
 
         dataset = self.get_dataset(prefix, dataset_idx)
-        tot_batches = len(dataset)//self.cfg.batch_size
-        is_last_batch = (tot_batches == batch_idx + 1)
+
+        # if "batch_size" in self.cfg:
+        #     tot_batches = len(dataset)//self.cfg.batch_size
+        #     is_last_batch = (tot_batches == batch_idx + 1)
+        # else:
+        #     loader = self.get_dataloader(prefix)
+        #     if isinstance(loader, list):
+        #         if dataset_idx is None:
+        #             dataset_idx = 0
+        #         loader = loader[dataset_idx]
+        #     is_last_batch = loader.batch_sampler.is_last_batch
+        #     if is_last_batch:
+        #         print("!!!!!!!!")
+        #         print("LASSSSSS")
+        #         print("!!!!!!!")
 
         dataset_name = dataset.get_name()
         for key, val in flatten_dict(computed_metrics).items():
             self.log(f"{prefix}/{dataset_name}/{key}", val, prog_bar=False, on_step=on_step, on_epoch=on_epoch, batch_size=len(x), add_dataloader_idx=False)
         
-        if is_last_batch and prefix != "train":
-            self.log_all_metrics(prefix, dataset_idx)
+        # if is_last_batch and prefix != "train":
+        #     self.log_all_metrics(prefix, dataset_idx)
 
         if "profile_max_batches" in self.cfg and batch_idx >= self.cfg.profile_max_batches:
             raise RuntimeError("Stop the process!")
@@ -130,10 +147,19 @@ class Trainer(pl.LightningModule):
         return self.shared_eval('train', batch, batch_idx)
     
     def validation_step(self, batch, batch_idx, dataset_idx=None):
+        print("!!!!")
+        print("!!!!")
         return self.shared_eval('val', batch, batch_idx, dataset_idx)
 
     def test_step(self, batch, batch_idx, dataset_idx=None):
         return self.shared_eval('test', batch, batch_idx, dataset_idx)
+    
+    def on_validation_epoch_end(self):
+        print("")
+        print("Val end")
+        # todo cant handle multiple dataloaders
+        self.log_all_metrics("val", None)
+        self.get_metrics("val").apply(reset_metrics)
 
     def log_all_metrics(self, prefix, dataset_idx):
         dataset_name = self.get_dataset(prefix, dataset_idx).get_name()
@@ -146,13 +172,15 @@ class Trainer(pl.LightningModule):
             self.log(f"{prefix}/{dataset_name}/{key}", val, prog_bar=False, on_epoch=True, batch_size=1, add_dataloader_idx=False)
 
     def on_train_end(self):
-        self.get_metrics("train").apply(reset_metrics)
+        pass
+        # self.get_metrics("train").apply(reset_metrics)
 
-    def on_validation_end(self):
-        self.get_metrics("val").apply(reset_metrics)
+    # def on_validation_end(self):
+    #     self.get_metrics("val").apply(reset_metrics)
 
     def on_test_end(self):
-        self.get_metrics("test").apply(reset_metrics)
+        pass
+        # self.get_metrics("test").apply(reset_metrics)
 
     def configure_optimizers(self):
         return torch.optim.AdamW(self.parameters(), lr=self.cfg.learn_rate)
@@ -172,6 +200,7 @@ class Trainer(pl.LightningModule):
         # profiler = PyTorchProfiler()
 
         self.trainer = pl.Trainer(gpus=gpus,
+                             num_sanity_val_steps=0,
                              max_epochs=self.cfg.max_epochs,
                              val_check_interval=self.cfg.val_check_interval,
                              check_val_every_n_epoch=self.cfg.get("check_val_every_n_epoch", 1),
