@@ -5,14 +5,14 @@ name: test_run
 
 val_check_interval: null
 metric_reset_interval: 200
-check_val_every_n_epoch: 5
+check_val_every_n_epoch: 3
 debug_dataset_len: null
 
 train_dataset: crossdocked
 val_datasets: [ crossdocked ]
 
 monitor_metric:
-  name: val/crossdocked/acc_2_16
+  name: val/crossdocked/acc_2_mean_1
   mode: max
 
 data:
