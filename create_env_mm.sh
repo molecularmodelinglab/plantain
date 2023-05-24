@@ -1,3 +1,5 @@
+# todo: super hacky. Fix!
+export REQUESTS_CA_BUNDLE=/work/users/m/i/mixarcid/miniconda3/ssl/cacert.pem
 mamba create -n mm python=3.7 -y
 conda activate mm
 mamba install pytorch==1.12.0 cudatoolkit=11.6 -c pytorch -c conda-forge -y

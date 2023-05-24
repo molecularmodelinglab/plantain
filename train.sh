@@ -2,8 +2,8 @@
 #SBATCH -J train
 #SBATCH -t 10-00:00:00
 #SBATCH --partition=gpu
-#SBATCH --cpus-per-task=16
-#SBATCH --mem=32G
+#SBATCH --cpus-per-task=8
+#SBATCH --mem=16G
 #SBATCH --gres=gpu:1
 #SBATCH --output=jobs/R-%x.%j.out
 #SBATCH --error=jobs/R-%x.%j.err
