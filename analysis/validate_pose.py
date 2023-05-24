@@ -21,15 +21,15 @@ from validation.metrics import get_metrics
 from validation.validate import get_preds, validate
 from common.utils import flatten_dict, get_mol_from_file
 
-def eval_combo(cfg, num_preds, split, shuffle_val):
+def eval_combo(cfg, dataset_name, num_preds, split, shuffle_val):
 
     device = "cpu"
     cfg.data.num_poses = 9
     gnina = GninaPose(cfg)
     twist = get_old_model(cfg, "even_more_tor", "best_k")
 
-    x, y, gnina_pred = get_preds(cfg, gnina, "bigbind_struct", split, num_preds, shuffle_val)
-    *_, twist_pred = get_preds(cfg, twist, "bigbind_struct", split, num_preds, shuffle_val)
+    x, y, gnina_pred = get_preds(cfg, gnina, dataset_name, split, num_preds, shuffle_val)
+    *_, twist_pred = get_preds(cfg, twist, dataset_name, split, num_preds, shuffle_val)
 
     x = x.to(device)
     y = y.to(device)
@@ -56,8 +56,8 @@ def main(name, split, tag):
     print(f"Evaluating {name}:{tag} on {split}")
     num_preds = None
     shuffle_val = False
-    dataset_name = "bigbind_struct"
-    subset = "diffdock"
+    dataset_name = "crossdocked"
+    subset = None
 
     cfg = get_config("diffusion_v2")
 
@@ -79,7 +79,7 @@ def main(name, split, tag):
         cfg.data.num_poses = 40
         model = DiffDock(cfg, split)
     elif name == "combo":
-        return eval_combo(cfg, num_preds, split, shuffle_val)
+        return eval_combo(cfg, dataset_name, num_preds, split, shuffle_val)
     else:
         model = get_old_model(cfg, name, tag)
         cfg = model.cfg
@@ -127,4 +127,4 @@ if __name__ == "__main__":
         tag = sys.argv[2]
     except IndexError:
         tag = "best_k"
-    main(sys.argv[1], "test", tag)
+    main(sys.argv[1], "val", tag)

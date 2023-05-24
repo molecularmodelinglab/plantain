@@ -31,8 +31,10 @@ class GninaPose(Model):
     def __init__(self, cfg):
         self.cfg = cfg
         dfs = []
-        for split in ["train", "val", "test"]:
-            dfs.append(pd.read_csv(cfg.platform.bigbind_gnina_dir + f"/structures_{split}.csv"))
+        # for split in ["train", "val", "test"]:
+        #     dfs.append(pd.read_csv(cfg.platform.bigbind_gnina_dir + f"/structures_{split}.csv"))
+        for split in ["val"]:
+            dfs.append(pd.read_csv(cfg.platform.crossdocked_gnina_dir + f"/structures_{split}.csv"))
         self.df = pd.concat(dfs)
         self.cache_key = "gnina"
         self.device = "cpu"
@@ -53,8 +55,9 @@ class GninaPose(Model):
     def call_single(self, x):
         lig_file = "/".join(x.lig_crystal_file.split("/")[-2:])
         rec_file = "/".join(x.rec_file.split("/")[-2:])
-        results = self.df.query("ex_rec_pocket_file == @rec_file and lig_file == @lig_file")
-        
+        # results = self.df.query("ex_rec_pocket_file == @rec_file and lig_file == @lig_file")
+        results = self.df.query("crossdock_rec_pocket_file == @rec_file and lig_crystal_file == @lig_file")
+
         all_pose_scores = torch.zeros((self.cfg.data.num_poses,), device=self.device)
         
         if len(results) == 0:
@@ -62,7 +65,7 @@ class GninaPose(Model):
                          pose_scores=all_pose_scores)
         assert len(results) == 1
         
-        docked_file = self.cfg.platform.bigbind_gnina_dir + "/" + next(iter(results.docked_lig_file))
+        docked_file = self.cfg.platform.crossdocked_gnina_dir + "/" + next(iter(results.docked_lig_file))
         pose_scores, affinities = get_gnina_scores_from_pdbqt(docked_file)
 
         for i, score in enumerate(pose_scores):
@@ -82,7 +85,6 @@ class GninaPose(Model):
             return DFRow(lig_pose=x.lig_docked_poses,
                          pose_scores=all_pose_scores)
 
-        
         pose = lig_docked_poses(self.cfg, DFRow(lig=lig))
         pose = MultiPose(coord=pose.coord.to(self.device))
         return DFRow(lig_pose=pose,

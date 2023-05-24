@@ -141,7 +141,6 @@ model:
   l_rf_expand_feat: 32
 
   updates_per_block: 2
-
   num_blocks: 16
 
   diffusion:

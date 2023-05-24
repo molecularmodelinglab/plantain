@@ -149,7 +149,7 @@ def get_vina_score(cfg, program, out_folder, tup):
 
 def dock_all(cfg, program, file_prefix):
     """ to be run in parallel on slurm """
-    for split in [ "val" ]:#, "test" ]:
+    for split in [ "train" ]:#, "test" ]:
         out_folder = cfg.platform[f"crossdocked_{program}_dir"]+ "/" + file_prefix + "_" + split
         os.makedirs(out_folder, exist_ok=True)
 
@@ -183,7 +183,7 @@ def can_load_docked_file(cfg, program, file_prefix, split, item):
 
 
 def finalize_crossdocked_vina(cfg, program, file_prefix):
-    for split in [ "val", "test"]:
+    for split in [ "val" ]: #, "test"]:
         screen_csv = get_crossdocked_dir(cfg) + f"/{file_prefix}_{split}.csv"
         screen_df = pd.read_csv(screen_csv)
 
@@ -204,4 +204,5 @@ if __name__ == "__main__":
 
     cfg = get_config("vina_ff")
     dock_all(cfg, "gnina", "structures")
-    dock_all(cfg, "vina", "structures")
+    # dock_all(cfg, "vina", "structures")
+    # finalize_crossdocked_vina(cfg, "gnina", "structures")
