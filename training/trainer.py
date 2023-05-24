@@ -132,7 +132,8 @@ class Trainer(pl.LightningModule):
     
     def shared_epoch_end(self, prefix):
         # todo cant handle multiple dataloaders
-        self.log_all_metrics(prefix, None)
+        if prefix != "train": # smh train epoch end sometimes logs before computing metrics
+            self.log_all_metrics(prefix, None)
         self.get_metrics(prefix).apply(reset_metrics)
 
     def on_validation_epoch_end(self):

@@ -68,6 +68,8 @@ def get_lig_size(lig, padding=3):
     size = (bounds_max - center + padding)*2
     return tuple(center), tuple(size)
 
+# Should be zero. Make 1 to test gnina on its training set
+GNINA_ITER = 1
 def run_vina(cfg, program, out_folder, i, row, lig_file, rec_file):
     
     name = rec_file.split("/")[-1] + "_" + lig_file.split("/")[-1]
@@ -100,7 +102,7 @@ def run_vina(cfg, program, out_folder, i, row, lig_file, rec_file):
     if program == "gnina":
         # todo: remove --nv option when running without gpu
         cmd = [ "apptainer", "run", "--nv", "--bind", get_crossdocked_dir(cfg)+","+cfg.platform.crossdocked_vina_dir+","+cfg.platform.crossdocked_gnina_dir+","+cfg.platform.cache_dir, cfg.platform.gnina_sif, "gnina" ]
-        cmd += [ "--cnn_weights" ] + glob("./prior_work/gnina/*.caffemodel")
+        cmd += [ "--cnn_weights" ] + glob(f"./prior_work/gnina/*{GNINA_ITER}_iter_*.caffemodel")
         cmd += [ "--cnn_model" ] + [ "./prior_work/gnina/default2018.model" ]*5
     elif program == "vina":
         cmd = [ cfg.platform.vina_exec ]
@@ -149,7 +151,7 @@ def get_vina_score(cfg, program, out_folder, tup):
 
 def dock_all(cfg, program, file_prefix):
     """ to be run in parallel on slurm """
-    for split in [ "train" ]:#, "test" ]:
+    for split in [ "val" ]:#, "test" ]:
         out_folder = cfg.platform[f"crossdocked_{program}_dir"]+ "/" + file_prefix + "_" + split
         os.makedirs(out_folder, exist_ok=True)
 
