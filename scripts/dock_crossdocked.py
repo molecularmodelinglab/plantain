@@ -19,7 +19,7 @@ import tarfile
 from tqdm import tqdm
 
 from common.cfg_utils import get_config
-from common.utils import get_mol_from_file, get_prot_from_file
+from common.utils import get_mol_from_file, get_mol_from_file_no_cache, get_prot_from_file
 
 def get_crossdocked_dir(cfg):
     return cfg.platform.crossdocked_dir
@@ -69,7 +69,8 @@ def get_lig_size(lig, padding=3):
     return tuple(center), tuple(size)
 
 # Should be zero. Make 1 to test gnina on its training set
-GNINA_ITER = 1
+GNINA_ITER = 0
+PREP_FOR_GNINA = False
 def run_vina(cfg, program, out_folder, i, row, lig_file, rec_file):
     
     name = rec_file.split("/")[-1] + "_" + lig_file.split("/")[-1]
@@ -96,14 +97,27 @@ def run_vina(cfg, program, out_folder, i, row, lig_file, rec_file):
         preparator.write_pdbqt_file(lig_pdbqt)
 
     out_file = out_folder + f"/{i}.pdbqt"
+    if program == "gnina":
+        out_file = out_folder + f"/{i}.sdf"
+
     if os.path.exists(out_file):
-        return out_file
+        try:
+            get_mol_from_file_no_cache(out_file)
+            return out_file
+        except:
+            print_exc()
 
     if program == "gnina":
         # todo: remove --nv option when running without gpu
         cmd = [ "apptainer", "run", "--nv", "--bind", get_crossdocked_dir(cfg)+","+cfg.platform.crossdocked_vina_dir+","+cfg.platform.crossdocked_gnina_dir+","+cfg.platform.cache_dir, cfg.platform.gnina_sif, "gnina" ]
-        cmd += [ "--cnn_weights" ] + glob(f"./prior_work/gnina/*{GNINA_ITER}_iter_*.caffemodel")
-        cmd += [ "--cnn_model" ] + [ "./prior_work/gnina/default2018.model" ]*5
+        if GNINA_ITER is not None:
+            cmd += [ "--cnn_weights" ] + glob(f"./prior_work/gnina/*{GNINA_ITER}_iter_*.caffemodel")
+            cmd += [ "--cnn_model" ] + [ "./prior_work/gnina/default2018.model" ]*5
+
+        if not PREP_FOR_GNINA:
+            rec_file = get_crossdocked_dir(cfg) + "/" + row.crossdock_rec_file
+            lig_pdbqt = lig_file
+
     elif program == "vina":
         cmd = [ cfg.platform.vina_exec ]
     else:
@@ -169,7 +183,10 @@ def dock_all(cfg, program, file_prefix):
 
 def can_load_docked_file(cfg, program, file_prefix, split, item):
     i, row = item
-    docked_file = f"{file_prefix}_{split}/{i}.pdbqt"
+    if program == "gnina" and not PREP_FOR_GNINA:
+            docked_file = f"{file_prefix}_{split}/{i}.sdf"
+    else:
+        docked_file = f"{file_prefix}_{split}/{i}.pdbqt"
     full_docked_file = cfg.platform[f"crossdocked_{program}_dir"]+ "/" + docked_file
     if os.path.exists(full_docked_file):
         try:
@@ -205,6 +222,6 @@ def finalize_crossdocked_vina(cfg, program, file_prefix):
 if __name__ == "__main__":
 
     cfg = get_config("vina_ff")
-    dock_all(cfg, "gnina", "structures")
+    # dock_all(cfg, "gnina", "structures")
     # dock_all(cfg, "vina", "structures")
-    # finalize_crossdocked_vina(cfg, "gnina", "structures")
+    finalize_crossdocked_vina(cfg, "gnina", "structures")

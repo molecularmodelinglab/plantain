@@ -52,6 +52,8 @@ data:
       stop: 10.0
       step: 10
     include_h: False
+    include_ions: True
+    include_extra_aas: True
 
   use_interaction_graph: false
   interaction_graph:

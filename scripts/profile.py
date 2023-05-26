@@ -80,7 +80,8 @@ def profile(task):
                     val.update(x, pred, y)
         fn = train
     elif task == "twist_train":
-        cfg = get_config("twist_regr")
+        # cfg = get_config("twist_regr")
+        cfg = get_config("icml")
         # cfg.platform.batch_size = 8
         # cfg.platform.num_workers = 0
         model = make_model(cfg)
@@ -99,7 +100,7 @@ def profile(task):
                 if i > 50:
                     break
                 optim.zero_grad()
-                pred = model.predict_train(x, y, tasks, "train", i)
+                pred = model.predict_train(x, y, tasks, "train", 1)
                 loss, loss_dict = get_losses(cfg, tasks, x, pred, y)
                 loss.backward()
                 for key, val in metrics.items():

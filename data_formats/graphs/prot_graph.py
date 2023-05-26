@@ -51,11 +51,21 @@ possible_atom_feats = {
                      'PTR', 'GLV', 'CYT', 'SEP', 'HIZ', 'CYM', 'GLM', 'ASQ', 'TYS', 'CYX', 'GLZ', 'misc'],
 }
 
-possible_residue_feats = {
-    "residue_type": [None, 'ALA', 'ARG', 'ASN', 'ASP', 'CYS', 'GLN', 'GLU', 'GLY', 'HIS', 'ILE', 'LEU', 'LYS', 'MET',
+def get_possible_residue_feats(prot_cfg):
+    """ config encodes wether on not we want ions """
+    res_types = [None, 'ALA', 'ARG', 'ASN', 'ASP', 'CYS', 'GLN', 'GLU', 'GLY', 'HIS', 'ILE', 'LEU', 'LYS', 'MET',
                      'PHE', 'PRO', 'SER', 'THR', 'TRP', 'TYR', 'VAL', 'HIP', 'HIE', 'TPO', 'HID', 'LEV', 'MEU',
-                     'PTR', 'GLV', 'CYT', 'SEP', 'HIZ', 'CYM', 'GLM', 'ASQ', 'TYS', 'CYX', 'GLZ', 'misc'],
-}
+                     'PTR', 'GLV', 'CYT', 'SEP', 'HIZ', 'CYM', 'GLM', 'ASQ', 'TYS', 'CYX', 'GLZ' ]
+
+    if prot_cfg.get("include_extra_aas", False):
+        res_types += [ 'MSE', 'CSO' ]
+
+    if prot_cfg.get("include_ions", False):
+        res_types += [ 'PT', 'CU', 'ZN', 'CA', 'CL', 'CO', 'MG', 'CD', 'NA', 'ZN', 'K', 'TL', 'RB', 'IOD', 'HG' ]
+
+    return {
+        "residue_type": res_types + ['misc'],
+    }
 
 def get_atom_type(atom, rec):
     return atom.name
@@ -79,7 +89,7 @@ class ProtAtomNode(Node3d):
             cat_feat.append(feat)
         cat_feat = torch.tensor(cat_feat, dtype=torch.long)
         scal_feat = torch.tensor(scal_feat, dtype=torch.float32)
-        super(ProtAtomNode, self).__init__(coord, cat_feat, scal_feat)
+        super().__init__(coord, cat_feat, scal_feat)
 
 class ProtResidueNode(Node3d):
 
@@ -94,28 +104,28 @@ class ProtResidueNode(Node3d):
         num_classes = []
         for feat_name in prot_cfg.residue_feats:
             get_feat = globals()["get_" + feat_name]
-            possible = possible_residue_feats[feat_name]
+            possible = get_possible_residue_feats(prot_cfg)[feat_name]
             num_classes.append(len(possible))
             feat = safe_index(possible, get_feat(residue, prot))
             cat_feat.append(feat)
         cat_feat = torch.tensor(cat_feat, dtype=torch.long)
         cat_feat = CategoricalTensor(cat_feat, num_classes=num_classes)
         scal_feat = torch.tensor(scal_feat, dtype=torch.float32)
-        super(ProtResidueNode, self).__init__(coord, cat_feat, scal_feat)
+        super().__init__(coord, cat_feat, scal_feat)
 
-    def get_color(self):
-        resname = possible_residue_feats["residue_type"][self.cat_feat[0]]
-        if resname in RESIDUE_COLORS:
-            return RESIDUE_COLORS[resname]
-        else:
-            return RESIDUE_COLORS["misc"]
+    # def get_color(self):
+    #     resname = get_possible_residue_feats(prot_cfg)["residue_type"][self.cat_feat[0]]
+    #     if resname in RESIDUE_COLORS:
+    #         return RESIDUE_COLORS[resname]
+    #     else:
+    #         return RESIDUE_COLORS["misc"]
 
 def get_nodes_and_edges_from_model(cfg: DictConfig, prot: Model):
     prot_cfg = cfg.data.rec_graph
     # nodes = []
     # for chain in prot:
     #     for residue in chain:
-    #         if residue.get_resname() not in possible_residue_feats["residue_type"]: continue
+    #         if residue.get_resname() not in get_possible_residue_feats(prot_cfg)["residue_type"]: continue
     #         if prot_cfg.node_type == "residue":
     #             nodes.append(ProtResidueNode(prot_cfg, residue, prot))
     #         elif prot_cfg.node_type == "atom":
@@ -126,23 +136,24 @@ def get_nodes_and_edges_from_model(cfg: DictConfig, prot: Model):
         residues = []
         for chain in prot:
             for residue in chain:
-                if residue.get_resname() not in possible_residue_feats["residue_type"]: continue
+                if residue.get_resname() not in get_possible_residue_feats(prot_cfg)["residue_type"]:
+                    continue
                 residues.append(residue)
 
         
         cat_feat = torch.zeros((len(residues), len(prot_cfg.residue_feats)), dtype=torch.long)
-        num_classes = [ len(possible_residue_feats[feat_name]) for feat_name in prot_cfg.residue_feats]
+        num_classes = [ len(get_possible_residue_feats(prot_cfg)[feat_name]) for feat_name in prot_cfg.residue_feats]
         coord = torch.zeros((len(residues), 3), dtype=torch.float32)
 
         for i, feat_name in enumerate(prot_cfg.residue_feats):
             get_feat = globals()["get_" + feat_name]
-            possible = possible_residue_feats[feat_name]
+            possible = get_possible_residue_feats(prot_cfg)[feat_name]
             for j, residue in enumerate(residues):
                 cat_feat[j, i] = safe_index(possible, get_feat(residue, prot))
 
         for j, residue in enumerate(residues):
             for atom in residue:
-                if atom.name == "CA":
+                if atom.name == "CA" or len(residue) == 1:
                     coord[j] = torch.tensor(list(atom.get_vector()), dtype=torch.float32)
                     break
             else:
@@ -159,7 +170,7 @@ def get_nodes_and_edges_from_model(cfg: DictConfig, prot: Model):
         res_indexes = []
         for chain in prot:
             for i, residue in enumerate(chain):
-                if residue.get_resname() not in possible_residue_feats["residue_type"]: continue
+                if residue.get_resname() not in get_possible_residue_feats(prot_cfg)["residue_type"]: continue
                 for atom in residue:
                     atoms.append(atom)
                     res_indexes.append(i)
@@ -216,7 +227,7 @@ class ProtGraph(Graph3d):
         #     node2 = nodes[j]
         #     edata.append(DistEdge(prot_cfg, node1, node2))
 
-        super(ProtGraph, self).__init__(nodes, edges, edata, directed=True)
+        super().__init__(nodes, edges, edata, directed=True)
 
 def prot_graph_from_pdb(cfg, pdb_file):
     parser = PDBParser()
@@ -282,7 +293,7 @@ def get_full_rec_data(cfg, rec):
     cur_res_index = 0
     for chain in rec:
         for i, residue in enumerate(chain):
-            if residue.get_resname() not in possible_residue_feats["residue_type"]: continue
+            if residue.get_resname() not in get_possible_residue_feats(prot_cfg)["residue_type"]: continue
             for atom in residue:
                 atoms.append(atom)
                 res_indexes.append(cur_res_index)
@@ -314,7 +325,7 @@ def get_full_rec_data(cfg, rec):
                       _res_index=res_indexes)
         return FullRecGraph(ndata, [])
     else:
-        return FullRecData(coord, 
+        return FullRecData(coord,
                         cat_feat,
                         scal_feat,
                         res_indexes)

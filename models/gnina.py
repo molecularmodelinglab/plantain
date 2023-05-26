@@ -2,7 +2,7 @@ import pandas as pd
 from rdkit import Chem
 import torch
 from common.pose_transform import MultiPose
-from common.utils import get_gnina_scores_from_pdbqt, get_mol_from_file
+from common.utils import get_gnina_scores_from_pdbqt, get_mol_from_file, get_mol_from_file_no_cache
 from data_formats.transforms import lig_docked_poses
 from models.model import Model, ScoreActivityModel
 from terrace.batch import Batch
@@ -72,7 +72,10 @@ class GninaPose(Model):
             if i >= len(all_pose_scores): break
             all_pose_scores[i] = score
 
-        lig = get_mol_from_file(docked_file)
+        # print(docked_file)
+        # lig = get_mol_from_file(docked_file)
+        lig = get_mol_from_file_no_cache(docked_file)
+        # print(lig.GetNumConformers())
         lig = Chem.RemoveHs(lig)
         assert lig.GetNumAtoms() == x.lig.GetNumAtoms()
 

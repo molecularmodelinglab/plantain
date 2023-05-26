@@ -56,7 +56,8 @@ def main(name, split, tag):
     print(f"Evaluating {name}:{tag} on {split}")
     num_preds = None
     shuffle_val = False
-    dataset_name = "crossdocked"
+    # dataset_name = "crossdocked"
+    dataset_name = "bigbind_struct"
     subset = None
 
     cfg = get_config("diffusion_v2")
@@ -84,7 +85,8 @@ def main(name, split, tag):
         model = get_old_model(cfg, name, tag)
         cfg = model.cfg
 
-    cfg.batch_size = 1
+    cfg.batch_size = 8
+    cfg.model.diffusion.only_pred_local_min = True
 
     prefix = "" if subset is None else subset
     metrics, plots = validate(cfg, model, dataset_name, split, num_preds, shuffle_val, subset_indexes)

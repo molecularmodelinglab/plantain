@@ -261,17 +261,17 @@ class CrystalEnergy(FullMetric):
         crystal_rmsds = get_rmsds(x.lig, pred.crystal_pose, y.lig_crystal_pose)
         local = crystal_rmsds < self.rmsd_cutoff
         self.num_local += local.sum()
-        for loc, energy, crys_energy in zip(local, pred.energy, pred.crystal_energy):
-            if not loc: continue
-            all_energies = torch.cat((energy, crys_energy.unsqueeze(0)), 0)
-            if all_energies.min() == crys_energy:
-                self.num_global += 1
+        # for loc, energy, crys_energy in zip(local, pred.energy, pred.crystal_energy):
+        #     if not loc: continue
+        #     all_energies = torch.cat((energy, crys_energy.unsqueeze(0)), 0)
+        #     if all_energies.min() == crys_energy:
+        #         self.num_global += 1
         self.total += len(x)
 
     def compute(self):
         if self.total == 0: return {}
         return {
-            "global_min": self.num_global.float()/self.total,
+            # "global_min": self.num_global.float()/self.total,
             "local_min": self.num_local.float()/self.total
         }
 
@@ -411,11 +411,11 @@ def get_single_task_metrics(task: str):
             "acc_5": PoseRankAcc(5.0)
         }),
         "predict_lig_pose": nn.ModuleDict({
-            "rmsd": PosePerPocketMetric(PoseRMSD),
-            "acc_2": PosePerPocketMetric(PoseAcc, 2.0),
-            "acc_5": PosePerPocketMetric(PoseAcc, 5.0),
-            # "crystal_2": CrystalEnergy(2.0),
-            # "crystal_5": CrystalEnergy(5.0)
+            # "rmsd": PosePerPocketMetric(PoseRMSD),
+            # "acc_2": PosePerPocketMetric(PoseAcc, 2.0),
+            # "acc_5": PosePerPocketMetric(PoseAcc, 5.0),
+            "crystal_2": CrystalEnergy(2.0),
+            "crystal_5": CrystalEnergy(5.0)
         }),
         "predict_activity": nn.ModuleDict({
             "r2": PerPocketActR2(),

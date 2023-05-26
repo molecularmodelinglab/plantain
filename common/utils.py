@@ -77,7 +77,13 @@ def get_mol_from_file_no_cache(fname):
                         break
         mol = RDKitMolCreate.from_pdbqt_mol(pdbqt)[0]
     elif fname.endswith(".sdf"):
-        mol = next(Chem.SDMolSupplier(fname, sanitize=True))
+        mols = [ mol for mol in Chem.SDMolSupplier(fname, sanitize=True) ]
+        mol = mols[0]
+        # we assume all these mols are the same, but with different conformers.
+        # this is what gnina outputs, for instance
+        for other in mols[1:]:
+            mol.AddConformer(other.GetConformer(0), True)
+        return mol
     else:
         raise ValueError(f"invalid file extension for {fname}")
     return mol

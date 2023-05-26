@@ -179,15 +179,15 @@ class DiffusionV2(nn.Module, Model):
 
     def forward(self, batch, hid_feat=None, init_pose_override=None):
         # todo: remove timer here. This is not a place of benchmarking
-        start = time.time()
+        # start = time.time()
         optim = "bfgs"
         if optim == "bfgs":
             lig_pose, energy = self.infer_bfgs(batch, hid_feat, init_pose_override)
             # return Batch(DFRow, lig_pose=lig_pose, energy=energy)
-        end = time.time()
-        if hasattr(batch, "index"):
-            with open("outputs/plantain_timer.txt", "a") as f:
-                f.write(f"{int(batch.index)},{end-start}\n")
+        # end = time.time()
+        # if hasattr(batch, "index"):
+        #     with open("outputs/plantain_timer.txt", "a") as f:
+        #         f.write(f"{int(batch.index)},{end-start}\n")
         return Batch(DFRow, lig_pose=lig_pose, energy=energy)
 
     def predict_train(self, x, y, task_names, split, batch_idx):
@@ -197,14 +197,14 @@ class DiffusionV2(nn.Module, Model):
         # ret_dif = Batch(DiffPred, diffused_energy=diff_energy, diffused_rmsds=diff_rmsds, inv_dist_mat=inv_dist_mat, hid_feat=hid_feat)
         if "predict_lig_pose" in task_names and (split != "train" or batch_idx % self.cfg.metric_reset_interval == 0):
             with torch.no_grad():
-                ret_pred = self(x, hid_feat)
-                # pred_crystal = self(x, hid_feat, self.get_true_pose(y))
-                # pred_crystal = Batch(DFRow, crystal_pose=pred_crystal.lig_pose.get(0), crystal_energy=pred_crystal.energy[:,0])
-                # if self.cfg.model.diffusion.get("only_pred_local_min", False):
-                #     ret_pred = pred_crystal
-                # else:
-                #     ret_pred = self(x, hid_feat)
-                #     ret_pred = merge([ret_pred, pred_crystal])
+                # ret_pred = self(x, hid_feat)
+                pred_crystal = self(x, hid_feat, self.get_true_pose(y))
+                pred_crystal = Batch(DFRow, crystal_pose=pred_crystal.lig_pose.get(0), crystal_energy=pred_crystal.energy[:,0])
+                if self.cfg.model.diffusion.get("only_pred_local_min", False):
+                    ret_pred = pred_crystal
+                else:
+                    ret_pred = self(x, hid_feat)
+                    ret_pred = merge([ret_pred, pred_crystal])
             # oo now this is cursed. CLearly we need to change some of terrace's API
             # to do what I want to do
             ret = merge([ret_dif, ret_pred])
