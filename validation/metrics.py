@@ -411,11 +411,11 @@ def get_single_task_metrics(task: str):
             "acc_5": PoseRankAcc(5.0)
         }),
         "predict_lig_pose": nn.ModuleDict({
-            # "rmsd": PosePerPocketMetric(PoseRMSD),
-            # "acc_2": PosePerPocketMetric(PoseAcc, 2.0),
-            # "acc_5": PosePerPocketMetric(PoseAcc, 5.0),
-            "crystal_2": CrystalEnergy(2.0),
-            "crystal_5": CrystalEnergy(5.0)
+            "rmsd": PosePerPocketMetric(PoseRMSD),
+            "acc_2": PosePerPocketMetric(PoseAcc, 2.0),
+            "acc_5": PosePerPocketMetric(PoseAcc, 5.0),
+            # "crystal_2": CrystalEnergy(2.0),
+            # "crystal_5": CrystalEnergy(5.0)
         }),
         "predict_activity": nn.ModuleDict({
             "r2": PerPocketActR2(),
