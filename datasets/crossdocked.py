@@ -57,7 +57,7 @@ class CrossDockedDataset(Dataset):
 
         self.pocket2rec_files = {}
 
-        if self.cfg.data.randomize_recs:
+        if self.split == "train" and self.cfg.data.randomize_recs:
             assert self.cfg.data.rec_graph.only_pocket
             for pocket in self.structures.pocket.unique():
                 poc_rows = self.structures.query("pocket == @pocket")
@@ -88,7 +88,7 @@ class CrossDockedDataset(Dataset):
     def get_rec_file(self, index):
         """ same as above """
         if self.cfg.data.use_rec:
-            if self.cfg.data.randomize_recs:
+            if self.split == "train" and self.cfg.data.randomize_recs:
                 poc_file = random.choice(self.pocket2rec_files[self.structures.pocket[index]])
             else:
                 poc_file = self.structures[f"{self.rec_prefix}_rec_pocket_file"][index]

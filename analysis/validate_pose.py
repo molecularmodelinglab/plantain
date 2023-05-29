@@ -56,8 +56,8 @@ def main(name, split, tag):
     print(f"Evaluating {name}:{tag} on {split}")
     num_preds = None
     shuffle_val = False
-    # dataset_name = "crossdocked"
-    dataset_name = "bigbind_struct"
+    dataset_name = "crossdocked"
+    # dataset_name = "bigbind_struct"
     subset = None
 
     cfg = get_config("diffusion_v2")
@@ -94,7 +94,7 @@ def main(name, split, tag):
         print(f"{prefix}_{key}: {val:.3f}")
 
     if subset is not None: return
-    return
+    # return
 
     dataset = make_dataset(cfg, dataset_name, split, [])
     out_folder = f"outputs/pose_preds/{model.cache_key}/"

@@ -117,12 +117,12 @@ model:
 
   mpnn_type: egat
 
-  lig_mpnn_node_size: 64
-  lig_mpnn_edge_size: 64
+  lig_mpnn_node_size: 32 # 64
+  lig_mpnn_edge_size: 32 # 64
   lig_mpnn_heads: 4
 
-  rec_mpnn_node_size: 64
-  rec_mpnn_edge_size: 64
+  rec_mpnn_node_size: 32 # 64
+  rec_mpnn_edge_size: 32 # 64
   rec_mpnn_heads: 4
 
   ll_atn_heads: 4
