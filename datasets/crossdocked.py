@@ -1,4 +1,5 @@
 from copy import deepcopy
+import random
 import torch
 from typing import Set, Type
 import pandas as pd
@@ -54,6 +55,15 @@ class CrossDockedDataset(Dataset):
         self.split = split
         self.rec_prefix = self.cfg.data.dock_strategy
 
+        self.pocket2rec_files = {}
+
+        if self.cfg.data.randomize_recs:
+            assert self.cfg.data.rec_graph.only_pocket
+            for pocket in self.structures.pocket.unique():
+                poc_rows = self.structures.query("pocket == @pocket")
+                poc_files = set(poc_rows.crossdock_rec_pocket_file.unique()).union(poc_rows.redock_rec_pocket_file.unique())
+                self.pocket2rec_files[pocket] = list(poc_files)
+
     @staticmethod
     def get_name():
         return "crossdocked"
@@ -78,7 +88,10 @@ class CrossDockedDataset(Dataset):
     def get_rec_file(self, index):
         """ same as above """
         if self.cfg.data.use_rec:
-            poc_file = self.structures[f"{self.rec_prefix}_rec_pocket_file"][index]
+            if self.cfg.data.randomize_recs:
+                poc_file = random.choice(self.pocket2rec_files[self.structures.pocket[index]])
+            else:
+                poc_file = self.structures[f"{self.rec_prefix}_rec_pocket_file"][index]
             rec_file = self.structures[f"{self.rec_prefix}_rec_file"][index]
         else:
             poc_file = "ELNE_HUMAN_30_247_0/3q77_A_rec_pocket.pdb"

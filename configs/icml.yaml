@@ -29,6 +29,7 @@ data:
   dock_strategy: "crossdock"
 
   use_v2_full_rec_data: true
+  randomize_recs: true
 
   lig_graph:
     atom_feats: [ "element", "formal_charge", "hybridization", "is_aromatic", "numH"]
