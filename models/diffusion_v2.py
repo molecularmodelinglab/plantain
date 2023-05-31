@@ -24,12 +24,15 @@ from scipy.optimize import minimize, basinhopping
 class DiffPred(Batchable):
     """ Need custom collates for padded tensors. Todo: make this a more general class 
     (possible put in Terrace)"""
-    diffused_energy: torch.Tensor
-    diffused_rmsds: torch.Tensor
-    inv_dist_mat: torch.Tensor
+    # diffused_energy: torch.Tensor
+    # diffused_rmsds: torch.Tensor
+    # inv_dist_mat: torch.Tensor
+
+    pred_energy: torch.Tensor
+    true_energy: torch.Tensor
 
     @staticmethod
-    def collate_diffused_energy(tensor_list, dims=[0]):
+    def collate_pred_energy(tensor_list, dims=[0]):
         max_xs = [ max([t.shape[dim] for t in tensor_list]) for dim in dims ]
         padded_tensors = []
         for t in tensor_list:
@@ -44,12 +47,12 @@ class DiffPred(Batchable):
         return stacked_tensors
 
     @staticmethod
-    def collate_diffused_rmsds(tensor_list):
+    def collate_true_energy(tensor_list):
         return DiffPred.collate_diffused_energy(tensor_list)
 
-    @staticmethod
-    def collate_inv_dist_mat(tensor_list):
-        return DiffPred.collate_diffused_energy(tensor_list, [0,1])
+    # @staticmethod
+    # def collate_inv_dist_mat(tensor_list):
+    #     return DiffPred.collate_pred_energy(tensor_list, [0,1])
 
 class DiffusionV2(nn.Module, Model):
     
@@ -78,20 +81,18 @@ class DiffusionV2(nn.Module, Model):
     def get_energy(self,
                    batch,
                    hid_feat,
-                   lig_poses,
-                   per_atom_energy=False):
-        energy = self.force_field.get_energy(batch,
-                                            hid_feat,
-                                            lig_poses,
-                                            per_atom_energy)
-        assert per_atom_energy
-        # V1 energy returns packed, V2 energy returns padded
-        if "energy" in self.cfg.model:
-            energy = energy.transpose(1,2).contiguous()
-        else:
-            energy = dF.pad_packed_tensor(energy if energy.dim() == 1 else energy.transpose(0,1), batch.lig_graph.dgl().batch_num_nodes(), 0.0)
+                   lig_poses):
+        return self.force_field.get_energy(batch,
+                                           hid_feat,
+                                           lig_poses)
+        # assert per_atom_energy
+        # # V1 energy returns packed, V2 energy returns padded
+        # if "energy" in self.cfg.model:
+        #     energy = energy.transpose(1,2).contiguous()
+        # else:
+        #     energy = dF.pad_packed_tensor(energy if energy.dim() == 1 else energy.transpose(0,1), batch.lig_graph.dgl().batch_num_nodes(), 0.0)
 
-        return energy
+        # return energy
 
     @staticmethod
     def energy_raw(t_raw,
@@ -156,26 +157,23 @@ class DiffusionV2(nn.Module, Model):
         transform = self.get_diffused_transforms(batch, device)
         diff_pose = transform.apply(true_pose, batch.lig_torsion_data)
 
-        per_atom_energy = self.cfg.model.diffusion.pred == "atom_dist"
+        # per_atom_energy = self.cfg.model.diffusion.pred == "atom_dist"
         energy = self.get_energy(batch,
                                  hid_feat,
-                                 diff_pose,
-                                 per_atom_energy)
+                                 diff_pose)
+        
 
-        if self.cfg.model.diffusion.pred == "atom_dist":
-            diff_coord = torch.cat(diff_pose.coord, 1)
-            true_coord= torch.cat(true_pose.coord, 0).unsqueeze(0)
-            dists = torch.linalg.norm(diff_coord - true_coord, dim=-1)
-            rmsds = dists
-            rmsds = dF.pad_packed_tensor(rmsds.transpose(0,1), batch.lig_graph.dgl().batch_num_nodes(), 0.0)
+        diff_coord = torch.cat(diff_pose.coord, 1)
+        true_coord = torch.cat(true_pose.coord, 0).unsqueeze(0)
+        dists = torch.linalg.norm(diff_coord - true_coord, dim=-1)
+        dists = dF.pad_packed_tensor(dists.transpose(0,1), batch.lig_graph.dgl().batch_num_nodes(), 0.0)
 
-        elif self.cfg.model.diffusion.pred == "rank":
-            rmsds = torch.linspace(0,1,energy.shape[1], device=energy.device).unsqueeze(0).repeat(energy.shape[0], 1)
-        else:
-            assert self.cfg.model.diffusion.pred == "rmsd"
-            rmsds = get_transform_rmsds(batch, true_pose, transform)
+        rmsds = get_transform_rmsds(batch, true_pose, transform)
+        noise = torch.linspace(0,1,rmsds.shape[1], device=rmsds.device).unsqueeze(0).repeat(rmsds.shape[0], 1)
 
-        return energy, rmsds, hid_feat.inv_dist_mat
+        true_energy = Batch(DFRow, dist=dists, noise=noise, rmsd=rmsds)
+
+        return energy, true_energy
 
     def forward(self, batch, hid_feat=None, init_pose_override=None):
         # todo: remove timer here. This is not a place of benchmarking
@@ -192,8 +190,8 @@ class DiffusionV2(nn.Module, Model):
 
     def predict_train(self, x, y, task_names, split, batch_idx):
         hid_feat = self.get_hidden_feat(x)
-        diff_energy, diff_rmsds, inv_dist_mat = self.diffuse_energy(x, y, hid_feat)
-        ret_dif = Batch(DiffPred, diffused_energy=diff_energy, diffused_rmsds=diff_rmsds, inv_dist_mat=inv_dist_mat)
+        pred_energy, true_energy = self.diffuse_energy(x, y, hid_feat)
+        ret_dif = Batch(DiffPred, pred_energy=pred_energy, true_energy=true_energy)
         # ret_dif = Batch(DiffPred, diffused_energy=diff_energy, diffused_rmsds=diff_rmsds, inv_dist_mat=inv_dist_mat, hid_feat=hid_feat)
         if "predict_lig_pose" in task_names and (split != "train" or batch_idx % self.cfg.metric_reset_interval == 0):
             with torch.no_grad():
@@ -230,7 +228,7 @@ class DiffusionV2(nn.Module, Model):
             hid_feat = self.get_hidden_feat(x)
         device = x.lig_graph.ndata.cat_feat.device
 
-        per_atom_energy = self.cfg.model.diffusion.pred == "atom_dist"
+        # per_atom_energy = self.cfg.model.diffusion.pred == "atom_dist"
 
         if "energy" in self.cfg.model:
             params = self.force_field.get_energy_v2_params()
@@ -245,9 +243,9 @@ class DiffusionV2(nn.Module, Model):
             init_pose = DiffusionV2.get_init_pose(x)
             rand_transforms = PoseTransform.make_initial(self.cfg.model.diffusion, x, device, num_rand_poses)
             rand_poses = rand_transforms.apply(init_pose, x.lig_torsion_data)
-            init_energy = self.get_energy(x, hid_feat, rand_poses, per_atom_energy).cpu()
-            if per_atom_energy:
-                init_energy = init_energy.sum(1)
+            init_energy = self.get_energy(x, hid_feat, rand_poses).energy.cpu()
+            # if per_atom_energy:
+            #     init_energy = init_energy.sum(1)
             rand_poses = rand_poses.cpu()
             # print("stopped init energy")
         else:
@@ -307,6 +305,7 @@ class DiffusionV2(nn.Module, Model):
 
         pose_and_energies = []
         n_tries = cfg.model.diffusion.get("optim_tries", 16)
+
         if init_pose_override is not None:
             n_tries = 1
         if cfg.model.get("fix_infer_torsion", False):

@@ -545,13 +545,13 @@ class TwisterV2(Module, ClassifyActivityModel):
         act = scal_outputs[:,0]
         is_act = scal_outputs[:,1]
 
-        inv_dist_mat = self.get_inv_dist_mat(td)
+        # inv_dist_mat = self.get_inv_dist_mat(td)
 
         return Batch(DFRow,
                      score=is_act,
                      activity=act,
                      activity_score=act,
-                     inv_dist_mat=inv_dist_mat,
+                     # inv_dist_mat=inv_dist_mat,
                     )
                     #  final_l_rf_hid=td.l_rf_feat,
                     #  final_l_ra_hid=td.l_ra_feat,
@@ -594,7 +594,14 @@ class TwistForceField(TwistModule):
             self.ll_out = nn.Linear(self.cfg.rbf_steps, self.cfg.energy.ll_heads*self.cfg.energy.ll_feat)
             self.ll_atn = nn.Linear(self.cfg.rbf_steps, self.cfg.energy.ll_heads)
 
-            self.out_lin = nn.Linear(self.cfg.energy.ll_heads*self.cfg.energy.ll_feat + self.cfg.energy.l_rf_heads*self.cfg.energy.l_rf_feat, 1)
+            hid_size = self.cfg.energy.ll_heads*self.cfg.energy.ll_feat + self.cfg.energy.l_rf_heads*self.cfg.energy.l_rf_feat
+            self.out_lin = nn.Linear(hid_size, 1)
+
+            single_hid_size = self.cfg.energy.single_heads*self.cfg.energy.single_feat
+            self.single_head = nn.Linear(hid_size, single_hid_size)
+            self.single_atn = nn.Linear(hid_size, self.cfg.energy.single_heads)
+            self.single_hid = nn.Linear(single_hid_size, self.cfg.energy.single_hid)
+            self.single_out = nn.Linear(self.cfg.energy.single_hid, 2)
 
 
     def get_hidden_feat(self, x):
@@ -626,8 +633,7 @@ class TwistForceField(TwistModule):
                         lig_graph,
                         full_rec_data,
                         weight,
-                        bias,
-                        per_atom_energy):
+                        bias):
 
         l_rf_coef = coef.l_rf_coef
         ll_coef = coef.ll_coef
@@ -662,17 +668,17 @@ class TwistForceField(TwistModule):
         ll_U = (ll_rbfs*ll_coef)
         ll_U[~ll_mask] = 0.0
 
-        if per_atom_energy:
-            ret = (l_rf_U.sum((-1,-2)) + ll_U.sum((-1,-2)))*weight + bias
-            if ret.dim() == 3:
-                ret = ret.transpose(-1,-2)
-            idx = get_padded_index(lig_graph.dgl().batch_num_nodes())
-            ret = pack_padded_tensor_with_index(ret,idx)
-            if ret.dim() == 2:
-                ret = ret.transpose(-1,-2)
-            return ret
+        pred_dist = (l_rf_U.sum((-1,-2)) + ll_U.sum((-1,-2)))*weight + bias
+        if pred_dist.dim() == 3:
+            pred_dist = pred_dist.transpose(-1,-2)
+        idx = get_padded_index(lig_graph.dgl().batch_num_nodes())
+        pred_dist = pack_padded_tensor_with_index(pred_dist,idx)
+        if pred_dist.dim() == 2:
+            pred_dist = pred_dist.transpose(-1,-2)
 
-        return (l_rf_U.sum((-1,-2,-3)) + ll_U.sum((-1,-2,-3)))*weight + bias
+        pred_dist = dF.pad_packed_tensor(pred_dist if pred_dist.dim() == 1 else pred_dist.transpose(0,1), lig_graph.dgl().batch_num_nodes(), 0.0)
+        U = (l_rf_U.sum((-1,-2,-3)) + ll_U.sum((-1,-2,-3)))*weight + bias
+        return Batch(DFRow, dist=pred_dist, energy=U)
 
     @staticmethod
     def static_get_energy_v2(mcfg,
@@ -720,7 +726,20 @@ class TwistForceField(TwistModule):
         comb = torch.cat((ll_col, l_rf_col), -1)
 
         out = run_linear(comb, params.out_wb).squeeze(-1)
-        return out*params.final_weight + params.final_bias
+        pred_dist = out*params.final_weight + params.final_bias
+        pred_dist = pred_dist.transpose(1,2).contiguous()
+
+        single_hid = run_attention_collapse(comb, mcfg.energy.single_heads, params.single_head, params.single_atn, ll_mask[...,0])
+        single_hid = run_linear(single_hid, params.single_hid)
+        single_hid = run_leaky_relu(single_hid)
+        single_out = run_linear(single_hid, params.single_out)
+
+        pred_noise = single_out[...,0]
+        pred_rmsd = single_out[...,0]
+
+        energy = pred_dist.mean(-2)
+
+        return Batch(DFRow, dist=pred_dist, rmsd=pred_rmsd, noise=pred_noise, energy=energy)
 
     @staticmethod
     def get_energy_single_v1(mcfg,
@@ -743,12 +762,13 @@ class TwistForceField(TwistModule):
         l_rf_coef = l_rf_coef[:l_rf_rbfs.shape[0],:l_rf_rbfs.shape[1]]
 
         l_rf_U = (l_rf_rbfs*l_rf_coef)
-        ll_U = (ll_rbfs*ll_coef)# .where(ll_mask, torch.tensor(0.0, device=l_rf_dist.device))
+        ll_U = (ll_rbfs*ll_coef)
+        # ll_U = torch.where(ll_mask, ll_U, torch.tensor(0.0, device=l_rf_dist.device))
 
         dist_U = (l_rf_U.sum((-1,-2)) + ll_U.sum((-1,-2)))*weight + bias
         # dist_U = dist_U.where(dist_U < -100.0, torch.tensor(0.0, device=l_rf_dist.device))
 
-        # print(ll_U[0][1])
+        # print(ll_U[0][0])
         # print(dist_U.where(dist_U < -100.0, torch.tensor(0.0, device=l_rf_dist.device)))
 
         # return torch.sqrt((dist_U**2).sum())
@@ -790,11 +810,11 @@ class TwistForceField(TwistModule):
         else:
             return TwistForceField.get_energy_single_v1(mcfg, *args)
 
-    def get_energy(self, x, coef, lig_pose, per_atom_energy):
+    def get_energy(self, x, coef, lig_pose):
         if "energy" in self.cfg:
-            return self.get_energy_v2(x, coef, lig_pose, per_atom_energy)
+            return self.get_energy_v2(x, coef, lig_pose)
         bias, weight = self.scale_output.parameters()
-        return TwistForceField.static_get_energy(self.cfg, coef, lig_pose, x.lig_graph, x.full_rec_data, weight, bias, per_atom_energy)
+        return TwistForceField.static_get_energy(self.cfg, coef, lig_pose, x.lig_graph, x.full_rec_data, weight, bias)
 
     def get_energy_v2_params(self):
         return [
@@ -804,6 +824,10 @@ class TwistForceField(TwistModule):
            *tuple(self.ll_atn.parameters()),
            *tuple(self.out_lin.parameters()),
            *tuple(self.scale_output.parameters()),
+           *tuple(self.single_head.parameters()),
+           *tuple(self.single_atn.parameters()),
+           *tuple(self.single_hid.parameters()),
+           *tuple(self.single_out.parameters()),
         ]
 
     @staticmethod
@@ -817,8 +841,12 @@ class TwistForceField(TwistModule):
             out_wb=(next(it), next(it)),
             final_bias=next(it),
             final_weight=next(it),
+            single_head=(next(it), next(it)),
+            single_atn=(next(it), next(it)),
+            single_hid=(next(it), next(it)),
+            single_out=(next(it), next(it)),
         )
 
-    def get_energy_v2(self, x, coef, lig_pose, per_atom_energy):
+    def get_energy_v2(self, x, coef, lig_pose):
         params = self.get_energy_v2_params()
         return TwistForceField.static_get_energy_v2(self.cfg, coef, lig_pose, x.lig_graph, x.full_rec_data, *params)

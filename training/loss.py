@@ -119,12 +119,15 @@ def diffused_pose_mse(x, pred, y):
     return torch.stack(ret).mean()
 
 def diffused_rmsd_mse(x, pred, y):
-    return F.mse_loss(pred.diffused_energy, pred.diffused_rmsds)
+    return F.mse_loss(pred.pred_energy.rmsd, pred.true_energy.rmsd)
+
+def diffused_noise_mse(x, pred, y):
+    return F.mse_loss(pred.pred_energy.noise, pred.true_energy.noise)
 
 def diffused_dist_mse(x, pred, y):
     lig_num_nodes = x.lig_graph.dgl().batch_num_nodes()
-    yp = dF.pack_padded_tensor(pred.diffused_energy, lig_num_nodes)
-    yt = dF.pack_padded_tensor(pred.diffused_rmsds, lig_num_nodes)
+    yp = dF.pack_padded_tensor(pred.pred_energy.dist, lig_num_nodes)
+    yt = dF.pack_padded_tensor(pred.true_energy.dist, lig_num_nodes)
     mses = F.mse_loss(yp, yt, reduction='none')
     return segment.segment_reduce(lig_num_nodes, mses, reducer="mean").mean()
 
@@ -155,6 +158,7 @@ def get_single_loss(loss_cfg, x, pred, y):
         "trans_mse": trans_mse,
         "diffused_pose_mse": diffused_pose_mse,
         "diffused_rmsd_mse": diffused_rmsd_mse,
+        "diffused_noise_mse": diffused_noise_mse,
         "diffused_dist_mse": diffused_dist_mse,
         "crystal_pose_ce": crystal_pose_ce_loss,
         "worse_pose_atn_ce": worst_pose_atn_ce_loss,

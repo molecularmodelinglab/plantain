@@ -85,13 +85,14 @@ def main(name, split, tag):
         model = get_old_model(cfg, name, tag)
         cfg = model.cfg
 
-    cfg.batch_size = 8
+    cfg.batch_size = 4
+    del cfg.batch_sampler
     cfg.model.diffusion.only_pred_local_min = True
 
     prefix = "" if subset is None else subset
-    metrics, plots = validate(cfg, model, dataset_name, split, num_preds, shuffle_val, subset_indexes)
-    for key, val in flatten_dict(metrics).items():
-        print(f"{prefix}_{key}: {val:.3f}")
+    # metrics, plots = validate(cfg, model, dataset_name, split, num_preds, shuffle_val, subset_indexes)
+    # for key, val in flatten_dict(metrics).items():
+    #     print(f"{prefix}_{key}: {val:.3f}")
 
     if subset is not None: return
     # return
@@ -102,14 +103,20 @@ def main(name, split, tag):
     shutil.rmtree(out_folder, ignore_errors=True)
     os.makedirs(out_folder, exist_ok=True)
 
-    x, y, p = get_preds(cfg, model, dataset_name, split, num_preds, shuffle_val, subset_indexes)
+    x, y, p = get_preds(cfg, model, dataset_name, split, num_preds, shuffle_val)
 
     lig_files = []
     rec_files = []
     pred_files = []
-    for i, (lig_file, poc_file, p_pose) in enumerate(zip(dataset.structures.lig_file, dataset.structures.ex_rec_pocket_file, tqdm(p.lig_pose.get(0)))):
-        lf = cfg.platform.bigbind_dir + "/" + lig_file
-        rf = cfg.platform.bigbind_dir + "/" + poc_file
+    for i, (lig_file, poc_file, p_pose) in enumerate(zip(dataset.structures.lig_crystal_file, dataset.structures.crossdock_rec_pocket_file, tqdm(p.lig_pose.get(0)))):
+        if dataset_name == "bigbind_struct":
+            lf = cfg.platform.bigbind_dir + "/" + lig_file
+            rf = cfg.platform.bigbind_dir + "/" + poc_file
+        elif dataset_name == "crossdocked":
+            lf = cfg.platform.crossdocked_dir + "/" + lig_file
+            rf = cfg.platform.crossdocked_dir + "/" + poc_file
+        else:
+            raise AssertionError
         mol = get_mol_from_file(lf)
         add_pose_to_mol(mol, p_pose)
         pose_file = out_folder + str(i) + ".sdf"
