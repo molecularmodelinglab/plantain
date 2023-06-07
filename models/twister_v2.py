@@ -575,6 +575,52 @@ def run_attention_collapse(x, heads, y_wb, atn_wb, mask):
     ret = (y*atn).sum(-3)
     return run_leaky_relu(ret.reshape((*ret.shape[:-2], -1)))
 
+def collate_padded_tensors(tensor_list, dims=[0]):
+    max_xs = [ max([t.shape[dim] for t in tensor_list]) for dim in dims ]
+    padded_tensors = []
+    for t in tensor_list:
+        padded_tensor = t
+        for max_x, dim in zip(max_xs, dims):
+            pad_length = max_x - t.shape[dim]
+            # yes, this is a cursed line
+            # but it's not my fault F.pad has a horrible api
+            padded_tensor = F.pad(padded_tensor, (*([0,0]*(t.dim()-dim-1)), 0, pad_length))
+        padded_tensors.append(padded_tensor)
+    stacked_tensors = torch.stack(padded_tensors)
+    return stacked_tensors
+
+# todo: move these classes!
+# and clean up -- don't like having to manually define all these
+# collate functions
+class PredEnergy(Batchable):
+    dist: torch.Tensor
+    energy: torch.Tensor
+
+    @staticmethod
+    def collate_dist(x):
+        return collate_padded_tensors(x)
+
+    @staticmethod
+    def collate_energy(x):
+        return collate_padded_tensors(x)
+    
+class TrueEnergy(Batchable):
+    dist: torch.Tensor
+    noise: torch.Tensor
+    rmsd: torch.Tensor
+
+    @staticmethod
+    def collate_dist(x):
+        return collate_padded_tensors(x)
+
+    @staticmethod
+    def collate_noise(x):
+        return collate_padded_tensors(x)
+
+    @staticmethod
+    def collate_rmsd(x):
+        return collate_padded_tensors(x)
+
 class TwistFFCoef(Batchable):
     l_rf_coef: torch.Tensor
     ll_coef: torch.Tensor
@@ -641,8 +687,13 @@ class TwistForceField(TwistModule):
         lig_coord = torch.cat(lig_pose.coord, -2)
         if lig_coord.dim() == 3:
             lig_coord = lig_coord.transpose(0,1)
-        lig_coord = dF.pad_packed_tensor(lig_coord, lig_graph.dgl().batch_num_nodes(), 0.0)
-        rec_coord = dF.pad_packed_tensor(full_rec_data.ndata.coord, full_rec_data.dgl().batch_num_nodes(), 0.0)
+        rec_coord = full_rec_data.ndata.coord
+        if lig_graph is None:
+            lig_coord = lig_coord.unsqueeze(0)
+            rec_coord = rec_coord.unsqueeze(0)
+        else:
+            lig_coord = dF.pad_packed_tensor(lig_coord, lig_graph.dgl().batch_num_nodes(), 0.0)
+            rec_coord = dF.pad_packed_tensor(rec_coord, full_rec_data.dgl().batch_num_nodes(), 0.0)
         if lig_coord.dim() == 4:
             lig_coord = lig_coord.transpose(1,2)
             rec_coord = rec_coord.unsqueeze(1)
@@ -668,17 +719,21 @@ class TwistForceField(TwistModule):
         ll_U = (ll_rbfs*ll_coef)
         ll_U[~ll_mask] = 0.0
 
-        pred_dist = (l_rf_U.sum((-1,-2)) + ll_U.sum((-1,-2)))*weight + bias
-        if pred_dist.dim() == 3:
-            pred_dist = pred_dist.transpose(-1,-2)
-        idx = get_padded_index(lig_graph.dgl().batch_num_nodes())
-        pred_dist = pack_padded_tensor_with_index(pred_dist,idx)
-        if pred_dist.dim() == 2:
-            pred_dist = pred_dist.transpose(-1,-2)
+        pred_dist = ((l_rf_U.sum((-1,-2)) + ll_U.sum((-1,-2)))*weight + bias)
+        # if pred_dist.dim() == 3:
+        #     pred_dist = pred_dist.transpose(-1,-2)
+        # idx = get_padded_index(lig_graph.dgl().batch_num_nodes())
+        # print("old", pred_dist.shape)
+        # pred_dist = pack_padded_tensor_with_index(pred_dist,idx)
+        # print("new", pred_dist.shape)
+        # if pred_dist.dim() == 2:
+        #     pred_dist = pred_dist.transpose(-1,-2)
 
-        pred_dist = dF.pad_packed_tensor(pred_dist if pred_dist.dim() == 1 else pred_dist.transpose(0,1), lig_graph.dgl().batch_num_nodes(), 0.0)
-        U = (l_rf_U.sum((-1,-2,-3)) + ll_U.sum((-1,-2,-3)))*weight + bias
-        return Batch(DFRow, dist=pred_dist, energy=U)
+        # pred_dist = dF.pad_packed_tensor(pred_dist if pred_dist.dim() == 1 else pred_dist.transpose(0,1), lig_graph.dgl().batch_num_nodes(), 0.0)
+        U = pred_dist.mean(-1)
+        pred_dist = pred_dist.transpose(-1,-2)
+        # U = (l_rf_U.sum((-1,-2,-3)) + ll_U.sum((-1,-2,-3)))*weight + bias
+        return Batch(PredEnergy, dist=pred_dist, energy=U)
 
     @staticmethod
     def static_get_energy_v2(mcfg,
@@ -739,7 +794,7 @@ class TwistForceField(TwistModule):
 
         energy = pred_dist.mean(-2)
 
-        return Batch(DFRow, dist=pred_dist, rmsd=pred_rmsd, noise=pred_noise, energy=energy)
+        return Batch(PredEnergy, dist=pred_dist, rmsd=pred_rmsd, noise=pred_noise, energy=energy)
 
     @staticmethod
     def get_energy_single_v1(mcfg,
@@ -810,11 +865,12 @@ class TwistForceField(TwistModule):
         else:
             return TwistForceField.get_energy_single_v1(mcfg, *args)
 
-    def get_energy(self, x, coef, lig_pose):
+    def get_energy(self, x, coef, lig_pose, inference=False):
         if "energy" in self.cfg:
             return self.get_energy_v2(x, coef, lig_pose)
         bias, weight = self.scale_output.parameters()
-        return TwistForceField.static_get_energy(self.cfg, coef, lig_pose, x.lig_graph, x.full_rec_data, weight, bias)
+        lig_graph = None if inference else x.lig_graph
+        return TwistForceField.static_get_energy(self.cfg, coef, lig_pose, lig_graph, x.full_rec_data, weight, bias)
 
     def get_energy_v2_params(self):
         return [

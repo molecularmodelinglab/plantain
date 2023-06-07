@@ -10,8 +10,10 @@ from common.cfg_utils import get_config
 from common.pose_transform import MultiPose, add_pose_to_mol
 from common.wandb_utils import get_old_model
 from datasets.bigbind_struct import BigBindStructDataset
+from datasets.crossdocked import CrossDockedDataset
 from datasets.make_dataset import make_dataset
 from models.diffdock import DiffDock, get_diffdock_indexes
+from models.diffusion_v3 import DiffusionV3
 from models.gnina import GninaPose
 from models.sym_diffusion import SymDiffusion
 from models.vina import VinaPose
@@ -54,6 +56,7 @@ def eval_combo(cfg, dataset_name, num_preds, split, shuffle_val):
 
 def main(name, split, tag):
     print(f"Evaluating {name}:{tag} on {split}")
+    v3 = True
     num_preds = None
     shuffle_val = False
     dataset_name = "crossdocked"
@@ -82,17 +85,30 @@ def main(name, split, tag):
     elif name == "combo":
         return eval_combo(cfg, dataset_name, num_preds, split, shuffle_val)
     else:
-        model = get_old_model(cfg, name, tag)
-        cfg = model.cfg
+        if v3:
+            assert name == "thin_chungus" and tag == "best_k"
+            cfg = get_config("icml_v3")
+            model = DiffusionV3(cfg)
+            model.cache_key = "thin_chungus_v3"
+
+            dataset = CrossDockedDataset(cfg, "val", ['lig_embed_pose', 'lig_torsion_data', 'lig_graph', 'rec_graph', 'full_rec_data'])
+
+            x, y = dataset[0]
+            model.get_hidden_feat(collate([x]))
+
+            model.force_field.load_state_dict(torch.load("data/cur_best.pt"))
+        else:
+            model = get_old_model(cfg, name, tag)
+            cfg = model.cfg
 
     cfg.batch_size = 4
     del cfg.batch_sampler
     cfg.model.diffusion.only_pred_local_min = True
 
     prefix = "" if subset is None else subset
-    # metrics, plots = validate(cfg, model, dataset_name, split, num_preds, shuffle_val, subset_indexes)
-    # for key, val in flatten_dict(metrics).items():
-    #     print(f"{prefix}_{key}: {val:.3f}")
+    metrics, plots = validate(cfg, model, dataset_name, split, num_preds, shuffle_val, subset_indexes)
+    for key, val in flatten_dict(metrics).items():
+        print(f"{prefix}_{key}: {val:.3f}")
 
     if subset is not None: return
     # return

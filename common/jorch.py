@@ -169,7 +169,6 @@ def jax_norm(arr, p, axis, keepdims, out, dtype):
     return jnp.linalg.norm(arr, axis=axis, keepdims=keepdims)
 
 def jax_clamp_min(arr, eps):
-    # return arr.at[arr < eps].set(eps)
     return (arr - eps)*(arr > eps) + eps
 
 def jax_flatten(arr, start_dim=0, end_dim=-1):

@@ -33,6 +33,8 @@ terrace
 terrace_tmp
 terrace_moveme
 scripts/sync_longleaf.sh
+torch_compile_debug
+scripts/collect_env
 
 lambda
 

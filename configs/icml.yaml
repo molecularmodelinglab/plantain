@@ -155,7 +155,7 @@ model:
   l_rf_expand_feat: 8
 
   updates_per_block: 2
-  num_blocks: 16
+  num_blocks: 8
 
   norm_after_add: false
 
@@ -172,14 +172,14 @@ model:
     pred: atom_dist
     optim: bfgs
 
-  energy:
-    ll_heads: 4
-    ll_feat: 8
-    l_rf_heads: 4
-    l_rf_feat: 8
-    single_heads: 8
-    single_feat: 32
-    single_hid: 128
+  # energy:
+  #   ll_heads: 4
+  #   ll_feat: 8
+  #   l_rf_heads: 4
+  #   l_rf_feat: 8
+  #   single_heads: 8
+  #   single_feat: 32
+  #   single_hid: 128
 
   fix_infer_torsion: false
 

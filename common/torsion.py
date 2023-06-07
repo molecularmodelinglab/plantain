@@ -1,3 +1,4 @@
+from collections import namedtuple
 from copy import deepcopy
 import torch
 import roma
@@ -55,6 +56,8 @@ def mol_to_nx(mol):
                    bond_type=bond.GetBondType())
     return G
 
+TorTuple = namedtuple("TorTuple",["rot_edges","rot_masks"])
+
 class TorsionData(Batchable):
     rot_edges: torch.Tensor
     rot_masks: torch.Tensor
@@ -93,9 +96,12 @@ class TorsionData(Batchable):
         rot_edges = torch.asarray(rot_edges, dtype=torch.long)
         return TorsionData(rot_edges, mask_rotate)
 
+    # @torch.compile(dynamic=True, fullgraph=False)
     def set_angle(self, rot_index, angle, coord):
         angle = angle + 1e-10 # add epsilon to avoid NaN gradients
         idx1, idx2 = self.rot_edges[rot_index]
+        # idx1 = self.rot_edges[rot_index, 0]
+        # idx2 = self.rot_edges[rot_index, 1]
         mask = self.rot_masks[rot_index]
         if (isinstance(angle, float) or angle.shape == tuple()) and len(coord.shape) == 2:
             ax = coord[idx2] - coord[idx1]
@@ -132,6 +138,7 @@ class TorsionData(Batchable):
         else:
             raise NotImplementedError
 
+    # @torch.compile(dynamic=True)
     def set_all_angles(self, angles, coord):
         if isinstance(coord, JorchTensor):
             def body(idx, args):
@@ -142,6 +149,12 @@ class TorsionData(Batchable):
             new_coord = jorch_wrap(new_coord)
         else:
             new_coord = coord
+            me = self # TorTuple(self.rot_edges, self.rot_masks)
             for idx in range(angles.shape[-1]):
-                new_coord = self.set_angle(idx, angles[...,idx], new_coord)
+                new_coord = TorsionData.set_angle(me, idx, angles[...,idx], new_coord)
+                # explanation, *rest = torch._dynamo.explain(TorsionData.set_angle, me, idx, angles[...,idx], new_coord)
+                # print(explanation)
+                # print(rest[-1])
+                # exit()
+                # new_coord = self.set_angle(idx, angles[...,idx], new_coord)
         return new_coord #rigid_align(new_coord, coord)

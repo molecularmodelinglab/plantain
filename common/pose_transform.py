@@ -138,6 +138,7 @@ class PoseTransform(Batchable):
 
         return Batch(PoseTransform, rot=rot, trans=trans, tor_angles=angles)
 
+    # @torch.compile(dynamic=True, fullgraph=True)
     def apply(self, pose, tor_data, use_tor=True):
         coord = pose.coord
         rot = self.rot + 1e-10 # add epsilon to avoid NaN gradients

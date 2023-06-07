@@ -10,7 +10,7 @@ import jax
 from common.pose_transform import MultiPose, PoseTransform, Pose
 from common.torsion import TorsionData
 from common.jorch import to_jax
-from models.twister_v2 import TwistFFCoef, TwistForceField
+from models.twister_v2 import TrueEnergy, TwistFFCoef, TwistForceField, collate_padded_tensors
 from terrace.batch import Batch, Batchable, collate
 from terrace.dataframe import DFRow, merge
 from .model import Model
@@ -21,38 +21,38 @@ import multiprocessing as mp
 
 from scipy.optimize import minimize, basinhopping
 
-class DiffPred(Batchable):
-    """ Need custom collates for padded tensors. Todo: make this a more general class 
-    (possible put in Terrace)"""
-    # diffused_energy: torch.Tensor
-    # diffused_rmsds: torch.Tensor
-    # inv_dist_mat: torch.Tensor
+# class DiffPred(Batchable):
+#     """ Need custom collates for padded tensors. Todo: make this a more general class 
+#     (possible put in Terrace)"""
+#     # diffused_energy: torch.Tensor
+#     # diffused_rmsds: torch.Tensor
+#     # inv_dist_mat: torch.Tensor
 
-    pred_energy: torch.Tensor
-    true_energy: torch.Tensor
+#     pred_energy: torch.Tensor
+#     true_energy: torch.Tensor
 
-    @staticmethod
-    def collate_pred_energy(tensor_list, dims=[0]):
-        max_xs = [ max([t.shape[dim] for t in tensor_list]) for dim in dims ]
-        padded_tensors = []
-        for t in tensor_list:
-            padded_tensor = t
-            for max_x, dim in zip(max_xs, dims):
-                pad_length = max_x - t.shape[dim]
-                # yes, this is a cursed line
-                # but it's not my fault F.pad has a horrible api
-                padded_tensor = F.pad(padded_tensor, (*([0,0]*(t.dim()-dim-1)), 0, pad_length))
-            padded_tensors.append(padded_tensor)
-        stacked_tensors = torch.stack(padded_tensors)
-        return stacked_tensors
+#     @staticmethod
+#     def collate_pred_energy(tensor_list, dims=[0]):
+#         max_xs = [ max([t.shape[dim] for t in tensor_list]) for dim in dims ]
+#         padded_tensors = []
+#         for t in tensor_list:
+#             padded_tensor = t
+#             for max_x, dim in zip(max_xs, dims):
+#                 pad_length = max_x - t.shape[dim]
+#                 # yes, this is a cursed line
+#                 # but it's not my fault F.pad has a horrible api
+#                 padded_tensor = F.pad(padded_tensor, (*([0,0]*(t.dim()-dim-1)), 0, pad_length))
+#             padded_tensors.append(padded_tensor)
+#         stacked_tensors = torch.stack(padded_tensors)
+#         return stacked_tensors
 
-    @staticmethod
-    def collate_true_energy(tensor_list):
-        return DiffPred.collate_diffused_energy(tensor_list)
+#     @staticmethod
+#     def collate_true_energy(tensor_list):
+#         return DiffPred.collate_pred_energy(tensor_list)
 
-    # @staticmethod
-    # def collate_inv_dist_mat(tensor_list):
-    #     return DiffPred.collate_pred_energy(tensor_list, [0,1])
+#     # @staticmethod
+#     # def collate_inv_dist_mat(tensor_list):
+#     #     return DiffPred.collate_pred_energy(tensor_list, [0,1])
 
 class DiffusionV2(nn.Module, Model):
     
@@ -171,7 +171,7 @@ class DiffusionV2(nn.Module, Model):
         rmsds = get_transform_rmsds(batch, true_pose, transform)
         noise = torch.linspace(0,1,rmsds.shape[1], device=rmsds.device).unsqueeze(0).repeat(rmsds.shape[0], 1)
 
-        true_energy = Batch(DFRow, dist=dists, noise=noise, rmsd=rmsds)
+        true_energy = Batch(TrueEnergy, dist=dists, noise=noise, rmsd=rmsds)
 
         return energy, true_energy
 
@@ -191,7 +191,7 @@ class DiffusionV2(nn.Module, Model):
     def predict_train(self, x, y, task_names, split, batch_idx):
         hid_feat = self.get_hidden_feat(x)
         pred_energy, true_energy = self.diffuse_energy(x, y, hid_feat)
-        ret_dif = Batch(DiffPred, pred_energy=pred_energy, true_energy=true_energy)
+        ret_dif = Batch(DFRow, pred_energy=pred_energy, true_energy=true_energy)
         # ret_dif = Batch(DiffPred, diffused_energy=diff_energy, diffused_rmsds=diff_rmsds, inv_dist_mat=inv_dist_mat, hid_feat=hid_feat)
         if "predict_lig_pose" in task_names and (split != "train" or batch_idx % self.cfg.metric_reset_interval == 0):
             with torch.no_grad():
@@ -206,7 +206,7 @@ class DiffusionV2(nn.Module, Model):
             # oo now this is cursed. CLearly we need to change some of terrace's API
             # to do what I want to do
             ret = merge([ret_dif, ret_pred])
-            ret._batch_type = DiffPred
+            # ret._batch_type = DiffPred
             return ret
         else:
             return ret_dif

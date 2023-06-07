@@ -9,21 +9,26 @@ import jax
 from common.pose_transform import MultiPose, PoseTransform, Pose
 from common.torsion import TorsionData
 from common.jorch import to_jax
-from models.twister_v2 import TwistFFCoef, TwistForceField
+from models.twister_v2 import TrueEnergy, TwistFFCoef, TwistForceField
 from terrace.batch import Batch, Batchable, collate
 from terrace.dataframe import DFRow, merge
 from .model import Model
 from .diffusion import get_transform_rmsds
-from .diffusion_v2 import DiffPred
 from validation.metrics import get_rmsds
 from multiprocessing import Pool
 import multiprocessing as mp
+
+# torch._dynamo.config.cache_size_limit = 2048
+
+# from torch._dynamo.utils import CompileProfiler
+# prof = CompileProfiler()
+# torch._dynamo.reset()
 
 # so far the best I can do is compile applying transformations (that is,
 # translations, rotations, and torsional updates)to the ligand structure
 # we need dynamic=True when compiling everything because coordinates
 # and angles all have different shapes
-# @torch.compile(dynamic=True)
+# @torch.compile(dynamic=True, backend=prof)
 def apply_transform(transforms, init_pose, lig_torsion_data):
     return transforms.apply(init_pose, lig_torsion_data)
 
@@ -53,18 +58,11 @@ class DiffusionV3(nn.Module, Model):
                    batch,
                    hid_feat,
                    lig_poses,
-                   per_atom_energy=False):
+                   inference=False):
         energy = self.force_field.get_energy(batch,
                                             hid_feat,
                                             lig_poses,
-                                            per_atom_energy)
-        assert per_atom_energy
-        # V1 energy returns packed, V2 energy returns padded
-        if "energy" in self.cfg.model:
-            energy = energy.transpose(1,2).contiguous()
-        else:
-            energy = dF.pad_packed_tensor(energy if energy.dim() == 1 else energy.transpose(0,1), batch.lig_graph.dgl().batch_num_nodes(), 0.0)
-
+                                            inference)
         return energy
 
     def get_diffused_transforms(self, batch, device, timesteps=None):
@@ -80,31 +78,31 @@ class DiffusionV3(nn.Module, Model):
             hid_feat= self.get_hidden_feat(batch)
         device = batch.lig_graph.ndata.cat_feat.device
 
-        true_pose = y.lig_crystal_pose
+        if hasattr(y, "lig_crystal_pose"):
+            true_pose = y.lig_crystal_pose
+        else:
+            true_pose = collate([Pose(p.coord[0]) for p in batch.lig_docked_poses])
 
         transform = self.get_diffused_transforms(batch, device)
         diff_pose = transform.apply(true_pose, batch.lig_torsion_data)
 
-        per_atom_energy = self.cfg.model.diffusion.pred == "atom_dist"
+        # per_atom_energy = self.cfg.model.diffusion.pred == "atom_dist"
         energy = self.get_energy(batch,
                                  hid_feat,
-                                 diff_pose,
-                                 per_atom_energy)
+                                 diff_pose)
+        
 
-        if self.cfg.model.diffusion.pred == "atom_dist":
-            diff_coord = torch.cat(diff_pose.coord, 1)
-            true_coord= torch.cat(true_pose.coord, 0).unsqueeze(0)
-            dists = torch.linalg.norm(diff_coord - true_coord, dim=-1)
-            rmsds = dists
-            rmsds = dF.pad_packed_tensor(rmsds.transpose(0,1), batch.lig_graph.dgl().batch_num_nodes(), 0.0)
+        diff_coord = torch.cat(diff_pose.coord, 1)
+        true_coord = torch.cat(true_pose.coord, 0).unsqueeze(0)
+        dists = torch.linalg.norm(diff_coord - true_coord, dim=-1)
+        dists = dF.pad_packed_tensor(dists.transpose(0,1), batch.lig_graph.dgl().batch_num_nodes(), 0.0)
 
-        elif self.cfg.model.diffusion.pred == "rank":
-            rmsds = torch.linspace(0,1,energy.shape[1], device=energy.device).unsqueeze(0).repeat(energy.shape[0], 1)
-        else:
-            assert self.cfg.model.diffusion.pred == "rmsd"
-            rmsds = get_transform_rmsds(batch, true_pose, transform)
+        rmsds = get_transform_rmsds(batch, true_pose, transform)
+        noise = torch.linspace(0,1,rmsds.shape[1], device=rmsds.device).unsqueeze(0).repeat(rmsds.shape[0], 1)
 
-        return energy, rmsds, hid_feat.inv_dist_mat
+        true_energy = Batch(TrueEnergy, dist=dists, noise=noise, rmsd=rmsds)
+
+        return energy, true_energy
 
     def forward(self, batch, hid_feat=None):
         assert self.cfg.model.inference.optimizer == "bfgs"
@@ -113,13 +111,19 @@ class DiffusionV3(nn.Module, Model):
 
     def predict_train(self, x, y, task_names, split, batch_idx):
         hid_feat = self.get_hidden_feat(x)
-        diff_energy, diff_rmsds, inv_dist_mat = self.diffuse_energy(x, y, hid_feat)
-        ret_dif = Batch(DiffPred, diffused_energy=diff_energy, diffused_rmsds=diff_rmsds, inv_dist_mat=inv_dist_mat, hid_feat=hid_feat)
+        pred_energy, true_energy = self.diffuse_energy(x, y, hid_feat)
+        ret_dif = Batch(DFRow, pred_energy=pred_energy, true_energy=true_energy)
         if "predict_lig_pose" in task_names and (split != "train" or batch_idx % self.cfg.metric_reset_interval == 0):
             with torch.no_grad():
                 ret_pred = self(x, hid_feat)
+                # pred_crystal = self(x, hid_feat, self.get_true_pose(y))
+                # pred_crystal = Batch(DFRow, crystal_pose=pred_crystal.lig_pose.get(0), crystal_energy=pred_crystal.energy[:,0])
+                # if self.cfg.model.diffusion.get("only_pred_local_min", False):
+                #     ret_pred = pred_crystal
+                # else:
+                #     ret_pred = self(x, hid_feat)
+                #     ret_pred = merge([ret_pred, pred_crystal])
             ret = merge([ret_dif, ret_pred])
-            ret._batch_type = DiffPred
             return ret
         else:
             return ret_dif
@@ -146,19 +150,41 @@ class DiffusionV3(nn.Module, Model):
                 l_rf_coef=hid_feat.l_rf_coef.detach()[i:(i+1),:L,:Rf],
                 ll_coef=hid_feat.ll_coef.detach()[i:(i+1),:L,:L]
             )
+            # explanation, *rest = torch._dynamo.explain(DiffusionV3.infer_bfgs_single, self, x0, hf0, pose_callback)
+            # print(explanation)
+            # print(rest[-1])
+            # exit()
             ret.append(self.infer_bfgs_single(x0, hf0, pose_callback))
         return collate(ret)
     
+    @torch.compile(dynamic=True)#, backend=prof)
     def get_inference_energy(self, x, hid_feat, init_pose, transforms):
         """ This is the function we want to differentiate -- get the
         predicted 'energy' from the ligand translation, rotation,
         and torsional angles """
+        
+        # explanation, *rest = torch._dynamo.explain(transforms.apply, init_pose, x.lig_torsion_data)
+        # print(explanation)
+        # print(rest[-1])
+        # exit()
+        
         poses = apply_transform(transforms, init_pose, x.lig_torsion_data)
         # poses = transforms.apply(init_pose, x.lig_torsion_data)
-        Us = self.get_energy(x, hid_feat, poses, True)
-        U = Us.sum()
+        Us = self.get_energy(x, hid_feat, poses, True).energy
+        # U = Us.sum()
+        return Us
+    
+    # @torch.compile(dynamic=True, fullgraph=True)
+    def infer_backward(self, x, hid_feat, init_pose, transforms):
+        U = self.get_inference_energy(x, hid_feat, init_pose, transforms)
+        U.backward()
         return U
+    
+    def get_raw_inference_energy(self, trans, rot, tor_angles):
+        transforms = Batch(PoseTransform, trans=trans, rot=rot, tor_angles=tor_angles)
+        return self.get_inference_energy(self.x, self.hid_feat, self.init_pose, transforms)
 
+    # @torch.compile(dynamic=True, backend=prof)
     def infer_bfgs_single(self, x, hid_feat, pose_callback):
         """ Use Pytorch's L-BFGS optimizer to minimize the predicted score
         w/r/t the translation, rotation, and torsional angles """
@@ -179,17 +205,35 @@ class DiffusionV3(nn.Module, Model):
             params = optimizer.param_groups[0]["params"]
             transforms = Batch(PoseTransform, trans=params[0], rot=params[1], tor_angles=[params[2]])
             return transforms.apply(init_pose, x.lig_torsion_data)
+        
 
+        # od = torch.jit.trace_module(self, {"get_raw_inference_energy": (params[0], params[1], [params[2]])})
+        
         def closure():
             optimizer.zero_grad()
             if pose_callback is not None:
                 pose_callback(x, get_poses())
             params = optimizer.param_groups[0]["params"]
             transforms = Batch(PoseTransform, trans=params[0], rot=params[1], tor_angles=[params[2]])
-            U = self.get_inference_energy(x, hid_feat, init_pose, transforms)
+            # U = mod.get_raw_inference_energy(params[0], params[1], [params[2]])
+            U = self.get_inference_energy(x, hid_feat, init_pose, transforms).sum()
             U.backward()
+            # U = self.infer_backward(x, hid_feat, init_pose, transforms)
+            # print(U)
+            # torch._dynamo.explain(DiffusionV3.infer_backward, self, x, hid_feat, init_pose, transforms)
             return U
         
         optimizer.step(closure)
 
-        return get_poses()[0]
+        params = optimizer.param_groups[0]["params"]
+        transforms = Batch(PoseTransform, trans=params[0], rot=params[1], tor_angles=[params[2]])
+        Us = self.get_inference_energy(x, hid_feat, init_pose, transforms)[0]
+
+        # sort poses according to increasing "energy"
+        idx = torch.argsort(Us)
+        energy = Us[idx]
+
+        coord = get_poses().coord[0]
+        poses = MultiPose(coord[idx])
+
+        return poses, energy
