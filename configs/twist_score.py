@@ -35,6 +35,8 @@ class TwistScore(TwistModule):
     
     def get_energy(self, x, coef, lig_pose, inference=False):
 
+        self.checkpoint()
+
         rbf_start = self.cfg.rbf_start
         rbf_end = self.cfg.rbf_end
         rbf_steps = self.cfg.rbf_steps
