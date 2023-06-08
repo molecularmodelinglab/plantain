@@ -7,35 +7,10 @@ from models.force_field import ScaleOutput, cdist_diff, rbf_encode
 from models.twister_v2 import AttentionContract, FullNorm, NormAndLinear, PredEnergy, TwistBlock, TwistEncoder, TwistFFCoef, TwistIndex, TwistModule
 from terrace import Batch, LazyLinear
 
+class FastScore(TwistModule):
 
-class TwistScore(TwistModule):
-
-    def get_input_feats(self):
-        return [ "lig_graph", "rec_graph", "full_rec_data" ]
-
-    def __init__(self, cfg):
-        super().__init__(cfg)
-
-    def get_hidden_feat(self, x):
+    def forward(self, x, coef, lig_pose, inference=False):
         self.start_forward()
-
-        twist_index = TwistIndex(x)
-
-        td = self.make(TwistEncoder, self.cfg)(x, twist_index)
-        for i in range(self.cfg.num_blocks):
-            td = td + self.make(TwistBlock, self.cfg)(x, twist_index, td)
-            if self.cfg.get("norm_after_add", False):
-                td = self.make(FullNorm, self.cfg)(td)
-
-        return Batch(TwistFFCoef,
-            l_rf_coef = self.make(LazyLinear, self.cfg.rbf_steps)(F.leaky_relu(td.l_rf_feat)),
-            ll_coef = self.make(LazyLinear, self.cfg.rbf_steps)(F.leaky_relu(td.ll_feat)),
-            inv_dist_mat = self.make(LazyLinear, 1)(F.leaky_relu(td.l_rf_feat))[...,0]
-        )
-    
-    def get_energy(self, x, coef, lig_pose, inference=False):
-
-        self.checkpoint()
 
         rbf_start = self.cfg.rbf_start
         rbf_end = self.cfg.rbf_end
@@ -97,3 +72,28 @@ class TwistScore(TwistModule):
         energy = pred_dist.mean(-2)
 
         return Batch(PredEnergy, dist=pred_dist, rmsd=pred_rmsd, noise=pred_noise, energy=energy)
+
+class TwistScore(TwistModule):
+
+    def get_input_feats(self):
+        return [ "lig_graph", "rec_graph", "full_rec_data" ]
+
+    def get_hidden_feat(self, x):
+        self.start_forward()
+
+        twist_index = TwistIndex(x)
+
+        td = self.make(TwistEncoder, self.cfg)(x, twist_index)
+        for i in range(self.cfg.num_blocks):
+            td = td + self.make(TwistBlock, self.cfg)(x, twist_index, td)
+            if self.cfg.get("norm_after_add", False):
+                td = self.make(FullNorm, self.cfg)(td)
+
+        return Batch(TwistFFCoef,
+            l_rf_coef = self.make(LazyLinear, self.cfg.rbf_steps)(F.leaky_relu(td.l_rf_feat)),
+            ll_coef = self.make(LazyLinear, self.cfg.rbf_steps)(F.leaky_relu(td.ll_feat)),
+            inv_dist_mat = self.make(LazyLinear, 1)(F.leaky_relu(td.l_rf_feat))[...,0]
+        )
+    
+    def get_energy(self, x, coef, lig_pose, inference=False):
+        return self.make(FastScore, self.cfg)(x, coef, lig_pose, inference)
