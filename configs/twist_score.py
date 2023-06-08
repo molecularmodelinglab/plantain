@@ -89,6 +89,8 @@ class TwistScore(TwistModule):
             if self.cfg.get("norm_after_add", False):
                 td = self.make(FullNorm, self.cfg)(td)
 
+        self.fast_score = self.make(FastScore, self.cfg)
+
         return Batch(TwistFFCoef,
             l_rf_coef = self.make(LazyLinear, self.cfg.rbf_steps)(F.leaky_relu(td.l_rf_feat)),
             ll_coef = self.make(LazyLinear, self.cfg.rbf_steps)(F.leaky_relu(td.ll_feat)),
@@ -96,4 +98,4 @@ class TwistScore(TwistModule):
         )
     
     def get_energy(self, x, coef, lig_pose, inference=False):
-        return self.make(FastScore, self.cfg)(x, coef, lig_pose, inference)
+        return self.fast_score(x, coef, lig_pose, inference)
