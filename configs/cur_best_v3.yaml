@@ -171,7 +171,7 @@ model:
     pred: atom_dist
 
   inference:
-    num_init_poses: 32
+    # num_init_poses: 32
     num_optim_poses: 16
     optimizer: bfgs
     learn_rate: 0.1

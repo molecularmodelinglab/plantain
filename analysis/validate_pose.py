@@ -8,7 +8,7 @@ from rdkit import Chem
 import torch
 from tqdm import tqdm
 from common.cfg_utils import get_config
-from common.pose_transform import MultiPose, add_pose_to_mol
+from common.pose_transform import MultiPose, add_multi_pose_to_mol, add_pose_to_mol
 from common.wandb_utils import get_old_model
 from datasets.bigbind_struct import BigBindStructDataset
 from datasets.crossdocked import CrossDockedDataset
@@ -125,7 +125,7 @@ def main(name, split, tag):
     lig_files = []
     rec_files = []
     pred_files = []
-    for i, (lig_file, poc_file, p_pose) in enumerate(zip(dataset.structures.lig_crystal_file, dataset.structures.crossdock_rec_pocket_file, tqdm(p.lig_pose.get(0)))):
+    for i, (lig_file, poc_file, p_pose) in enumerate(zip(dataset.structures.lig_crystal_file, dataset.structures.crossdock_rec_pocket_file, tqdm(p.lig_pose))):
         if dataset_name == "bigbind_struct":
             lf = cfg.platform.bigbind_dir + "/" + lig_file
             rf = cfg.platform.bigbind_dir + "/" + poc_file
@@ -135,10 +135,12 @@ def main(name, split, tag):
         else:
             raise AssertionError
         mol = get_mol_from_file(lf)
-        add_pose_to_mol(mol, p_pose)
+        add_multi_pose_to_mol(mol, p_pose)
         pose_file = out_folder + str(i) + ".sdf"
         writer = Chem.SDWriter(pose_file)
-        writer.write(mol)
+        for c in range(mol.GetNumConformers()):
+            writer.write(mol, c)
+        writer.close()
         pred_files.append(pose_file)
         lig_files.append(lf)
         rec_files.append(rf)

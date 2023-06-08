@@ -31,6 +31,9 @@ class MultiPose(Batchable):
 
     def get(self, i):
         return Pose(coord=self.coord[i])
+    
+    def num_poses(self):
+        return len(self.coord)
 
     def items(self):
         for coord in self.coord:
@@ -48,6 +51,18 @@ def add_pose_to_mol(mol, pose):
                                                 float(coord[2])))
 
     mol.AddConformer(conformer)
+
+def add_multi_pose_to_mol(mol, mp):
+    mol.RemoveAllConformers()
+    for i in range(mp.num_poses()):
+        pose = mp.get(i)
+        conformer = Chem.Conformer(mol.GetNumAtoms())
+        for i, coord in enumerate(pose.coord.detach().cpu()):
+            conformer.SetAtomPosition(i, Point3D(float(coord[0]),
+                                                    float(coord[1]),
+                                                    float(coord[2])))
+
+        mol.AddConformer(conformer, True)
 
 # tried to make this class less hacky but only partially succeeded
 # a single transform actually can emcompass a batch of transforms

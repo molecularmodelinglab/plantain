@@ -224,8 +224,6 @@ class DiffusionV3(nn.Module, Model):
             else:
                 U = maybe_compile(self.get_inference_energy, self.cfg)(x, hid_feat, init_pose, transforms).sum()
             U.backward()
-            # U = self.infer_backward(x, hid_feat, init_pose, transforms)
-            # print(U)
             # torch._dynamo.explain(DiffusionV3.infer_backward, self, x, hid_feat, init_pose, transforms)
             return U
         
