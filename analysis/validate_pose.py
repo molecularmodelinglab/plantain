@@ -2,6 +2,7 @@ import os
 import shutil
 import pickle
 import sys
+import warnings
 import pandas as pd
 from rdkit import Chem
 import torch
@@ -87,7 +88,7 @@ def main(name, split, tag):
     else:
         if v3:
             assert name == "thin_chungus" and tag == "best_k"
-            cfg = get_config("icml_v3")
+            cfg = get_config("cur_best_v3")
             model = DiffusionV3(cfg)
             model.cache_key = "thin_chungus_v3"
 
@@ -152,4 +153,6 @@ if __name__ == "__main__":
         tag = sys.argv[2]
     except IndexError:
         tag = "best_k"
-    main(sys.argv[1], "val", tag)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        main(sys.argv[1], "val", tag)

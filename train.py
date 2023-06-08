@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import sys
+import warnings
 
 # needed because dgllife can't find rdkit otherwise...
 from rdkit import Chem
@@ -44,4 +45,6 @@ if __name__ == "__main__":
     else:
         raise AssertionError("First argument must be name of config profile!")
     cfg = get_config(cfg_name=cfg_name)
-    train(cfg)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        train(cfg)

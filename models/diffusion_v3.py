@@ -9,6 +9,7 @@ import jax
 from common.pose_transform import MultiPose, PoseTransform, Pose
 from common.torsion import TorsionData
 from common.jorch import to_jax
+from configs.twist_score import TwistScore
 from models.twister_v2 import TrueEnergy, TwistFFCoef, TwistForceField
 from terrace.batch import Batch, Batchable, collate
 from terrace.dataframe import DFRow, merge
@@ -37,7 +38,10 @@ class DiffusionV3(nn.Module, Model):
     def __init__(self, cfg):
         super().__init__()
         self.cfg = cfg
-        self.force_field = TwistForceField(cfg.model)
+        if "score" in self.cfg.model:
+            self.force_field = TwistScore(cfg.model)
+        else:
+            self.force_field = TwistForceField(cfg.model)
 
     @staticmethod
     def get_name() -> str:

@@ -177,15 +177,6 @@ model:
     learn_rate: 0.1
     max_iter: 150
 
-  score:
-    ll_heads: 4
-    ll_feat: 8
-    l_rf_heads: 4
-    l_rf_feat: 8
-    single_heads: 8
-    single_feat: 32
-    single_hid: 128
-
   fix_infer_torsion: false
 
   rbf_start: 0

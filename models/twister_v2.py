@@ -255,6 +255,7 @@ class AttentionContract(TwistModule):
         a (X, n_heads*n_feat) tensor"""
         out_feat = self.make(NormAndLinear, self.cfg, n_heads*n_feat)(xy_feat).reshape((*xy_feat.shape[:-1], n_heads, n_feat))
         atn_coefs = self.make(LazyLinear, n_heads)(F.leaky_relu(xy_feat)).unsqueeze(-1)
+        # print(atn_coefs.shape, mask.unsqueeze(-1).shape)
         atn_coefs = softmax_with_mask(atn_coefs, mask.unsqueeze(-1), -3)
         out = (atn_coefs*out_feat).sum(-3).reshape((*atn_coefs.shape[:-3], -1))
         return out
@@ -731,7 +732,7 @@ class TwistForceField(TwistModule):
 
         # pred_dist = dF.pad_packed_tensor(pred_dist if pred_dist.dim() == 1 else pred_dist.transpose(0,1), lig_graph.dgl().batch_num_nodes(), 0.0)
         U = pred_dist.mean(-1)
-        pred_dist = pred_dist.transpose(-1,-2)
+        pred_dist = pred_dist.transpose(-1,-2).contiguous()
         # U = (l_rf_U.sum((-1,-2,-3)) + ll_U.sum((-1,-2,-3)))*weight + bias
         return Batch(PredEnergy, dist=pred_dist, energy=U)
 
@@ -782,7 +783,7 @@ class TwistForceField(TwistModule):
 
         out = run_linear(comb, params.out_wb).squeeze(-1)
         pred_dist = out*params.final_weight + params.final_bias
-        pred_dist = pred_dist.transpose(1,2).contiguous()
+        pred_dist = pred_dist.transpose(-1,-2).contiguous()
 
         single_hid = run_attention_collapse(comb, mcfg.energy.single_heads, params.single_head, params.single_atn, ll_mask[...,0])
         single_hid = run_linear(single_hid, params.single_hid)
@@ -790,7 +791,7 @@ class TwistForceField(TwistModule):
         single_out = run_linear(single_hid, params.single_out)
 
         pred_noise = single_out[...,0]
-        pred_rmsd = single_out[...,0]
+        pred_rmsd = single_out[...,1]
 
         energy = pred_dist.mean(-2)
 
