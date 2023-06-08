@@ -10,6 +10,7 @@ from terrace import Batch, LazyLinear
 class FastScore(TwistModule):
 
     def forward(self, x, coef, lig_pose, inference=False):
+
         self.start_forward()
 
         rbf_start = self.cfg.rbf_start

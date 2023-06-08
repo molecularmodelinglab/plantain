@@ -216,8 +216,13 @@ class DiffusionV3(nn.Module, Model):
                 pose_callback(x, get_poses())
             params = optimizer.param_groups[0]["params"]
             transforms = Batch(PoseTransform, trans=params[0], rot=params[1], tor_angles=[params[2]])
-            # U = mod.get_raw_inference_energy(params[0], params[1], [params[2]])
-            U = maybe_compile(self.get_inference_energy, self.cfg)(x, hid_feat, init_pose, transforms).sum()
+            
+            # because terrace lazily initializes modules, we need to call the
+            # score function once before compiling
+            if hasattr(self.force_field, "fast_score") and not self.force_field.fast_score.is_initialized():
+                U = self.get_inference_energy(x, hid_feat, init_pose, transforms).sum()
+            else:
+                U = maybe_compile(self.get_inference_energy, self.cfg)(x, hid_feat, init_pose, transforms).sum()
             U.backward()
             # U = self.infer_backward(x, hid_feat, init_pose, transforms)
             # print(U)
