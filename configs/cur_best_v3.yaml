@@ -94,7 +94,7 @@ test_inference: true
 
 model:
 
-  type: diffusion_v2
+  type: diffusion_v3
 
   rec_encoder:
     node_embed_size: 64

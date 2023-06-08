@@ -68,22 +68,17 @@ losses:
     func: diffused_dist_mse
     weight: 1.0
 
-  # rmsd_mse:
-  #   func: diffused_rmsd_mse
-  #   weight: 1.0
+  rmsd_mse:
+    func: diffused_rmsd_mse
+    weight: 1.0
 
-  # noise_mse:
-  #   func: diffused_noise_mse
-  #   weight: 10.0
+  noise_mse:
+    func: diffused_noise_mse
+    weight: 10.0
 
 optimizer: adamw
 learn_rate: 1e-4
 max_epochs: 5000
-
-# batch_size: 1
-# batch_sampler:
-#   type: lig_times_rec
-#   max_size: 6000
 
 batch_sampler:
   type: rec
@@ -94,7 +89,7 @@ test_inference: true
 
 model:
 
-  type: diffusion_v2
+  type: diffusion_v3
 
   rec_encoder:
     node_embed_size: 64

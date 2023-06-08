@@ -1,5 +1,6 @@
 from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
+from functools import lru_cache
 import torch
 import numpy as np
 import torch.nn as nn
@@ -18,6 +19,12 @@ from .diffusion import get_transform_rmsds
 from validation.metrics import get_rmsds
 from multiprocessing import Pool
 import multiprocessing as mp
+
+@lru_cache
+def maybe_compile(f, cfg):
+    if cfg.platform.get("compile", True):
+        return torch.compile(dynamic=True)(f)
+    return f
 
 # torch._dynamo.config.cache_size_limit = 2048
 
@@ -161,7 +168,7 @@ class DiffusionV3(nn.Module, Model):
             ret.append(self.infer_bfgs_single(x0, hf0, pose_callback))
         return collate(ret)
     
-    @torch.compile(dynamic=True)#, backend=prof)
+    # @torch.compile(dynamic=True)#, backend=prof)
     def get_inference_energy(self, x, hid_feat, init_pose, transforms):
         """ This is the function we want to differentiate -- get the
         predicted 'energy' from the ligand translation, rotation,
@@ -177,16 +184,6 @@ class DiffusionV3(nn.Module, Model):
         Us = self.get_energy(x, hid_feat, poses, True).energy
         # U = Us.sum()
         return Us
-    
-    # @torch.compile(dynamic=True, fullgraph=True)
-    def infer_backward(self, x, hid_feat, init_pose, transforms):
-        U = self.get_inference_energy(x, hid_feat, init_pose, transforms)
-        U.backward()
-        return U
-    
-    def get_raw_inference_energy(self, trans, rot, tor_angles):
-        transforms = Batch(PoseTransform, trans=trans, rot=rot, tor_angles=tor_angles)
-        return self.get_inference_energy(self.x, self.hid_feat, self.init_pose, transforms)
 
     # @torch.compile(dynamic=True, backend=prof)
     def infer_bfgs_single(self, x, hid_feat, pose_callback):
@@ -220,7 +217,7 @@ class DiffusionV3(nn.Module, Model):
             params = optimizer.param_groups[0]["params"]
             transforms = Batch(PoseTransform, trans=params[0], rot=params[1], tor_angles=[params[2]])
             # U = mod.get_raw_inference_energy(params[0], params[1], [params[2]])
-            U = self.get_inference_energy(x, hid_feat, init_pose, transforms).sum()
+            U = maybe_compile(self.get_inference_energy, self.cfg)(x, hid_feat, init_pose, transforms).sum()
             U.backward()
             # U = self.infer_backward(x, hid_feat, init_pose, transforms)
             # print(U)
