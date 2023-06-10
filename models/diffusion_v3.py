@@ -200,7 +200,9 @@ class DiffusionV3(nn.Module, Model):
         params.append(nn.Parameter(rand_transforms.trans))
         params.append(nn.Parameter(rand_transforms.rot))
         params.append(nn.Parameter(rand_transforms.tor_angles[0]))
-        optimizer = torch.optim.LBFGS(params, inf_cfg.learn_rate, inf_cfg.max_iter)
+        # emperically, optimization can diverge when line_search_fn is the default (None)
+        # strong-wolfe is great tho
+        optimizer = torch.optim.LBFGS(params, inf_cfg.learn_rate, inf_cfg.max_iter, line_search_fn="strong_wolfe")
         
         def get_poses():
             params = optimizer.param_groups[0]["params"]

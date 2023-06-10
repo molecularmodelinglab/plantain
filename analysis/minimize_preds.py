@@ -6,9 +6,10 @@ from rdkit.Chem.rdMolAlign import CalcRMS
 
 from tqdm import tqdm
 from common.cfg_utils import get_config
-from common.utils import get_mol_from_file
+from common.utils import get_mol_from_file, get_mol_from_file_no_cache
 from common.wandb_utils import get_old_model
 from datasets.bigbind_struct import BigBindStructDataset
+from datasets.crossdocked import CrossDockedDataset
 from vina_bigbind import prepare_rec
 
 def mean_acc(rms_dict, thresh=2.0):
@@ -21,7 +22,7 @@ class DummyModel:
 
 def minimize_preds(cfg):
     # model = get_old_model(cfg, "even_more_tor", "best_k")
-    model = DummyModel("wandb:zza5dhen:v4")
+    model = DummyModel("thin_chungus_v3")
 
     pred_folder = f"outputs/pose_preds/{model.cache_key}/"
     out_folder = f"outputs/pose_preds/{model.cache_key}-minimized/"
@@ -36,20 +37,20 @@ def minimize_preds(cfg):
     acc_thresh = 2.0
     local_min_thresh = 2.0
 
-    dataset = BigBindStructDataset(cfg, "val", [])
-    for i, (rf, pocket) in enumerate(zip(tqdm(dataset.structures.ex_rec_file), dataset.structures.pocket)):
+    dataset = CrossDockedDataset(cfg, "val", [])
+    for i, (rf, pocket) in enumerate(zip(tqdm(dataset.structures.crossdock_rec_file), dataset.structures.pocket)):
 
         # rf = cfg.platform.bigbind_dir + "/" + rf
         docked_sdf = pred_folder + f"/{i}.sdf"
         out_sdf = out_folder + f"/{i}.sdf"
 
         try:
-            min_mol = get_mol_from_file(out_sdf)
-        except OSError:
+            min_mol = get_mol_from_file_no_cache(out_sdf)
+        except (OSError, AttributeError):
             # print("TODO: no more breaking")
             # continue
-            rf = prepare_rec(cfg, rf)
-            cmd = f"{cfg.platform.gnina_sif} gnina -r {rf} -l {docked_sdf} --minimize -o {out_sdf}"
+            # rf = prepare_rec(cfg, rf)
+            cmd = f"apptainer run --nv {cfg.platform.gnina_sif} gnina -r {cfg.platform.crossdocked_dir}/{rf} -l {docked_sdf} --minimize -o {out_sdf}"
             proc = subprocess.Popen(cmd.split(" "), stdout=subprocess.PIPE)
             out, err = proc.communicate()
             min_mol = get_mol_from_file(out_sdf)
