@@ -70,10 +70,14 @@ class DiffusionV3(nn.Module, Model):
                    hid_feat,
                    lig_poses,
                    inference=False):
-        energy = self.force_field.get_energy(batch,
-                                            hid_feat,
-                                            lig_poses,
-                                            inference)
+        if inference and self.cfg.platform.get("infer_on_cpu", False):
+            ff = self.ff_cpu
+        else:
+            ff = self.force_field
+        energy = ff.get_energy(batch,
+                                hid_feat,
+                                lig_poses,
+                                inference)
         return energy
 
     def get_diffused_transforms(self, batch, device, timesteps=None):
@@ -153,6 +157,12 @@ class DiffusionV3(nn.Module, Model):
     def infer_bfgs(self, x, hid_feat = None, pose_callback=None):
         if hid_feat is None:
             hid_feat = self.get_hidden_feat(x)
+
+        if self.cfg.platform.get("infer_on_cpu", False):
+            hid_feat = hid_feat.cpu()
+            x = x.cpu()
+            self.ff_cpu = deepcopy(self.force_field).cpu()
+
         ret = []
         for i, (L, Rf) in enumerate(zip(x.lig_graph.dgl().batch_num_nodes(),
                                 x.full_rec_data.dgl().batch_num_nodes())):
