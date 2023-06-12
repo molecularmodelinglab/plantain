@@ -28,13 +28,14 @@ class Trainer(pl.LightningModule):
 
         self.metrics = nn.ModuleDict()
 
-        for name in self.cfg.val_datasets:
+        for i, name in enumerate(self.cfg.val_datasets):
             val_loader = make_dataloader(self.cfg, name, "val", self.model.get_input_feats())
+            tasks = set(self.model.get_tasks()).intersection(val_loader.dataset.get_tasks())
 
             # give the model an initial batch before training to initialize
             # its (lazily created) parameters
             x, y = collate([val_loader.dataset[0]])
-            self.model(x)
+            self.model.predict_train(x, y, tasks, "val", 0)
     
     def get_tasks(self, prefix, dataset_idx):
         dataset = self.get_dataset(prefix, dataset_idx)

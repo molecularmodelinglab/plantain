@@ -159,8 +159,13 @@ class DiffusionV3(nn.Module, Model):
             hid_feat = self.get_hidden_feat(x)
 
         if self.cfg.platform.get("infer_on_cpu", False):
-            hid_feat = deepcopy(hid_feat).cpu()
-            x = deepcopy(x).cpu()
+            # hid_feat = deepcopy(hid_feat).cpu()
+            # x = deepcopy(x).cpu()
+            hid_feat = hid_feat.cpu()
+            x = x.cpu()
+            # we don't actually need to deepcopy the entire twister model,
+            # but this takes so little time that it's not worth the effort
+            # to optimize
             self.ff_cpu = deepcopy(self.force_field).cpu()
 
         ret = []
