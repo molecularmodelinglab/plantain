@@ -159,8 +159,8 @@ class DiffusionV3(nn.Module, Model):
             hid_feat = self.get_hidden_feat(x)
 
         if self.cfg.platform.get("infer_on_cpu", False):
-            hid_feat = hid_feat.cpu()
-            x = x.cpu()
+            hid_feat = deepcopy(hid_feat).cpu()
+            x = deepcopy(x).cpu()
             self.ff_cpu = deepcopy(self.force_field).cpu()
 
         ret = []
