@@ -53,9 +53,18 @@ class FastScore(TwistModule):
         l_rf_data = l_rf_rbfs*l_rf_coef
         ll_data = ll_rbfs*ll_coef
 
+        if "l_rf_hid" in self.cfg.score:
+            l_rf_data = F.leaky_relu(self.make(NormAndLinear, self.cfg, self.cfg.score.l_rf_hid)(l_rf_data))
+
+        if "ll_hid" in self.cfg.score:
+            ll_data = F.leaky_relu(self.make(NormAndLinear, self.cfg, self.cfg.score.ll_hid)(ll_data))
+
         ll_col = self.make(AttentionContract, self.cfg)(ll_data, self.cfg.score.ll_heads, self.cfg.score.ll_feat, ll_mask.unsqueeze(-1))
         l_rf_col = self.make(AttentionContract, self.cfg)(l_rf_data, self.cfg.score.l_rf_heads, self.cfg.score.l_rf_feat, l_rf_mask.unsqueeze(-1))
-        all_collapsed =torch.cat((ll_col, l_rf_col), -1)
+        all_collapsed = torch.cat((ll_col, l_rf_col), -1)
+
+        if self.cfg.score.get("leaky_relu_after_collapse", False):
+            all_collapsed = F.leaky_relu(all_collapsed)
 
         pred_dist = self.make(LazyLinear, 1)(all_collapsed).squeeze(-1).transpose(-1,-2).contiguous()
 
@@ -70,7 +79,15 @@ class FastScore(TwistModule):
         pred_noise = single_out[...,0]
         pred_rmsd = single_out[...,1]
 
-        energy = pred_dist.mean(-2)
+        pred = self.cfg.score.get("pred", "mae")
+        # print("\nPRED", pred)
+
+        if pred == "mae":
+            energy = pred_dist.mean(-2)
+        elif pred == "rmsd":
+            energy = pred_rmsd
+        elif pred == "noise":
+            energy = pred_noise
 
         return Batch(PredEnergy, dist=pred_dist, rmsd=pred_rmsd, noise=pred_noise, energy=energy)
 

@@ -2,6 +2,7 @@ from collections import defaultdict
 import os
 import shutil
 import subprocess
+from traceback import print_exc
 from rdkit.Chem.rdMolAlign import CalcRMS
 
 from tqdm import tqdm
@@ -55,13 +56,19 @@ def minimize_preds(cfg):
             out, err = proc.communicate()
             min_mol = get_mol_from_file(out_sdf)
 
-        docked_mol = get_mol_from_file(docked_sdf)
+        try:
+            docked_mol = get_mol_from_file(docked_sdf)
+        except AttributeError:
+            print_exc()
         true_lig = get_mol_from_file(dataset.get_lig_crystal_file(i))
 
-        docked_min_rms[pocket].append(CalcRMS(docked_mol, min_mol, maxMatches=1000))
-        min_true_rms[pocket].append(CalcRMS(true_lig, min_mol, maxMatches=1000))
-        docked_true_rms[pocket].append(CalcRMS(docked_mol, true_lig, maxMatches=1000))
-        
+        try:
+            docked_min_rms[pocket].append(CalcRMS(docked_mol, min_mol, maxMatches=1000))
+            min_true_rms[pocket].append(CalcRMS(true_lig, min_mol, maxMatches=1000))
+            docked_true_rms[pocket].append(CalcRMS(docked_mol, true_lig, maxMatches=1000))
+        except RuntimeError:
+            print_exc()
+
     print(f"Plantain acc: ", mean_acc(docked_true_rms, acc_thresh))
     print(f"Minimized plantain acc: ", mean_acc(min_true_rms, acc_thresh))
     print(f"Frac of time plantain is in local min: ", mean_acc(docked_min_rms, local_min_thresh))

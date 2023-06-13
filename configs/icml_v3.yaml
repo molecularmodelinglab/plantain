@@ -68,13 +68,13 @@ losses:
     func: diffused_dist_mse
     weight: 1.0
 
-  rmsd_mse:
-    func: diffused_rmsd_mse
-    weight: 1.0
+  # rmsd_mse:
+  #   func: diffused_rmsd_mse
+  #   weight: 1.0
 
-  noise_mse:
-    func: diffused_noise_mse
-    weight: 10.0
+  # noise_mse:
+  #   func: diffused_noise_mse
+  #   weight: 10.0
 
 optimizer: adamw
 learn_rate: 1e-4
@@ -173,6 +173,8 @@ model:
     max_iter: 150
 
   score:
+    ll_hid: 32
+    l_rf_hid: 16
     ll_heads: 4
     ll_feat: 8
     l_rf_heads: 4
@@ -180,6 +182,8 @@ model:
     single_heads: 8
     single_feat: 32
     single_hid: 128
+    leaky_relu_after_collapse: true
+    pred: mae # can be mae, rmsd, or noise
 
   fix_infer_torsion: false
 

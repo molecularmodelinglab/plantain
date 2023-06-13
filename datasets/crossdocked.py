@@ -154,11 +154,10 @@ class CrossDockedDataset(Dataset):
         if self.cfg.get("debug_crystal_pose_cheat", False):
             lig = lig_crystal
 
-        # refined = torch.tensor(self.refined_mask[index], dtype=torch.bool)
         x = DFRow(lig=lig,
                   rec=rec,
+                  index=torch.tensor(index, dtype=torch.long),
                   pocket_id=poc_id,
-                  # refined=refined,
                   rec_file=rec_file,
                   lig_crystal_file=lig_crystal_file)
         

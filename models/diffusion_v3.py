@@ -10,7 +10,7 @@ import jax
 from common.pose_transform import MultiPose, PoseTransform, Pose
 from common.torsion import TorsionData
 from common.jorch import to_jax
-from configs.twist_score import TwistScore
+from models.twist_score import TwistScore
 from models.twister_v2 import TrueEnergy, TwistFFCoef, TwistForceField
 from terrace.batch import Batch, Batchable, collate
 from terrace.dataframe import DFRow, merge

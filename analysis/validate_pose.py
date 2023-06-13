@@ -24,7 +24,7 @@ from validation.metrics import get_metrics
 from validation.validate import get_preds, validate
 from common.utils import flatten_dict, get_mol_from_file
 
-def eval_combo(cfg, dataset_name, num_preds, split, shuffle_val):
+def eval_naive_combo(cfg, dataset_name, num_preds, split, shuffle_val):
 
     device = "cpu"
     cfg.data.num_poses = 9
@@ -57,14 +57,14 @@ def eval_combo(cfg, dataset_name, num_preds, split, shuffle_val):
 
 def main(name, split, tag):
     print(f"Evaluating {name}:{tag} on {split}")
-    v3 = True
+    v2_to_v3 = False
     num_preds = None
     shuffle_val = False
     dataset_name = "crossdocked"
     # dataset_name = "bigbind_struct"
     subset = None
 
-    cfg = get_config("diffusion_v2")
+    cfg = get_config("icml_v3")
 
     if subset is None:
         subset_indexes = None
@@ -83,10 +83,10 @@ def main(name, split, tag):
     elif name == "diffdock":
         cfg.data.num_poses = 40
         model = DiffDock(cfg, split)
-    elif name == "combo":
-        return eval_combo(cfg, dataset_name, num_preds, split, shuffle_val)
+    elif name == "naive_combo":
+        return eval_naive_combo(cfg, dataset_name, num_preds, split, shuffle_val)
     else:
-        if v3:
+        if v2_to_v3:
             assert name == "thin_chungus" and tag == "best_k"
             cfg = get_config("cur_best_v3")
             model = DiffusionV3(cfg)
@@ -100,6 +100,8 @@ def main(name, split, tag):
             model.force_field.load_state_dict(torch.load("data/cur_best.pt"))
         else:
             model = get_old_model(cfg, name, tag)
+            model.cfg.model.score = cfg.model.score
+            model.force_field.cfg.score = cfg.model.score
             cfg = model.cfg
 
     cfg.batch_size = 4
@@ -125,15 +127,17 @@ def main(name, split, tag):
     lig_files = []
     rec_files = []
     pred_files = []
-    for i, (lig_file, poc_file, p_pose) in enumerate(zip(dataset.structures.lig_crystal_file, dataset.structures.crossdock_rec_pocket_file, tqdm(p.lig_pose))):
-        if dataset_name == "bigbind_struct":
-            lf = cfg.platform.bigbind_dir + "/" + lig_file
-            rf = cfg.platform.bigbind_dir + "/" + poc_file
-        elif dataset_name == "crossdocked":
-            lf = cfg.platform.crossdocked_dir + "/" + lig_file
-            rf = cfg.platform.crossdocked_dir + "/" + poc_file
-        else:
-            raise AssertionError
+    for i, (lig_file, poc_file, p_pose) in enumerate(zip(x.lig_crystal_file, x.rec_file, tqdm(p.lig_pose))):
+        lf = lig_file
+        rf = poc_file
+        # if dataset_name == "bigbind_struct":
+        #     lf = cfg.platform.bigbind_dir + "/" + lig_file
+        #     rf = cfg.platform.bigbind_dir + "/" + poc_file
+        # elif dataset_name == "crossdocked":
+        #     lf = cfg.platform.crossdocked_dir + "/" + lig_file
+        #     rf = cfg.platform.crossdocked_dir + "/" + poc_file
+        # else:
+        #     raise AssertionError
         mol = get_mol_from_file(lf)
         add_multi_pose_to_mol(mol, p_pose)
         pose_file = out_folder + str(i) + ".sdf"
