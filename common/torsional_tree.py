@@ -4,7 +4,6 @@ from openbabel import openbabel as ob
 from openbabel import pybel
 import networkx as nx
 from copy import copy,deepcopy
-import torchvision.transforms as transforms
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 from rdkit import Chem
@@ -393,11 +392,55 @@ def get_tree_edge_mapping(tree,rotate_edges):
                     mapping.append((i))
     return mapping
 
+def get_all_atoms_for_node(tor_tree, node_index):
+    """ returns the union of the current node's atom indexes
+    and all its children"""
+    ret = list(tor_tree[node_index].atoms)
+    for child in tor_tree[node_index].children:
+        ret += get_all_atoms_for_node(tor_tree, child)
+    return ret
+
+def rotate_node(tor_tree, node_index, coords, scale):
+    """ Applies the rotation of the current node to coords,
+    scaled by the scale factor. Returns the updated coords
+    TODO: This scales things improperly at the momement, need
+    to scale the rotation by the 'moment of inertia'"""
+
+    node = tor_tree[node_index]
+    idx = get_all_atoms_for_node(tor_tree, node_index)
+    if node.rotation.shape == ():
+        torque = node.rotation*node.axis
+    else:
+        # if it's the root node, just use the global torques
+        torque = node.torques
+
+    rot = roma.rotvec_to_rotmat(torque*scale)
+    cur_coord = coords[idx]
+    center = node.origin_coords
+    ret = deepcopy(coords)
+    ret[idx] = center + (cur_coord - center)@rot
+    return ret
+
+def apply_forces(tor_tree, coords, forces, dt):
+    """Uses the torsional tree to update the coordinates
+    given forces with scale factor dt. Returns the
+    new coords """
+    set_derivative(tor_tree,0,forces)
+    # apply all the rotations
+    for i in range(len(tor_tree)):
+        coords = rotate_node(tor_tree, i, coords, dt)
+        set_coords(tor_tree, coords)
+    # apply the translations
+    coords += tor_tree[0].forces*dt
+    set_coords(tor_tree, coords)
+
+    return coords
+
 if __name__ == '__main__':
     test_smile="C#CCOCCOCCOCCNc1nc(N2CCN(C(=O)[C@H](CCC(=O)O)n3cc(C(N)CO)nn3)CC2)nc(N2CCN(C(=O)[C@H](CCC(=O)O)n3cc(C([NH3+])CO)nn3)CC2)n1"
     mol=pybel.readstring("smi",test_smile)
     mol.removeh()
-    rigid_fragments=obtain_rigid_from_mol(mol)
+    rigid_fragments=obtain_rigid_from_mol(mol, [])
     root_fragment,root_atom=get_root_fragment(mol,rigid_fragments)
     tree,visited=breadth_first_generate(mol,rigid_fragments,root_fragment,root_atom)
     mol.make3D()
@@ -438,7 +481,7 @@ if __name__ == '__main__':
         new_coords.append([x,y,z])
     new_coords=np.array(new_coords)
     new_coords_tensor=torch.tensor(new_coords,requires_grad=True)
-    rigid_fragments=obtain_rigid_from_mol(new_mol)
+    rigid_fragments=obtain_rigid_from_mol(new_mol, [])
     root_fragment,root_atom=get_root_fragment(new_mol,rigid_fragments)
     new_tree,new_visited=breadth_first_generate(new_mol,rigid_fragments,root_fragment,root_atom)
     print(calculate_torsion_angle(new_coords_tensor[0],new_coords_tensor[1],new_coords_tensor[2],new_coords_tensor[3]))

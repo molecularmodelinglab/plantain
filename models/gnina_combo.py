@@ -1,3 +1,4 @@
+from traceback import print_exc
 import pandas as pd
 from rdkit import Chem
 import torch
@@ -28,22 +29,32 @@ class GninaComboPose(Model):
         return self
 
     def call_single(self, x):
-        fname = self.dir + f"/{int(x.index)}.sdf"
+        try:
+            fname = self.dir + f"/{int(x.index)}.sdf"
 
-        coords = []
-        scores = []
-        for lig in Chem.SDMolSupplier(fname):
-            scores.append(lig.GetPropsAsDict()["CNNscore"])
-            lig = Chem.RemoveHs(lig)
-            assert lig.GetNumAtoms() == x.lig.GetNumAtoms()
-            order = lig.GetSubstructMatch(x.lig)
-            lig = Chem.RenumberAtoms(lig, list(order))
-            pose = lig_embed_pose(self.cfg, DFRow(lig=lig))
-            coords.append(pose.coord)
+            coords = []
+            scores = []
+            for lig in Chem.SDMolSupplier(fname):
+                scores.append(lig.GetPropsAsDict()["CNNscore"])
+                lig = Chem.RemoveHs(lig)
+                assert lig.GetNumAtoms() == x.lig.GetNumAtoms()
+                order = lig.GetSubstructMatch(x.lig)
+                lig = Chem.RenumberAtoms(lig, list(order))
+                pose = lig_embed_pose(self.cfg, DFRow(lig=lig))
+                coords.append(pose.coord)
 
-        indexes = torch.argsort(-torch.tensor(scores))
-        scores = torch.tensor(scores)[indexes]
-        coords = torch.stack(coords)[indexes]
-        pose = MultiPose(coord=coords.to(self.device))
-        return DFRow(lig_pose=pose,
-                     pose_scores=scores)
+            while len(scores) < self.cfg.data.num_poses:
+                scores.append(-1.0)
+                coords.append(pose.coord)
+
+            indexes = torch.argsort(-torch.tensor(scores))
+            scores = torch.tensor(scores)[indexes].to(self.device)
+            coords = torch.stack(coords)[indexes]
+            pose = MultiPose(coord=coords.to(self.device))
+            return DFRow(lig_pose=pose,
+                        pose_scores=scores)
+        except:
+            print_exc()
+            pose_scores = torch.zeros((self.cfg.data.num_poses,), device=self.device)
+            return DFRow(lig_pose=x.lig_docked_poses,
+                            pose_scores=pose_scores)

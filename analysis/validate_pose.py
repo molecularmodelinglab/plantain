@@ -16,6 +16,7 @@ from datasets.make_dataset import make_dataset
 from models.diffdock import DiffDock, get_diffdock_indexes
 from models.diffusion_v3 import DiffusionV3
 from models.gnina import GninaPose
+from models.gnina_combo import GninaComboPose
 from models.sym_diffusion import SymDiffusion
 from models.vina import VinaPose
 from terrace.batch import Batch, collate
@@ -83,6 +84,9 @@ def main(name, split, tag):
     elif name == "diffdock":
         cfg.data.num_poses = 40
         model = DiffDock(cfg, split)
+    elif name == "combo":
+        cfg.data.num_poses = 16
+        model = GninaComboPose(cfg, "wandb:3vs554ja:v5")
     elif name == "naive_combo":
         return eval_naive_combo(cfg, dataset_name, num_preds, split, shuffle_val)
     else:

@@ -18,7 +18,8 @@ omegaconf
 torchmetrics
 rdkit
 py3Dmol
-jax
-jaxlib
+# openbabel
+# jax
+# jaxlib
 terrace
 # torch_scatter

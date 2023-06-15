@@ -9,7 +9,7 @@ from rdkit import Chem
 from common.jorch import JorchTensor, jorch_unwrap, jorch_wrap
 from terrace import Batchable
 
-# many of these functions are takem/modified from:
+# many of these functions are taken/modified from:
 #  https://github.com/HannesStark/EquiBind/blob/main/commons/geometry_utils.py
 # and https://github.com/gcorso/torsional-diffusion/blob/master/utils/torsion.py
 
@@ -149,9 +149,8 @@ class TorsionData(Batchable):
             new_coord = jorch_wrap(new_coord)
         else:
             new_coord = coord
-            me = self # TorTuple(self.rot_edges, self.rot_masks)
             for idx in range(angles.shape[-1]):
-                new_coord = TorsionData.set_angle(me, idx, angles[...,idx], new_coord)
+                new_coord = self.set_angle(idx, angles[...,idx], new_coord)
                 # explanation, *rest = torch._dynamo.explain(TorsionData.set_angle, me, idx, angles[...,idx], new_coord)
                 # print(explanation)
                 # print(rest[-1])
