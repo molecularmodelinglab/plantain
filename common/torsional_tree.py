@@ -7,7 +7,7 @@ from copy import copy,deepcopy
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 from rdkit import Chem
-
+import roma
 
 class Node:
     def __init__(self,index, origin,atoms,parent=None):
@@ -402,9 +402,7 @@ def get_all_atoms_for_node(tor_tree, node_index):
 
 def rotate_node(tor_tree, node_index, coords, scale):
     """ Applies the rotation of the current node to coords,
-    scaled by the scale factor. Returns the updated coords
-    TODO: This scales things improperly at the momement, need
-    to scale the rotation by the 'moment of inertia'"""
+    scaled by the scale factor. Returns the updated coords'"""
 
     node = tor_tree[node_index]
     idx = get_all_atoms_for_node(tor_tree, node_index)
@@ -414,12 +412,24 @@ def rotate_node(tor_tree, node_index, coords, scale):
         # if it's the root node, just use the global torques
         torque = node.torques
 
-    rot = roma.rotvec_to_rotmat(torque*scale)
     cur_coord = coords[idx]
     center = node.origin_coords
     ret = deepcopy(coords)
+
+    radius = torch.linalg.norm(cur_coord-center, dim=-1)
+
+    # the "moment of inertia" assumes that all atoms
+    # have equal mass, and the total mass of the molecule
+    # is 1. The point here isn't to be physically realistic,
+    # just to ensure that the rotations and translations
+    # operate on the same scale
+
+    moment_inertia = (radius**2).sum()/len(coords)
+    rot = roma.rotvec_to_rotmat(torque*scale/moment_inertia)
+
     ret[idx] = center + (cur_coord - center)@rot
     return ret
+
 
 def apply_forces(tor_tree, coords, forces, dt):
     """Uses the torsional tree to update the coordinates
