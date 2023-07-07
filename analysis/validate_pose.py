@@ -10,14 +10,12 @@ from tqdm import tqdm
 from common.cfg_utils import get_config
 from common.pose_transform import MultiPose, add_multi_pose_to_mol, add_pose_to_mol
 from common.wandb_utils import get_old_model
-from datasets.bigbind_struct import BigBindStructDataset
 from datasets.crossdocked import CrossDockedDataset
 from datasets.make_dataset import make_dataset
 from models.diffdock import DiffDock, get_diffdock_indexes
 from models.diffusion_v3 import DiffusionV3
 from models.gnina import GninaPose
 from models.gnina_combo import GninaComboPose
-from models.sym_diffusion import SymDiffusion
 from models.vina import VinaPose
 from terrace.batch import Batch, collate
 from terrace.dataframe import DFRow
@@ -86,7 +84,7 @@ def main(name, split, tag):
         model = DiffDock(cfg, split)
     elif name == "combo":
         cfg.data.num_poses = 16
-        model = GninaComboPose(cfg, "wandb:3vs554ja:v5")
+        model = GninaComboPose(cfg, "wandb:ybslp3tt:v11")
     elif name == "naive_combo":
         return eval_naive_combo(cfg, dataset_name, num_preds, split, shuffle_val)
     else:
@@ -165,4 +163,4 @@ if __name__ == "__main__":
         tag = "best_k"
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        main(sys.argv[1], "val", tag)
+        main(sys.argv[1], "test", tag)

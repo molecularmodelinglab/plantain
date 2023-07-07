@@ -6,19 +6,27 @@ import numpy as np
 import torch.nn as nn
 import torch.nn.functional as F
 import dgl.backend as dF
-import jax
 from common.pose_transform import MultiPose, PoseTransform, Pose
 from common.torsion import TorsionData
-from common.jorch import to_jax
 from models.twist_score import TwistScore
 from models.twister_v2 import TrueEnergy, TwistFFCoef, TwistForceField
 from terrace.batch import Batch, Batchable, collate
 from terrace.dataframe import DFRow, merge
 from .model import Model
-from .diffusion import get_transform_rmsds
 from validation.metrics import get_rmsds
 from multiprocessing import Pool
 import multiprocessing as mp
+
+def get_transform_rmsds(x, true_pose, transform):
+    trans_poses = transform.apply(true_pose, x.lig_torsion_data)
+    ret = []
+    for lig, tps, true_pose in zip(x.lig, trans_poses, true_pose):
+        rmsds = []
+        for coord in tps.coord:
+            rmsds.append(get_rmsds([lig], collate([Pose(coord)]), [true_pose])[0])
+        ret.append(torch.stack(rmsds))
+    return torch.stack(ret)
+
 
 @lru_cache
 def maybe_compile(f, cfg):

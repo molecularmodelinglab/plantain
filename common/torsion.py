@@ -4,9 +4,7 @@ import torch
 import roma
 import math
 import networkx as nx
-import jax
 from rdkit import Chem
-from common.jorch import JorchTensor, jorch_unwrap, jorch_wrap
 from terrace import Batchable
 
 # many of these functions are taken/modified from:
@@ -140,20 +138,12 @@ class TorsionData(Batchable):
 
     # @torch.compile(dynamic=True)
     def set_all_angles(self, angles, coord):
-        if isinstance(coord, JorchTensor):
-            def body(idx, args):
-                rot_edges, rot_masks, new_coord = [jorch_wrap(a) for a in args]
-                t = TorsionData(rot_edges, rot_masks)
-                return rot_edges.arr, rot_masks.arr, t.set_angle(idx, angles[...,idx], new_coord).arr
-            *_, new_coord = jax.lax.fori_loop(0, angles.shape[-1], body, (self.rot_edges.arr, self.rot_masks.arr, coord.arr))
-            new_coord = jorch_wrap(new_coord)
-        else:
-            new_coord = coord
-            for idx in range(angles.shape[-1]):
-                new_coord = self.set_angle(idx, angles[...,idx], new_coord)
-                # explanation, *rest = torch._dynamo.explain(TorsionData.set_angle, me, idx, angles[...,idx], new_coord)
-                # print(explanation)
-                # print(rest[-1])
-                # exit()
-                # new_coord = self.set_angle(idx, angles[...,idx], new_coord)
+        new_coord = coord
+        for idx in range(angles.shape[-1]):
+            new_coord = self.set_angle(idx, angles[...,idx], new_coord)
+            # explanation, *rest = torch._dynamo.explain(TorsionData.set_angle, me, idx, angles[...,idx], new_coord)
+            # print(explanation)
+            # print(rest[-1])
+            # exit()
+            # new_coord = self.set_angle(idx, angles[...,idx], new_coord)
         return new_coord #rigid_align(new_coord, coord)

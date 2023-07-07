@@ -12,15 +12,15 @@ class VinaPose(Model):
     def __init__(self, cfg):
         self.cfg = cfg
         dfs = []
-        for split in ["train", "val", "test"]:
-            dfs.append(pd.read_csv(cfg.platform.bigbind_vina_dir + f"/structures_{split}.csv"))
+        for split in ["val", "test"]:
+            dfs.append(pd.read_csv(cfg.platform.crossdocked_vina_dir + f"/structures_{split}.csv"))
         self.df = pd.concat(dfs)
         self.cache_key = "vina"
         self.device = "cpu"
 
     def get_input_feats(self):
         # this is a hack. "lig_docked_poses" will default to just using the UFF
-        # pose on this dataset repeated a bunch of times. We can use that if GNINA
+        # pose on this dataset repeated a bunch of times. We can use that if Vina
         # didn't give us a valid pose for a particular datapoint
         return ["lig_docked_poses"]
 
@@ -34,12 +34,12 @@ class VinaPose(Model):
     def call_single(self, x):
         lig_file = "/".join(x.lig_crystal_file.split("/")[-2:])
         rec_file = "/".join(x.rec_file.split("/")[-2:])
-        results = self.df.query("ex_rec_pocket_file == @rec_file and lig_file == @lig_file")
+        results = self.df.query("crossdock_rec_pocket_file == @rec_file and lig_crystal_file == @lig_file")
         if len(results) == 0:
             return DFRow(lig_pose=x.lig_docked_poses)
         assert len(results) == 1
         
-        docked_file = self.cfg.platform.bigbind_vina_dir + "/" + next(iter(results.docked_lig_file))
+        docked_file = self.cfg.platform.crossdocked_vina_dir + "/" + next(iter(results.docked_lig_file))
         lig = get_mol_from_file(docked_file)
         lig = Chem.RemoveHs(lig)
         order = lig.GetSubstructMatch(x.lig)

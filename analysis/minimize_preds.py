@@ -23,7 +23,7 @@ class DummyModel:
 
 def minimize_preds(cfg):
     # model = get_old_model(cfg, "even_more_tor", "best_k")
-    model = DummyModel("wandb:3vs554ja:v5")
+    model = DummyModel("wandb:ybslp3tt:v11")
 
     pred_folder = f"outputs/pose_preds/{model.cache_key}/"
     out_folder = f"outputs/pose_preds/{model.cache_key}-minimized/"

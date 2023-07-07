@@ -14,7 +14,7 @@ def main(cfg, split, version):
     val_struct_df = dataset.structures
     dd_train_set = [ line.strip() for line in open(cfg.platform.diffdock_dir + "/data/splits/timesplit_no_lig_overlap_train").readlines() ]
 
-    sifts_file = "/home/boris/Data/SIFTS/pdb_chain_uniprot.csv"
+    sifts_file = cfg.sifts_csv
     sifts_df = pd.read_csv(sifts_file, comment='#')
     
     chain2uniprot = {}
@@ -40,6 +40,8 @@ def main(cfg, split, version):
         try:
             bb_val_uniprots.append(chain2uniprot[(pdb, chain)])
         except KeyError:
+            # This seems to be happening because PDBs that have been removed
+            # Just ignore them
             bb_val_uniprots.append("???")
     val_struct_df["uniprot"] = bb_val_uniprots
 

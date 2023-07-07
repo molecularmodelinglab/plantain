@@ -31,9 +31,7 @@ class GninaPose(Model):
     def __init__(self, cfg):
         self.cfg = cfg
         dfs = []
-        # for split in ["train", "val", "test"]:
-        #     dfs.append(pd.read_csv(cfg.platform.bigbind_gnina_dir + f"/structures_{split}.csv"))
-        for split in ["val"]:
+        for split in ["val", "test"]:
             dfs.append(pd.read_csv(cfg.platform.crossdocked_gnina_dir + f"/structures_{split}.csv"))
         self.df = pd.concat(dfs)
         self.cache_key = "gnina"
