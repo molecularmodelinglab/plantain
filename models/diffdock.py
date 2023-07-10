@@ -1,12 +1,13 @@
 from glob import glob
 from typing import List
 import pandas as pd
+import os
 from rdkit import Chem
 import torch
 from tqdm import tqdm, trange
 from common.cache import cache
 from common.pose_transform import MultiPose
-from common.utils import get_mol_from_file
+from common.utils import get_mol_from_file_no_cache
 from data_formats.transforms import lig_docked_poses, lig_embed_pose
 from models.model import Model, ScoreActivityModel
 from terrace.batch import Batch
@@ -19,7 +20,7 @@ class DiffDock(Model):
         self.cache_key = "diffdock"
         self.device = "cpu"
         self.split = split
-        bb_diffdock_csv = cfg.platform.diffdock_dir + f"/data/bb_struct_{split}.csv"
+        bb_diffdock_csv = cfg.platform.diffdock_dir + f"/data/crossdocked_{split}.csv"
         df = pd.read_csv(bb_diffdock_csv)
         df["rec_file"] = df.protein_path.str.split("/").apply(lambda x: "/".join(x[-2:]))
         self.df = df
@@ -47,21 +48,31 @@ class DiffDock(Model):
         
         complex_name = results.complex_name[0]
 
-        result_folder = self.cfg.platform.diffdock_dir + f"/results/bb_struct_{self.split}/" + complex_name
+        result_folder = self.cfg.platform.diffdock_dir + f"/results/crossdocked_{self.split}/" + complex_name
         result_sdfs = glob(result_folder + "/rank*_confidence*.sdf")
         
         if len(result_sdfs) == 0:
             return DFRow(lig_pose=x.lig_docked_poses)
         
-        
-        result_sdfs = sorted(result_sdfs, key=lambda f: int(f.split("_")[-2].split("rank")[-1]))
 
-        # print(complex_name, result_folder, len(result_sdfs))
-        assert len(result_sdfs) == 40
+        # smh I forgot to delete diffdock results between runs.
+        # this uses stat.st_mtime to get the latest files
+        sorted_results = []
+        for i in range(40):
+            cur_results = [(fname, os.stat(fname).st_mtime) for fname in result_sdfs if f"rank{i+1}_" in fname]
+            fname = sorted(cur_results, key=lambda x: -x[1])[0][0]
+            sorted_results.append(fname)       
 
         coord_list = []
-        for sdf in result_sdfs:
-            lig = get_mol_from_file(sdf)
+        for sdf in sorted_results:
+            lig = get_mol_from_file_no_cache(sdf)
+            if lig is None:
+                # if we can't load the ligand, it seems
+                # like that means diffdock is outputting
+                # really bizarre coordinates that can't
+                # be encoded in an SDF file
+                # print(f"Something is wrong with {sdf}")
+                return DFRow(lig_pose=x.lig_docked_poses)
             lig = Chem.RemoveHs(lig)
             order = lig.GetSubstructMatch(x.lig)
             lig = Chem.RenumberAtoms(lig, list(order))
@@ -72,7 +83,7 @@ class DiffDock(Model):
         pose = MultiPose(coord=torch.stack(coord_list).to(self.device))
         return DFRow(lig_pose=pose)
     
-@cache(lambda cfg, d: d.split, disable=False)
+@cache(lambda cfg, d: d.split, disable=False, version=2.0)
 def get_diffdock_indexes(cfg, dataset):
     model = DiffDock(cfg, dataset.split)
     indexes = set()
