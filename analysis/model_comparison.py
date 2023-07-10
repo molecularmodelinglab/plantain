@@ -60,14 +60,14 @@ def eval_model_on_crossdocked(name, split, subset):
 def main():
     split = "test"
     model_names = [
-        "diffdock",
-        # "plantain",
+        # "diffdock",
+        "plantain",
         # "gnina",
         # "vina",
     ]
     data = []
     for name in model_names:
-        data.append(eval_model_on_crossdocked(name, "test", "diffdock"))
+        data.append(eval_model_on_crossdocked(name, "test", None))
 
     df = pd.DataFrame(data)
 

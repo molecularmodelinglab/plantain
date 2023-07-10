@@ -1,8 +1,7 @@
-mamba create -n plantain python=3.10 -y
-conda activate plantain
-mamba install pytorch==1.12.0 cudatoolkit=11.6 -c pytorch -c conda-forge -y
-# mamba install -c dglteam dgl-cuda11.6 -y
-pip install dgl-cu116 dglgo -f https://data.dgl.ai/wheels/repo.html
-pip install -r requirements.txt
-# this last line is sometimes necessary
-# pip uninstall nvidia_cublas_cu11
+#!/bin/bash
+conda create -n plantain python=3.10 -y &&
+conda activate plantain &&
+conda install pytorch torchvision torchaudio pytorch-cuda=11.8 -c pytorch-nightly -c nvidia -y &&
+pip install  dgl -f https://data.dgl.ai/wheels/cu118/repo.html &&
+pip install -r requirements.txt &&
+pip install -r dev_requirements.txt
