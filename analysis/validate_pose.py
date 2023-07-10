@@ -57,8 +57,9 @@ def eval_naive_combo(cfg, dataset_name, num_preds, split, shuffle_val):
 def main(name, split, tag):
     print(f"Evaluating {name}:{tag} on {split}")
     v2_to_v3 = False
-    num_preds = None
+    num_preds = 2
     shuffle_val = False
+    timing = True
     dataset_name = "crossdocked"
     # dataset_name = "bigbind_struct"
     subset = None
@@ -111,9 +112,11 @@ def main(name, split, tag):
     cfg.model.diffusion.only_pred_local_min = True
 
     prefix = "" if subset is None else subset
-    metrics, plots = validate(cfg, model, dataset_name, split, num_preds, shuffle_val, subset_indexes)
+    metrics, (x, y, p, runtimes) = validate(cfg, model, dataset_name, split, num_preds, shuffle_val, subset_indexes, timing)
     for key, val in flatten_dict(metrics).items():
         print(f"{prefix}_{key}: {val:.3f}")
+
+    print(f"Mean runtime: {sum(runtimes)/len(runtimes)}")
 
     if subset is not None: return
     # return
@@ -124,7 +127,7 @@ def main(name, split, tag):
     shutil.rmtree(out_folder, ignore_errors=True)
     os.makedirs(out_folder, exist_ok=True)
 
-    x, y, p = get_preds(cfg, model, dataset_name, split, num_preds, shuffle_val)
+    # x, y, p = get_preds(cfg, model, dataset_name, split, num_preds, shuffle_val)
 
     lig_files = []
     rec_files = []

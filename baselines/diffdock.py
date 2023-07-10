@@ -10,8 +10,8 @@ from datasets.crossdocked import CrossDockedDataset
 def make_diffdock_dataset(cfg, split):
 
     out_file = cfg.platform.diffdock_dir + f"/data/crossdocked_{split}.csv"
-    # if os.path.exists(out_file):
-    #     return out_file
+    if os.path.exists(out_file):
+        return out_file
 
     dataset = CrossDockedDataset(cfg, split, [])
     val_struct_df = dataset.structures
@@ -75,11 +75,12 @@ if __name__ == "__main__":
     os.chdir(cfg.platform.diffdock_dir)
     cmd = f"""
     conda run -n {cfg.platform.diffdock_env} \
-    /usr/bin/time -o diffdock_timer_{split}.txt \
+    /usr/bin/time -o diffdock_timer_crossdocked_{split}.txt \
     python -m inference \
         --protein_ligand_csv data/crossdocked_{split}.csv \
         --out_dir results/crossdocked_{split} \
         --inference_steps 20 --samples_per_complex 40 \
         --batch_size 2 --actual_steps 18 --no_final_step_noise
     """
-    subprocess.run(cmd, shell=True)
+    print(cmd)
+    #subprocess.run(cmd, shell=True)

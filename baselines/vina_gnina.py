@@ -1,5 +1,6 @@
 
 import os
+import time
 import numpy as np
 # from vina import Vina
 from meeko import MoleculePreparation, PDBQTMolecule
@@ -72,7 +73,7 @@ def get_lig_size(lig, padding=3):
 GNINA_ITER = 0
 # Don't re-run openbabel before running gnina
 PREP_FOR_GNINA = False
-def run_vina(cfg, program, out_folder, i, row, lig_file, rec_file):
+def run_vina(cfg, program, out_folder, i, row, lig_file, rec_file, timing):
     
     name = rec_file.split("/")[-1] + "_" + lig_file.split("/")[-1]
     center = (row.pocket_center_x, row.pocket_center_y, row.pocket_center_z)
@@ -101,7 +102,7 @@ def run_vina(cfg, program, out_folder, i, row, lig_file, rec_file):
     if program == "gnina":
         out_file = out_folder + f"/{i}.sdf"
 
-    if os.path.exists(out_file):
+    if os.path.exists(out_file) and not timing:
         try:
             get_mol_from_file_no_cache(out_file)
             return out_file
@@ -110,7 +111,10 @@ def run_vina(cfg, program, out_folder, i, row, lig_file, rec_file):
 
     if program == "gnina":
         # todo: remove --nv option when running without gpu
-        cmd = [ "apptainer", "run", "--nv", "--bind", get_crossdocked_dir(cfg)+","+cfg.platform.crossdocked_vina_dir+","+cfg.platform.crossdocked_gnina_dir+","+cfg.platform.cache_dir, cfg.platform.gnina_sif, "gnina" ]
+        if "gnina_exec" in cfg.platform:
+            cmd = [ cfg.platform.gnina_exec ]
+        else:
+            cmd = [ "apptainer", "run", "--nv", "--bind", get_crossdocked_dir(cfg)+","+cfg.platform.crossdocked_vina_dir+","+cfg.platform.crossdocked_gnina_dir+","+cfg.platform.cache_dir, cfg.platform.gnina_sif, "gnina" ]
         if GNINA_ITER is not None:
             cmd += [ "--cnn_weights" ] + glob(f"./prior_work/gnina/*{GNINA_ITER}_iter_*.caffemodel")
             cmd += [ "--cnn_model" ] + [ "./prior_work/gnina/default2018.model" ]*5
@@ -124,7 +128,7 @@ def run_vina(cfg, program, out_folder, i, row, lig_file, rec_file):
     else:
         raise AssertionError()
 
-    cmd += [ "--receptor", rec_file, "--ligand", lig_pdbqt, "--cpu", str(cfg.platform.vina_processes) ]
+    cmd += [ "--receptor", rec_file, "--ligand", lig_pdbqt, "--cpu", str(1 if timing else cfg.platform.vina_processes) ]
     for c, s, ax in zip(center, size, ["x", "y", "z"]):
         cmd += ["--center_"+ax, str(c)]
         cmd += ["--size_"+ax, str(s)]
@@ -132,10 +136,13 @@ def run_vina(cfg, program, out_folder, i, row, lig_file, rec_file):
 
     print("Docking with", " ".join(cmd))
 
+    cur_time = time.time()
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE)
     # proc.check_returncode()
     out, err = proc.communicate()
-    return out_file
+    runtime = time.time() - cur_time
+
+    return out_file, runtime
 
 def get_lig_file(row):
     return row.lig_uff_file
@@ -143,7 +150,7 @@ def get_lig_file(row):
 def get_rec_file(row):
     return row.crossdock_rec_file
 
-def get_vina_score(cfg, program, out_folder, tup):
+def get_vina_score(cfg, program, out_folder, tup, timing):
     i, row = tup
 
     lig_file = get_crossdocked_dir(cfg) + "/" + get_lig_file(row)
@@ -153,9 +160,9 @@ def get_vina_score(cfg, program, out_folder, tup):
     # if not os.path.exists(lig_file) or not os.path.exists(rec_file):
     #     return None
     
-    ret = None
+    ret = "null", "null"
     try:
-        ret = run_vina(cfg, program, out_folder, i, row, lig_file, rec_file)
+        ret = run_vina(cfg, program, out_folder, i, row, lig_file, rec_file, timing)
     except KeyboardInterrupt:
         raise
     except:
@@ -164,9 +171,11 @@ def get_vina_score(cfg, program, out_folder, tup):
     
     return ret
 
-def dock_all(cfg, program, file_prefix):
+# set timing to true if you want to time vina/gnina rigorously. This sets the available CPUs
+# to 1 and disables caching, Set to false if you just want docking results
+def dock_all(cfg, program, file_prefix, timing, random_sample=False):
     """ to be run in parallel on slurm """
-    for split in [ "val", "test" ]:
+    for split in [ "test" ]:
         out_folder = cfg.platform[f"crossdocked_{program}_dir"]+ "/" + file_prefix + "_" + split
         os.makedirs(out_folder, exist_ok=True)
 
@@ -179,8 +188,14 @@ def dock_all(cfg, program, file_prefix):
         #     score_fn = partial(get_vina_score, cfg, program, out_folder)
         #     for ret_file in p.imap_unordered(score_fn, screen_df.iterrows()):
         #         print(ret_file)
+        
+        if timing:
+            f = open(f"outputs/{program}_crossdocked_{file_prefix}_runtimes.txt", "w")
         for item in tqdm(screen_df.iterrows(), total=len(screen_df)):
-            print(get_vina_score(cfg, program, out_folder, item))
+            out_file, runtime = get_vina_score(cfg, program, out_folder, item, timing)
+            print(out_file, runtime)
+            if timing:
+                f.write(f"{out_file},{runtime}\n")
 
 def can_load_docked_file(cfg, program, file_prefix, split, item):
     i, row = item
@@ -203,7 +218,7 @@ def can_load_docked_file(cfg, program, file_prefix, split, item):
 
 
 def finalize_crossdocked_vina(cfg, program, file_prefix):
-    for split in [ "val", "test" ]:
+    for split in [ "test" ]:
         screen_csv = get_crossdocked_dir(cfg) + f"/{file_prefix}_{split}.csv"
         screen_df = pd.read_csv(screen_csv)
 
@@ -222,8 +237,8 @@ def finalize_crossdocked_vina(cfg, program, file_prefix):
 
 if __name__ == "__main__":
 
-    cfg = get_config("vina_ff")
-    dock_all(cfg, "gnina", "structures")
-    dock_all(cfg, "vina", "structures")
+    cfg = get_config("icml")
+    dock_all(cfg, "gnina", "structures", True)
+    dock_all(cfg, "vina", "structures", True)
     finalize_crossdocked_vina(cfg, "gnina", "structures")
     finalize_crossdocked_vina(cfg, "vina", "structures")

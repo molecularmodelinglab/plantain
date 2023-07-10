@@ -1,6 +1,7 @@
 import os
 import pickle
 import resource
+import time
 from terrace import collate
 from terrace.batch import DataLoader
 from validation.val_plots import make_plots
@@ -15,12 +16,17 @@ from datasets.make_dataset import make_dataloader, seed_worker
 from validation.metrics import get_metrics
 from common.utils import flatten_dict
 
-def pred_key(cfg, model, dataset_name, split, num_batches, shuffle_val):
-    return (model.cache_key, dataset_name, split, num_batches, shuffle_val)
+def pred_key(cfg, model, dataset_name, split, num_batches, shuffle_val, timing):
+    return (model.cache_key, dataset_name, split, num_batches, shuffle_val, timing)
 
-@cache(pred_key, disable=False, version=3.0)
+@cache(pred_key, disable=True, version=3.0)
 @torch.no_grad()
-def get_preds(cfg, model, dataset_name, split, num_batches, shuffle_val=True):
+def get_preds(cfg, model, dataset_name, split, num_batches, shuffle_val=True, timing=False):
+
+    print(timing)
+    # only use 1 cpu if we want to rigoursly time the outputs
+    if timing:
+        torch.set_num_threads(1)
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model = model.to(device)
@@ -29,7 +35,7 @@ def get_preds(cfg, model, dataset_name, split, num_batches, shuffle_val=True):
     if num_batches is not None and shuffle_val:
         # shuffle to get better sample
         loader = DataLoader(loader.dataset,
-                            batch_size=cfg.batch_size,
+                            batch_size= 1 if timing else cfg.batch_size,
                             num_workers=loader.num_workers,
                             pin_memory=True,
                             shuffle=True,
@@ -40,13 +46,18 @@ def get_preds(cfg, model, dataset_name, split, num_batches, shuffle_val=True):
     xs = []
     ys = []
     preds = []
+    runtimes = []
 
     for i, (x, y) in enumerate(tqdm(loader)):
         x = x.to(device)
         y = y.to(device)
-        pred = model.predict_train(x, y, tasks, split, i)
-        if num_batches is not None and i >= num_batches:
 
+        cur_time = time.time()
+        pred = model.predict_train(x, y, tasks, split, i)
+        runtime = time.time() - cur_time
+        runtimes.append(runtime)
+
+        if num_batches is not None and i >= num_batches:
             break
 
         for x0, y0, pred0 in zip(x, y, pred):
@@ -58,10 +69,10 @@ def get_preds(cfg, model, dataset_name, split, num_batches, shuffle_val=True):
     y = collate(ys)
     pred = collate(preds)
 
-    return x, y, pred
+    return x, y, pred, runtimes
 
 @torch.no_grad()
-def validate(cfg, model, dataset_name, split, num_batches=None, shuffle_val=True, subset_indexes=None):
+def validate(cfg, model, dataset_name, split, num_batches=None, shuffle_val=True, subset_indexes=None, timing=False):
 
     is_shuffled = num_batches is not None and shuffle_val
     # with the way I'm currently taking a subset of the dataset, 
@@ -76,7 +87,7 @@ def validate(cfg, model, dataset_name, split, num_batches=None, shuffle_val=True
     tasks = set(model.get_tasks()).intersection(loader.dataset.get_tasks())
     metrics = get_metrics(cfg, tasks, offline=True).to(device)
 
-    x, y, pred = get_preds(cfg, model, dataset_name, split, num_batches, shuffle_val)
+    x, y, pred, runtimes = get_preds(cfg, model, dataset_name, split, num_batches, shuffle_val, timing)
     if subset_indexes is not None:
         x, y, pred = collate([(xi, yi, pi) for i, (xi, yi, pi) in enumerate(zip(x, y, pred)) if i in subset_indexes], lazy=True)
 
@@ -86,8 +97,7 @@ def validate(cfg, model, dataset_name, split, num_batches=None, shuffle_val=True
     comp_mets = {
         key: val.cpu().compute() for key, val in metrics.items()
     }
-    plots = None # make_plots(cfg, tasks, x.cpu(), y.cpu(), pred.cpu(), comp_mets)
-    return comp_mets, plots # flatten_dict(ret)
+    return comp_mets, (x, y, pred, runtimes)
 
 def save_validation(cfg, model, dataset_name, split, num_batches=None):
     metrics, plots = validate(cfg, model, dataset_name, split, num_batches)

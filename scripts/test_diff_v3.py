@@ -14,6 +14,8 @@ from terrace.batch import collate
 
 def main(cfg):
 
+    torch.set_num_threads(4)
+
     device = 'cpu'
     dataset = CrossDockedDataset(cfg, "val", ['lig_embed_pose', 'lig_torsion_data', 'lig_graph', 'rec_graph', 'full_rec_data'])
 
@@ -26,7 +28,7 @@ def main(cfg):
     x, y = dataset[0]
     model.get_hidden_feat(collate([x]))
 
-    model.force_field.load_state_dict(torch.load("data/plantain_ff.pt"))
+    # model.force_field.load_state_dict(torch.load("data/plantain_ff.pt"))
     model = model.to(device)
 
     # this dataset also needs to be renamed -- really just the
@@ -43,5 +45,5 @@ def main(cfg):
     # print(prof.report())
 
 if __name__ == "__main__":
-    cfg = get_config("diffusion_v3")
+    cfg = get_config("icml")
     main(cfg)
