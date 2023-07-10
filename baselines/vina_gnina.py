@@ -238,7 +238,7 @@ def finalize_crossdocked_vina(cfg, program, file_prefix):
 if __name__ == "__main__":
 
     cfg = get_config("icml")
-    dock_all(cfg, "gnina", "structures", True)
+    # dock_all(cfg, "gnina", "structures", True)
     dock_all(cfg, "vina", "structures", True)
-    finalize_crossdocked_vina(cfg, "gnina", "structures")
+    # finalize_crossdocked_vina(cfg, "gnina", "structures")
     finalize_crossdocked_vina(cfg, "vina", "structures")

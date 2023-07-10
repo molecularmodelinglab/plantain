@@ -69,7 +69,7 @@ Now save the results (and timings) from Vina,  GNINA, and DiffDock with the foll
 python -m baselines.vina_gnina
 python -m baselines.diffdock
 ```
-Note that these commands will take a very long time! Each of Vina, GNINA, and DiffDock took several days to run on my computer.
+Note that these commands will take a very long time! Each of Vina, GNINA, and DiffDock took several days to run on my computer. This is because at the moment there is no parallelization in the scripts, but it shouldn't be hard to add that in.
 
 Now that you've saved the baseline results, run:
 ```bash
