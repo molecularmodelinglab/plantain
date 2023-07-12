@@ -78,9 +78,15 @@ def get_run_config(run, cfg=None):
 def get_config(cfg_name, folder="./configs"):
     """ Loads the config file and merges in the platform cfg """
     base_conf = OmegaConf.load(folder + f"/{cfg_name}.yaml")
-    platform_conf = OmegaConf.load(folder + "/local.yaml")
+    confs = [ base_conf ]
+    try:
+        platform_conf = OmegaConf.load(folder + "/local.yaml")
+        confs.append(platform_conf)
+    except FileNotFoundError:
+        pass
     cli_conf = OmegaConf.from_cli()
-    cfg = OmegaConf.merge(base_conf, platform_conf, cli_conf)
+    confs.append(cli_conf)
+    cfg = OmegaConf.merge(*confs)
     if cfg.project is not None and "project_postfix" in cfg:
         cfg.project = cfg.project + "_" + cfg.project_postfix
     return to_attr_dict(OmegaConf.to_container(cfg))

@@ -74,7 +74,7 @@ max_epochs: 5000
 
 batch_sampler:
   type: rec
-  max_size: 80
+  max_size: 120
   debug: false
 
 test_inference: true

@@ -188,10 +188,24 @@ def dock_all(cfg, program, file_prefix, timing, random_sample=False):
         #     score_fn = partial(get_vina_score, cfg, program, out_folder)
         #     for ret_file in p.imap_unordered(score_fn, screen_df.iterrows()):
         #         print(ret_file)
-        
+    
         if timing:
-            f = open(f"outputs/{program}_crossdocked_{file_prefix}_runtimes.txt", "w")
-        for item in tqdm(screen_df.iterrows(), total=len(screen_df)):
+            
+            # try to get previous runtimes if we crashed
+            fname = f"outputs/{program}_crossdocked_{file_prefix}_runtimes.txt"
+            try:
+                with open(fname, "r") as f:
+                    prev_lines = f.readlines()
+            except FileNotFoundError:
+                prev_lines = []
+
+            f = open(fname, "w")
+
+        for i, item in enumerate(tqdm(screen_df.iterrows(), total=len(screen_df))):
+            if timing and i < len(prev_lines):
+                # print("skipping", i)
+                f.write(prev_lines[i])
+                continue
             out_file, runtime = get_vina_score(cfg, program, out_folder, item, timing)
             print(out_file, runtime)
             if timing:
@@ -200,7 +214,7 @@ def dock_all(cfg, program, file_prefix, timing, random_sample=False):
 def can_load_docked_file(cfg, program, file_prefix, split, item):
     i, row = item
     if program == "gnina" and not PREP_FOR_GNINA:
-            docked_file = f"{file_prefix}_{split}/{i}.sdf"
+        docked_file = f"{file_prefix}_{split}/{i}.sdf"
     else:
         docked_file = f"{file_prefix}_{split}/{i}.pdbqt"
     full_docked_file = cfg.platform[f"crossdocked_{program}_dir"]+ "/" + docked_file
@@ -238,7 +252,7 @@ def finalize_crossdocked_vina(cfg, program, file_prefix):
 if __name__ == "__main__":
 
     cfg = get_config("icml")
-    # dock_all(cfg, "gnina", "structures", True)
-    dock_all(cfg, "vina", "structures", True)
-    # finalize_crossdocked_vina(cfg, "gnina", "structures")
-    finalize_crossdocked_vina(cfg, "vina", "structures")
+    dock_all(cfg, "gnina", "structures", True)
+    # dock_all(cfg, "vina", "structures", True)
+    finalize_crossdocked_vina(cfg, "gnina", "structures")
+    # finalize_crossdocked_vina(cfg, "vina", "structures")

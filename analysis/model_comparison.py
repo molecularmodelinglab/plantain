@@ -51,41 +51,52 @@ def eval_model_on_crossdocked(name, split, subset):
     for key, val in flatten_dict(metrics).items():
         out_metrics[key] = float(val)
 
-    if name == "plantain":
-        out_metrics["mean_runtime"] = sum(runtimes)/len(runtimes)
+    # if name == "plantain":
+    out_metrics["mean_runtime"] = sum(runtimes)/len(runtimes)
 
     return out_metrics
 
 
 def main():
     split = "test"
-    model_names = [
-        # "diffdock",
-        "plantain",
-        # "gnina",
-        # "vina",
-    ]
-    data = []
-    for name in model_names:
-        data.append(eval_model_on_crossdocked(name, "test", None))
+    subset = None #"diffdock"
+    subset_and_models = {
+        None: [
+            "plantain",
+            "gnina",
+            "vina",
+        ],
+        "diffdock": [
+            "diffdock",
+            "plantain",
+            "gnina",
+            "vina",
+        ]
+    }
 
-    df = pd.DataFrame(data)
+    for subset, model_names in subset_and_models.items():
 
-    print("Final results:\n")
+        data = []
+        for name in model_names:
+            data.append(eval_model_on_crossdocked(name, split, subset))
 
-    for row in df.itertuples():
-        print(f"{row.name} results (subset={row.subset})")
-        print(f"  <2 Å acc:")
-        print(f"    mean: {row.acc_2_mean_1*100:.0f}%, unnorm: {row.acc_2_all_1*100:.0f}%")
-        print(f"  <5 Å acc:")
-        print(f"    mean: {row.acc_5_mean_1*100:.0f}%, unnorm: {row.acc_5_all_1*100:.0f}%")
-        if "mean_runtime" in row:
-            print(f"  mean runtime: {row.mean_runtime:.0f} s")
-        # print()
+        df = pd.DataFrame(data)
 
-    out_file = f"outputs/model_comparison_{split}.csv"
-    print(f"Saving results to {out_file}")
-    df.to_csv(out_file, index=False)
+        print(f"\nFinal results for subset={subset}:")
+
+        for row in df.itertuples():
+            print(f"{row.name}:")
+            print(f"  <2 Å acc:")
+            print(f"    mean: {row.acc_2_mean_1*100:.1f}%, unnorm: {row.acc_2_all_1*100:.1f}%")
+            print(f"  <5 Å acc:")
+            print(f"    mean: {row.acc_5_mean_1*100:.1f}%, unnorm: {row.acc_5_all_1*100:.1f}%")
+            # if "mean_runtime" in row:
+            print(f"  mean runtime: {row.mean_runtime:.1f} s")
+            # print()
+
+        out_file = f"outputs/model_comparison_{split}_{subset}.csv"
+        print(f"Saving results to {out_file}")
+        df.to_csv(out_file, index=False)
 
 if __name__ == "__main__":
     main()
