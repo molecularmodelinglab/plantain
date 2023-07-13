@@ -58,7 +58,7 @@ platform:
 
 ```
 
-Additionally, you'll need to download the preprocessed CrossDocked dataset (location tbd) to the `crossdocked_dir` folder specified above.
+Additionally, you'll need to download the [preprocessed CrossDocked dataset](https://storage.googleapis.com/plantain_data/CrossDockedPreproc.tar.gz) to the `crossdocked_dir` folder specified above.
 
 Once you have these, you're ready to train. Start by running:
 ```bash
