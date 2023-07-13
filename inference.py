@@ -1,7 +1,9 @@
 import argparse
 import os
 from tqdm import tqdm
+from rdkit import Chem
 from common.cfg_utils import get_config
+from common.pose_transform import add_multi_pose_to_mol
 from datasets.inference_dataset import InferenceDataset
 from models.pretrained_plantain import get_pretrained_plantain
 from terrace import collate
@@ -35,10 +37,10 @@ def inference():
             continue
 
         batch = collate([x]).to(device)
-        pred = model(batch)
+        pred = model(batch)[0]
 
-        mol = x[0].lig
-        add_multi_pose_to_mol(mol, pred[0].lig_pose)
+        mol = x.lig
+        add_multi_pose_to_mol(mol, pred.lig_pose)
         pose_file = f"{args.out}/{i}.sdf"
         writer = Chem.SDWriter(pose_file)
         for c in range(mol.GetNumConformers()):

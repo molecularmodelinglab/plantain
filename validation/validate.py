@@ -2,6 +2,7 @@ import os
 import pickle
 import resource
 import time
+from copy import deepcopy
 from terrace import collate
 from terrace.batch import DataLoader
 from validation.val_plots import make_plots
@@ -19,11 +20,10 @@ from common.utils import flatten_dict
 def pred_key(cfg, model, dataset_name, split, num_batches, shuffle_val, timing):
     return (model.cache_key, dataset_name, split, num_batches, shuffle_val, timing)
 
-@cache(pred_key, disable=False, version=3.0)
+@cache(pred_key, disable=False, version=4.0)
 @torch.no_grad()
 def get_preds(cfg, model, dataset_name, split, num_batches, shuffle_val=True, timing=False):
 
-    print(timing)
     # only use 1 cpu if we want to rigoursly time the outputs
     if timing:
         torch.set_num_threads(1)
@@ -31,11 +31,16 @@ def get_preds(cfg, model, dataset_name, split, num_batches, shuffle_val=True, ti
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model = model.to(device)
 
+    if timing:
+        cfg = deepcopy(cfg)
+        cfg.batch_size = 1
+        del cfg.batch_sampler
+
     loader = make_dataloader(cfg, dataset_name, split, model.get_input_feats())
     if num_batches is not None and shuffle_val:
         # shuffle to get better sample
         loader = DataLoader(loader.dataset,
-                            batch_size= 1 if timing else cfg.batch_size,
+                            batch_size= cfg.batch_size,
                             num_workers=loader.num_workers,
                             pin_memory=True,
                             shuffle=True,
@@ -90,6 +95,10 @@ def validate(cfg, model, dataset_name, split, num_batches=None, shuffle_val=True
     x, y, pred, runtimes = get_preds(cfg, model, dataset_name, split, num_batches, shuffle_val, timing)
     if subset_indexes is not None:
         x, y, pred = collate([(xi, yi, pi) for i, (xi, yi, pi) in enumerate(zip(x, y, pred)) if i in subset_indexes], lazy=True)
+        runtimes = torch.asarray(runtimes)[torch.asarray(list(subset_indexes))]
+
+    # todo: remove!
+    # return {}, (x, y, pred, runtimes)
 
     for metric in metrics.values():
         metric.update(x, pred, y)

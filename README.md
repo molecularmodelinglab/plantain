@@ -14,7 +14,15 @@ This will create a new `plantain` environment, which you can use to run everythi
 
 ## Running with pretrained weights
 
-TBD...
+Now you're ready to run PLANTAIN. First, create a PDB file containing the pocket residues of your target protein. Then create a smi file with the SMILES strings of the compounds you want to screen (one smiles string per line). Now run the following:
+
+```bash
+python inference.py compounds.smi pocket.pdb --out predictions
+```
+
+This will predict the pose of each molecule in `compounds.smi` and save them to numbered SDF files in `predictions/`. For instance, the `predictions/0.sdf` will correspond to the first compound in the file. These SDF files contain each of the 16 poses proposed by PLANTAIN, ordered according to predicted MSE.
+
+Because PLANTAIN uses `torch.compile`, the first couple compounds will take a while to run. But things should speed up after that.
 
 ## Training from scratch
 

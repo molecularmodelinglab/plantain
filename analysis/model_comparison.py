@@ -1,5 +1,6 @@
 
 import pandas as pd
+import torch
 from common.cfg_utils import get_config
 from common.utils import flatten_dict
 from datasets.make_dataset import make_dataset
@@ -46,57 +47,72 @@ def eval_model_on_crossdocked(name, split, subset):
     # prefix = "" if subset is None else "_" + subset
     metrics, (x, y, p, runtimes) = validate(cfg, model, dataset_name, split, num_preds, shuffle_val, subset_indexes, timing)
 
-    out_metrics = { "name": name }
+    if name in ("vina", "gnina"):
+        runtimes = []
+        runtime_file = f"outputs/{name}_{dataset_name}_structures_{split}_runtimes.txt"
+        with open(runtime_file, "r") as f:
+            for line in f.readlines():
+                runtimes.append(float(line.split(",")[-1]))
+
+        if subset_indexes is not None:
+            runtimes = torch.asarray(runtimes)[torch.asarray(list(subset_indexes))]
+
+    out_metrics = { "name": name, "subset": subset }
     out_metrics["subset"] = "none" if subset is None else subset
     for key, val in flatten_dict(metrics).items():
         out_metrics[key] = float(val)
 
-    # if name == "plantain":
-    out_metrics["mean_runtime"] = sum(runtimes)/len(runtimes)
+    if name == "diffdock":
+        time_file = cfg.platform.diffdock_dir + f"/diffdock_timer_{dataset_name}_{split}.txt"
+        with open(time_file, "r") as f:
+            content = f.read()
+
+        hhmmss = content.split("elapsed")[0].split(" ")[-1]
+        h, m, s = hhmmss.split(":")
+        total_runtime = int(h)*60*60 + int(m)*60 + int(s)
+        out_metrics["mean_runtime"] = total_runtime/len(subset_indexes)
+
+    else:
+        out_metrics["mean_runtime"] = float(sum(runtimes)/len(runtimes))
 
     return out_metrics
 
 
 def main():
     split = "test"
-    subset = None #"diffdock"
     subset_and_models = {
         None: [
-            "plantain",
-            "gnina",
             "vina",
+            "gnina",
+            # "plantain",
         ],
         "diffdock": [
-            "diffdock",
-            "plantain",
-            "gnina",
             "vina",
+            "gnina",
+            "diffdock",
+            # "plantain",
         ]
     }
 
-    for subset, model_names in subset_and_models.items():
+    data = []
 
-        data = []
+    for subset, model_names in subset_and_models.items():
         for name in model_names:
             data.append(eval_model_on_crossdocked(name, split, subset))
 
-        df = pd.DataFrame(data)
+    df = pd.DataFrame(data)
 
-        print(f"\nFinal results for subset={subset}:")
+    for row in df.itertuples():
+        print(f"{row.name} (subset={row.subset})")
+        print(f"  <2 Å acc:")
+        print(f"    mean: {row.acc_2_mean_1*100:.1f}%, unnorm: {row.acc_2_all_1*100:.1f}%")
+        print(f"  <5 Å acc:")
+        print(f"    mean: {row.acc_5_mean_1*100:.1f}%, unnorm: {row.acc_5_all_1*100:.1f}%")
+        print(f"  mean runtime: {row.mean_runtime:.1f} s")
 
-        for row in df.itertuples():
-            print(f"{row.name}:")
-            print(f"  <2 Å acc:")
-            print(f"    mean: {row.acc_2_mean_1*100:.1f}%, unnorm: {row.acc_2_all_1*100:.1f}%")
-            print(f"  <5 Å acc:")
-            print(f"    mean: {row.acc_5_mean_1*100:.1f}%, unnorm: {row.acc_5_all_1*100:.1f}%")
-            # if "mean_runtime" in row:
-            print(f"  mean runtime: {row.mean_runtime:.1f} s")
-            # print()
-
-        out_file = f"outputs/model_comparison_{split}_{subset}.csv"
-        print(f"Saving results to {out_file}")
-        df.to_csv(out_file, index=False)
+    out_file = f"outputs/model_comparison_{split}.csv"
+    print(f"Saving results to {out_file}")
+    df.to_csv(out_file, index=False)
 
 if __name__ == "__main__":
     main()

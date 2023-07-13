@@ -192,7 +192,7 @@ def dock_all(cfg, program, file_prefix, timing, random_sample=False):
         if timing:
             
             # try to get previous runtimes if we crashed
-            fname = f"outputs/{program}_crossdocked_{file_prefix}_runtimes.txt"
+            fname = f"outputs/{program}_crossdocked_{file_prefix}_{split}_runtimes.txt"
             try:
                 with open(fname, "r") as f:
                     prev_lines = f.readlines()

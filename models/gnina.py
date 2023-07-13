@@ -72,7 +72,11 @@ class GninaPose(Model):
 
         # print(docked_file)
         # lig = get_mol_from_file(docked_file)
-        lig = get_mol_from_file_no_cache(docked_file)
+        try:
+            lig = get_mol_from_file_no_cache(docked_file)
+        except OSError:
+            return DFRow(lig_pose=x.lig_docked_poses,
+                         pose_scores=all_pose_scores)
         # print(lig.GetNumConformers())
         lig = Chem.RemoveHs(lig)
         assert lig.GetNumAtoms() == x.lig.GetNumAtoms()
