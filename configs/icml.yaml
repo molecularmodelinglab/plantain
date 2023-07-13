@@ -81,7 +81,7 @@ test_inference: true
 
 model:
 
-  type: diffusion_v3
+  type: plantain
 
   rec_encoder:
     node_embed_size: 64
@@ -141,8 +141,9 @@ model:
   l_rf_expand_heads: 4
   l_rf_expand_feat: 8
 
-  updates_per_block: 2
-  num_blocks: 16
+  # 32 TwistBlocks total, with a residual connection every 2 blocks
+  blocks_per_super_block: 2
+  num_super_blocks: 16
 
   norm_after_add: false
 
@@ -170,4 +171,4 @@ model:
   rbf_end: 24
   rbf_steps: 32
 
-  energy_bias: 3.7
+  score_bias: 3.7

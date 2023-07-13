@@ -119,20 +119,20 @@ def diffused_pose_mse(x, pred, y):
     return torch.stack(ret).mean()
 
 def diffused_rmsd_mse(x, pred, y):
-    return F.mse_loss(pred.pred_energy.rmsd, pred.true_energy.rmsd)
+    return F.mse_loss(pred.pred_score.rmsd, pred.true_score.rmsd)
 
 def diffused_noise_mse(x, pred, y):
-    return F.mse_loss(pred.pred_energy.noise, pred.true_energy.noise)
+    return F.mse_loss(pred.pred_score.noise, pred.true_score.noise)
 
 def diffused_dist_mse(x, pred, y):
     lig_num_nodes = x.lig_graph.dgl().batch_num_nodes()
-    yp = dF.pack_padded_tensor(pred.pred_energy.dist, lig_num_nodes)
-    yt = dF.pack_padded_tensor(pred.true_energy.dist, lig_num_nodes)
+    yp = dF.pack_padded_tensor(pred.pred_score.dist, lig_num_nodes)
+    yt = dF.pack_padded_tensor(pred.true_score.dist, lig_num_nodes)
     mses = F.mse_loss(yp, yt, reduction='none')
     return segment.segment_reduce(lig_num_nodes, mses, reducer="mean").mean()
 
-    # assert pred.diffused_energy.dim() == 2
-    # mses = F.mse_loss(pred.diffused_energy.T, pred.diffused_rmsds.T, reduction='none')
+    # assert pred.diffused_score.dim() == 2
+    # mses = F.mse_loss(pred.diffused_score.T, pred.diffused_rmsds.T, reduction='none')
     # return segment.segment_reduce(x.lig_graph.dgl().batch_num_nodes(), mses, reducer="mean").mean()
 
 def full_inv_dist_mse(x, pred, y):

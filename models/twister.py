@@ -1,10 +1,16 @@
+from typing import List
+from dataclassy import dataclass
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.cuda.amp import autocast
+import dgl.backend as dF
+from dgl.nn import WeightAndSum
+from dgl.nn.pytorch import EGATConv
 from common.pose_transform import MultiPose, Pose
 from models.attention_gnn import MPNN
 from terrace import Module
-from terrace.batch import Batch
+from terrace.batch import Batch, Batchable
 from terrace.dataframe import DFRow
 from terrace.module import LazyLayerNorm, LazyLinear, LazyMultiheadAttention
 from .model import ClassifyActivityModel
@@ -12,170 +18,625 @@ from .cat_scal_embedding import CatScalEmbedding
 from .graph_embedding import GraphEmbedding
 from .force_field import ScaleOutput, rbf_encode, cdist_diff
 
-class Twister(Module, ClassifyActivityModel):
+class EGATMPNN(Module):
+    """ Very basic message passing step"""
+
+    def __init__(self, out_node_feats, out_edge_feats, num_heads):
+        super().__init__()
+        self.out_node_feats = out_node_feats
+        self.out_edge_feats = out_edge_feats
+        self.num_heads = num_heads
+
+    def forward(self, g, node_feats, edge_feats):
+        self.start_forward()
+        node_size = node_feats.shape[-1]
+        edge_size = edge_feats.shape[-1]
+        gnn = self.make(EGATConv, node_size, edge_size, self.out_node_feats, self.out_edge_feats, self.num_heads)
+        ndata, edata = gnn(g.dgl(), F.leaky_relu(node_feats), F.leaky_relu(edge_feats))
+        return ndata.reshape(ndata.shape[0], -1), edata.reshape(edata.shape[0], -1)
+
+def is_tensor(obj):
+    return isinstance(obj, torch.Tensor)
+
+# taken from dgl backend code -- computing the index actually takes some time,
+# so we precompute it
+
+def get_padded_index(lengths):
+    assert is_tensor(lengths)
+    max_len = lengths.amax().item()
+    out_len = lengths.sum().item()
+    index = torch.ones(out_len, dtype=torch.int64, device=lengths.device)
+    cum_lengths = torch.cumsum(lengths, 0)
+    index[cum_lengths[:-1]] += (max_len - lengths[:-1])
+    index = torch.cumsum(index, 0) - 1
+    return index
+
+def pack_padded_tensor_with_index(input, index):
+    input = input.reshape(-1, *input.shape[2:])
+    return input[index]
+
+def pad_packed_tensor_with_index(input, lengths, max_len, index, value):
+    old_shape = input.shape
+    batch_size = len(lengths)
+    x = input.new(batch_size * max_len, *old_shape[1:])
+    x.fill_(value)
+    x[index] = input
+    return x.view(batch_size, max_len, *old_shape[1:])
+
+
+def get_padded_edge_indexes(graph):
+    """ Returns indexes mapping (padded) LL feat to (packed) lig edge feat"""
+    all_src, all_dst = graph.dgl().edges()
+    all_src, all_dst = all_src.long(), all_dst.long()
+    batch = torch.zeros_like(all_src)
+    src = torch.zeros_like(all_src)
+    dst = torch.zeros_like(all_src)
+    for i, (edge_slice, node_slice) in enumerate(zip(graph.edge_slices, graph.node_slices)):
+        cur_src, cur_dst = all_src[edge_slice] - node_slice.start, all_dst[edge_slice] - node_slice.start
+        batch[edge_slice] = i
+        src[edge_slice] = cur_src
+        dst[edge_slice] = cur_dst
+    return batch, src, dst
+
+def my_masked_fill(x, mask, val):
+    """ super inefficient but works with jorch"""
+    # return torch.masked_fill(x, mask, val)
+    return x*(~mask) + ((torch.zeros_like(x)+val)*(mask))
+
+def softmax_with_mask(x, mask, dim):
+    # return torch.softmax(x, dim)
+    x_exp = torch.exp(x - torch.max(x,dim=dim,keepdim=True)[0])
+    x_exp = my_masked_fill(x_exp, ~mask, 0.0)
+    ret = x_exp / (x_exp.sum(dim,keepdim=True) + 1e-10)
+    return ret
+
+
+class TwistIndex:
+    """ Used to store precomputed indexes for padding/packing tensors """
+
+    def __init__(self, x):
+        self.lig_lens = x.lig_graph.dgl().batch_num_nodes()
+        self.rec_lens = x.rec_graph.dgl().batch_num_nodes()
+        self.full_rec_lens = x.full_rec_data.dgl().batch_num_nodes()
+
+        self.lig_pad_index = get_padded_index(self.lig_lens)
+        self.rec_pad_index = get_padded_index(self.rec_lens)
+        self.full_rec_pad_index = get_padded_index(self.full_rec_lens)
+
+        self.Lm = max(self.lig_lens).cpu().item()
+        self.Ram = max(self.rec_lens).cpu().item()
+        self.Rfm = max(self.full_rec_lens).cpu().item()
+
+        self.res_index = x.full_rec_data.get_res_index()
+
+        self.lig_edge_pad_index = get_padded_edge_indexes(x.lig_graph)
+
+        lig_src, lig_dst = x.lig_graph.dgl().edges()
+        self.lig_edge_index = lig_src.long(), lig_dst.long()
+
+        rec_src, rec_dst = x.rec_graph.dgl().edges()
+        self.rec_edge_index = rec_src.long(), rec_dst.long()
+
+
+        device = x.lig_graph.ndata.cat_feat.device
+        l_mask = dF.pad_packed_tensor(torch.ones((len(x.lig_graph.ndata,)), dtype=bool, device=device), x.lig_graph.dgl().batch_num_nodes(), 0.0)
+        ra_mask = dF.pad_packed_tensor(torch.ones((len(x.rec_graph.ndata,)), dtype=bool, device=device), x.rec_graph.dgl().batch_num_nodes(), 0.0)
+        rf_mask = dF.pad_packed_tensor(torch.ones((len(x.full_rec_data.ndata,)), dtype=bool, device=device), x.full_rec_data.dgl().batch_num_nodes(), 0.0)
+
+        ll_mask = l_mask.unsqueeze(-1) & l_mask.unsqueeze(-2)
+        ll_mask = ll_mask & ~torch.eye(ll_mask.shape[-1], dtype=bool, device=ll_mask.device).unsqueeze(0)
+
+        l_ra_mask = l_mask.unsqueeze(-1) & ra_mask.unsqueeze(-2)
+        l_rf_mask = l_mask.unsqueeze(-1) & rf_mask.unsqueeze(-2)
+
+        self.ll_mask = ll_mask.unsqueeze(-1)
+        self.l_ra_mask = l_ra_mask.unsqueeze(-1)
+        self.l_rf_mask = l_rf_mask.unsqueeze(-1)
+
+# L = number of atoms in ligand
+# Ra = number of rec residues (nodes in Ca graph)
+# Rf = number of rec atoms (ndoe in full graph)
+# EL = number of edges in lig graph
+# ER = number of edges in Ra graph
+# *m = max number of nodes in graph *
+# B = batch size
+@dataclass
+class TwistData:
+
+    # these features are packed (no batch dim)
+    lig_feat: torch.Tensor # (L, F)
+    rec_feat: torch.Tensor # (Ra, F)
+    full_rec_feat: torch.Tensor # (Rf, F)
+
+    lig_edge_feat: torch.Tensor # (EL, F)
+    rec_edge_feat: torch.Tensor # (ER, F)
+
+    # these features are padded (batch dim, padding to max node number )
+    ll_feat: torch.Tensor # (B, Lm, Lm, F)
+    l_ra_feat: torch.Tensor # (B, Lm, Ram, F)
+    l_rf_feat: torch.Tensor # (B, Lm, Rfm, F)
+
+
+    def __add__(self, other):
+        args = {}
+        for key in self.__dict__.keys():
+            val1 = getattr(self, key)
+            val2 = getattr(other, key)
+            if isinstance(val1, list):
+                args[key] = [ v1 + v2 for v1, v2 in zip(val1, val2)]
+            else:
+                args[key] = val1 + val2
+        return TwistData(**args)
+
+class NormAndLinear(Module):
+
+    def __init__(self, cfg, out_feat):
+        super().__init__()
+        self.out_feat = out_feat
+        if cfg.normalization == "layer":
+            self.norm_class = LazyLayerNorm
+        else:
+            raise ValueError(f"Unsupported normalization {self.cfg.normalization}")
+
+    def forward(self, x):
+        self.start_forward()
+        hid = self.make(LazyLinear, self.out_feat)(F.leaky_relu(x))
+        return (self.make(self.norm_class)(hid.reshape((-1, hid.shape[-1])))).reshape(hid.shape)
+
+class TwistModule(Module):
+    """ Base class for TwistEncoder and TwistSuperBlock"""
 
     def __init__(self, cfg):
         super().__init__()
-        self.cfg = cfg.model
+        self.cfg = cfg
+
+class FullNorm(TwistModule):
+
+    def __init__(self, cfg):
+        super().__init__(cfg)
+        if cfg.normalization == "layer":
+            self.norm_class = LazyLayerNorm
+        else:
+            raise ValueError(f"Unsupported normalization {self.cfg.normalization}")
+
+
+    def forward(self, x):
+        self.start_forward()
+        args = {}
+        for key in x.__dict__.keys():
+            val = getattr(x, key)
+            args[key] = (self.make(self.norm_class)(val.reshape((-1, val.shape[-1])))).reshape(val.shape)
+
+        return TwistData(**args)
+
+class TwistEncoder(TwistModule):
+    """ Returns the initial TwistData object from the lig and rec graphs """
+
+    def forward(self, x, twist_index):
+        self.start_forward()
+
+        td_cfg = self.cfg.twist_data
+
+        device = x.lig_graph.ndata.cat_feat.device
+
+        lig_feat, lig_edge_feat = self.make(GraphEmbedding, self.cfg.lig_encoder)(x.lig_graph)
+        lig_feat = self.make(NormAndLinear, self.cfg, td_cfg.lig_feat)(lig_feat)
+        lig_edge_feat = self.make(NormAndLinear, self.cfg, td_cfg.lig_edge_feat)(lig_edge_feat)
+
+        rec_feat, rec_edge_feat = self.make(GraphEmbedding, self.cfg.rec_encoder)(x.rec_graph)
+        rec_feat = self.make(NormAndLinear, self.cfg, td_cfg.rec_feat)(rec_feat)
+        rec_edge_feat = self.make(NormAndLinear, self.cfg, td_cfg.rec_edge_feat)(rec_edge_feat)
+
+        full_rec_feat = self.make(CatScalEmbedding, self.cfg.full_atom_embed_size)(x.full_rec_data.ndata)
+        full_rec_feat = self.make(NormAndLinear, self.cfg, td_cfg.full_rec_feat)(full_rec_feat)
+
+        B = len(x)
+
+        ll_feat = torch.zeros((B, twist_index.Lm, twist_index.Lm, td_cfg.ll_feat), device=device)
+        l_ra_feat = torch.zeros((B, twist_index.Lm, twist_index.Ram, td_cfg.l_ra_feat), device=device)
+        l_rf_feat = torch.zeros((B, twist_index.Lm, twist_index.Rfm, td_cfg.l_rf_feat), device=device)
+
+
+        return TwistData(
+                    lig_feat=lig_feat,
+                    rec_feat=rec_feat,
+                    full_rec_feat=full_rec_feat,
+                    lig_edge_feat=lig_edge_feat,
+                    rec_edge_feat=rec_edge_feat,
+                    ll_feat=ll_feat,
+                    l_ra_feat=l_ra_feat,
+                    l_rf_feat=l_rf_feat)
+
+class AttentionContract(TwistModule):
+
+    def forward(self, xy_feat, n_heads, n_feat, mask):
+        self.start_forward()
+        """ uses a sort of multi-head attention to contract an (X, Y, F) tensor and get
+        a (X, n_heads*n_feat) tensor"""
+        out_feat = self.make(NormAndLinear, self.cfg, n_heads*n_feat)(xy_feat).reshape((*xy_feat.shape[:-1], n_heads, n_feat))
+        atn_coefs = self.make(LazyLinear, n_heads)(F.leaky_relu(xy_feat)).unsqueeze(-1)
+        # print(atn_coefs.shape, mask.unsqueeze(-1).shape)
+        atn_coefs = softmax_with_mask(atn_coefs, mask.unsqueeze(-1), -3)
+        out = (atn_coefs*out_feat).sum(-3).reshape((*atn_coefs.shape[:-3], -1))
+        return out
+
+class AttentionExpand(TwistModule):
+
+    def forward(self, x_feat, y_feat, n_heads, n_feat):
+        self.start_forward()
+        """ uses a sort of mult-head attention to expand a (X, F1) tensor and a (Y, F2) tensor
+        to a (X, Y, n_heads) tensor"""
+        x_feat = self.make(NormAndLinear, self.cfg, n_heads*n_feat)(x_feat).reshape((*x_feat.shape[:-1], n_heads, n_feat))
+        y_feat = self.make(NormAndLinear, self.cfg, n_heads*n_feat)(y_feat).reshape((*y_feat.shape[:-1], n_heads, n_feat))
+        out = torch.einsum("...xhf,...yhf->...xyh", x_feat, y_feat)
+        return out
+
+class FullRecContract(TwistModule):
+
+    def forward(self, full_rec_data, res_index, n_feat):
+        """ Contracts (Rf, F1) to (Ra, n_feat) tensor"""
+        self.start_forward()
+        feat = self.make(NormAndLinear, self.cfg, n_feat)(full_rec_data)
+        
+        # use dgl backend scatter_sum to softmax over residue indexes
+        # alas this isn't documented in dgl but torch_scatter is so
+        # annoying to install
+        atn = self.make(LazyLinear, 1)(F.leaky_relu(full_rec_data))
+        atn = atn - atn.amax()
+        atn = torch.exp(atn)
+        atn_sum = dF.scatter_add(atn, res_index, res_index.amax()+1)
+        atn_sum_expand = atn_sum[res_index]
+        atn = atn/atn_sum_expand
+
+        return dF.scatter_add(feat*atn, res_index, res_index.amax()+1)
+
+class FullRecExpand(TwistModule):
+
+    def forward(self, rec_data, res_index, n_feat):
+        """ Expands (Ra, F1) to (Rf, n_feat) """
+        self.start_forward()
+        feat = self.make(NormAndLinear, self.cfg, n_feat)(rec_data)
+        return feat[res_index]
+
+class FlattenXYData(TwistModule):
+    """ Flattens all the 2D data (ll_feat, l_ra_feat, etc) into a single tensor
+    using weighted sums with a certain number of heads """
+
+    def forward(self, xy_feat, n_heads, n_feat, mask=None):
+        self.start_forward()
+        B = xy_feat.shape[0]
+        xy_feat = xy_feat.reshape((B, -1, xy_feat.shape[-1]))
+        feat = self.make(NormAndLinear, self.cfg, n_heads*n_feat)(xy_feat).reshape((B, -1, n_heads, n_feat))
+        atn = self.make(LazyLinear, n_heads)(F.leaky_relu(xy_feat)).unsqueeze(-1)
+        atn = softmax_with_mask(atn, mask.reshape((1, -1, 1, 1)), 1)
+        raise Exception("debug me!")
+        return (feat*atn).sum(1).reshape(B, -1)
+
+def ll_feat_to_lig_edges(ll_feat, lig_edge_index):
+    """ returns the data in ll_feat indexes by the edge indexes in lig_graph """
+    return ll_feat[lig_edge_index]
+
+def lig_edges_to_ll_feat(lig_edge_feat, lig_edge_index, B, L):
+    llf = torch.zeros((B, L, L, lig_edge_feat.shape[-1]), device=lig_edge_feat.device)
+    llf[lig_edge_index] += lig_edge_feat
+    return llf
+
+def feat_to_edge_feat(x_feat, edge_index):
+    src, dst = edge_index
+    return torch.cat((x_feat[src], x_feat[dst]), -1)
+
+def cat_feat_list_list(feats):
+    return [ torch.cat([feats[i][j] for i in range(len(feats))], -1) for j in range(len(feats[0])) ]
+
+class TwistSuperBlock(TwistModule):
+    """2 TwistBlocks with a residual connection"""
+
+    def full_attention_contract(self, xy_feat, n_heads, n_feat, graph_index, mask, transpose=False):
+        if transpose:
+            xy_feat = xy_feat.transpose(-3,-2)
+            mask = mask.transpose(-3,-2)
+        ret = self.make(AttentionContract, self.cfg)(xy_feat, n_heads, n_feat, mask)
+        return pack_padded_tensor_with_index(ret, graph_index)
+
+    def full_attention_expand(self, x_feat, y_feat, n_heads, n_feat):
+        return self.make(AttentionExpand, self.cfg)(x_feat, y_feat, n_heads, n_feat)
+
+    def full_norm_and_linear(self, feat_list, out_feat):
+        """ Runs a new NormAndLinear layer on an list of tensors"""
+        mod = self.make(NormAndLinear, self.cfg, out_feat)
+        return [ mod(feat) for feat in feat_list ]
+
+    def full_linear(self, feat_list, out_feat):
+        """ Runs a new NormAndLinear layer on an list of tensors"""
+        mod = self.make(LazyLinear, out_feat)
+        return [ mod(feat) for feat in feat_list ]
+
+    def single_block(self, x, twist_index, td):
+
+        td_cfg = self.cfg.twist_data
+
+        lig_packed = pad_packed_tensor_with_index(td.lig_feat, twist_index.lig_lens, twist_index.Lm, twist_index.lig_pad_index, 0.0)
+        rec_packed = pad_packed_tensor_with_index(td.rec_feat, twist_index.rec_lens, twist_index.Ram, twist_index.rec_pad_index,  0.0)
+        full_rec_packed = pad_packed_tensor_with_index(td.full_rec_feat, twist_index.full_rec_lens, twist_index.Rfm, twist_index.full_rec_pad_index,  0.0)
+
+        mpnn_type = self.cfg.get("mpnn_type", "default")
+        if mpnn_type == "default":
+            lig_mpnn_hid = self.make(MPNN)(x.lig_graph, td.lig_feat, td.lig_edge_feat)
+            rec_mpnn_hid = self.make(MPNN)(x.rec_graph, td.rec_feat, td.rec_edge_feat)
+            lig_edge_mpnn_hid = None
+            rec_edge_mpnn_hid = None
+        elif mpnn_type == "egat":
+            lig_mpnn_hid, lig_edge_mpnn_hid = self.make(EGATMPNN, self.cfg.lig_mpnn_node_size, self.cfg.lig_mpnn_edge_size, self.cfg.lig_mpnn_heads)(x.lig_graph, td.lig_feat, td.lig_edge_feat)
+            rec_mpnn_hid, rec_edge_mpnn_hid = self.make(EGATMPNN, self.cfg.rec_mpnn_node_size, self.cfg.rec_mpnn_edge_size, self.cfg.rec_mpnn_heads)(x.rec_graph, td.rec_feat, td.rec_edge_feat)
+
+        # lig_feat, lig_edge_feat, ll_feat, l_ra_feat, l_rf_feat -> lig_feat
+        lig_hid = [ td.lig_feat ] 
+        lig_hid.append(lig_mpnn_hid)
+        lig_hid.append(self.full_attention_contract(td.ll_feat, self.cfg.ll_atn_heads, self.cfg.ll_atn_feat, twist_index.lig_pad_index, twist_index.ll_mask))
+        lig_hid.append(self.full_attention_contract(td.l_ra_feat, self.cfg.l_ra_atn_heads, self.cfg.l_ra_atn_feat, twist_index.lig_pad_index, twist_index.l_ra_mask))
+        lig_hid.append(self.full_attention_contract(td.l_rf_feat, self.cfg.l_rf_atn_heads, self.cfg.l_rf_atn_feat, twist_index.lig_pad_index, twist_index.l_rf_mask))
+
+        lig_hid = torch.cat(lig_hid, -1)
+        lig_feat = self.make(LazyLinear, td_cfg.lig_feat)(lig_hid)
+        
+        # rec_feat, rec_edge_feat, l_ra_feat, rf_feat -> rec_feat
+        rec_hid = [ td.rec_feat ]
+        rec_hid.append(rec_mpnn_hid)
+        rec_hid.append(self.full_attention_contract(td.l_ra_feat, self.cfg.l_ra_atn_heads, self.cfg.l_ra_atn_feat, twist_index.rec_pad_index, twist_index.l_ra_mask, transpose=True))
+        rec_hid.append(self.make(FullRecContract, self.cfg)(td.full_rec_feat, twist_index.res_index, self.cfg.rf_ra_hid_size))
+
+        rec_hid = torch.cat(rec_hid, -1)
+        rec_feat = self.make(LazyLinear, td_cfg.rec_feat)(rec_hid)
+
+        # full_rec_feat, l_rf_feat, ra_feat -> full_rec_feat
+        full_rec_hid = [ td.full_rec_feat ]
+        full_rec_hid.append(self.full_attention_contract(td.l_rf_feat, self.cfg.l_rf_atn_heads, self.cfg.l_rf_atn_feat, twist_index.full_rec_pad_index, twist_index.l_rf_mask, transpose=True))
+        full_rec_hid.append(self.make(FullRecExpand, self.cfg)(td.rec_feat, twist_index.res_index, self.cfg.rf_ra_hid_size))
+
+        full_rec_hid = torch.cat(full_rec_hid, -1)
+        full_rec_feat = self.make(LazyLinear, td_cfg.full_rec_feat)(full_rec_hid)
+
+        # lig_edge_feat, lig_feat, ll_feat -> lig_edge_feat
+        
+        ll_2_lig_edge = self.make(NormAndLinear, self.cfg, self.cfg.ll_lig_edge_hid_size)(td.ll_feat)
+        lig_2_lig_edge = self.make(NormAndLinear, self.cfg, self.cfg.lig_feat_lig_edge_hid_size)(td.lig_feat)
+
+        lig_edge_hid = [ td.lig_edge_feat ]
+        if lig_edge_mpnn_hid is not None:
+            lig_edge_hid.append(lig_edge_mpnn_hid)
+        lig_edge_hid.append(feat_to_edge_feat(lig_2_lig_edge, twist_index.lig_edge_index))
+        lig_edge_hid.append(ll_feat_to_lig_edges(ll_2_lig_edge, twist_index.lig_edge_pad_index))
+        
+        lig_edge_hid = torch.cat(lig_edge_hid, -1)
+        lig_edge_feat = self.make(LazyLinear, td_cfg.lig_edge_feat)(lig_edge_hid)
+
+        # rec_edge_feat, rec_feat -> rec_edge_feat
+
+        rec_2_rec_edge = self.make(NormAndLinear, self.cfg, self.cfg.rec_feat_rec_edge_hid_size)(td.rec_feat)
+
+        rec_edge_hid = [ td.rec_edge_feat ]
+        if rec_edge_mpnn_hid is not None:
+            rec_edge_hid.append(rec_edge_mpnn_hid)
+        rec_edge_hid.append(feat_to_edge_feat(rec_2_rec_edge, twist_index.rec_edge_index))        
+
+        rec_edge_hid = torch.cat(rec_edge_hid, -1)
+        rec_edge_feat = self.make(LazyLinear, td_cfg.rec_edge_feat)(rec_edge_hid)
+
+        # ll_feat, lig_feat, lig_edge_feat -> ll_feat
+        lig_edge_2_ll = self.make(NormAndLinear, self.cfg, self.cfg.ll_lig_edge_hid_size)(td.lig_edge_feat)
+
+        ll_hid = [ td.ll_feat ]
+        ll_hid.append(self.full_attention_expand(lig_packed, 
+                                                lig_packed,
+                                                self.cfg.ll_expand_heads,
+                                                self.cfg.ll_expand_feat))
+        ll_hid.append(lig_edges_to_ll_feat(lig_edge_2_ll, twist_index.lig_edge_pad_index, td.ll_feat.shape[0], td.ll_feat.shape[1]))
+
+        # ll_hid = cat_feat_list_list(ll_hid)
+        # ll_feat = self.full_linear(ll_hid, td_cfg.ll_feat)
+        ll_hid = torch.cat(ll_hid, -1)
+        ll_feat = self.make(LazyLinear, td_cfg.ll_feat)(ll_hid)
+
+        # l_ra_feat, lig_feat, rec_feat -> l_ra_feat
+        
+        l_ra_hid = [ td.l_ra_feat ]
+        l_ra_hid.append(self.full_attention_expand(lig_packed, 
+                                                rec_packed,
+                                                self.cfg.l_ra_expand_heads,
+                                                self.cfg.l_ra_expand_feat))
+        # l_ra_hid = cat_feat_list_list(l_ra_hid)
+        # l_ra_feat = self.full_linear(l_ra_hid, td_cfg.l_ra_feat)
+        
+        l_ra_hid = torch.cat(l_ra_hid, -1)
+        l_ra_feat = self.make(LazyLinear, td_cfg.l_ra_feat)(l_ra_hid)
+
+        # l_rf_feat, lig_feat, full_rec_feat -> l_rf_feat
+        
+        l_rf_hid = [ td.l_rf_feat ]
+        l_rf_hid.append(self.full_attention_expand(lig_packed, 
+                                                full_rec_packed,
+                                                self.cfg.l_rf_expand_heads,
+                                                self.cfg.l_rf_expand_feat))
+        # l_rf_hid = cat_feat_list_list(l_rf_hid)
+        # l_rf_feat = self.full_linear(l_rf_hid, td_cfg.l_rf_feat)
+        
+        l_rf_hid = torch.cat(l_rf_hid, -1)
+        l_rf_feat = self.make(LazyLinear, td_cfg.l_rf_feat)(l_rf_hid)
+
+        return TwistData(
+            lig_feat=lig_feat,
+            rec_feat=rec_feat,
+            full_rec_feat=full_rec_feat,
+            lig_edge_feat=lig_edge_feat,
+            rec_edge_feat=rec_edge_feat,
+            ll_feat=ll_feat,
+            l_ra_feat=l_ra_feat,
+            l_rf_feat=l_rf_feat
+        )
+
+    def forward(self, x, twist_index, td):
+        self.start_forward()
+        for i in range(self.cfg.blocks_per_super_block - 1):
+            td = self.single_block(x, twist_index, td)
+            if self.cfg.get("norm_after_add", False):
+                td = self.make(FullNorm, self.cfg)(td)
+        return self.single_block(x, twist_index, td)
+
+def collate_padded_tensors(tensor_list, dims=[0]):
+    max_xs = [ max([t.shape[dim] for t in tensor_list]) for dim in dims ]
+    padded_tensors = []
+    for t in tensor_list:
+        padded_tensor = t
+        for max_x, dim in zip(max_xs, dims):
+            pad_length = max_x - t.shape[dim]
+            # yes, this is a cursed line
+            # but it's not my fault F.pad has a horrible api
+            padded_tensor = F.pad(padded_tensor, (*([0,0]*(t.dim()-dim-1)), 0, pad_length))
+        padded_tensors.append(padded_tensor)
+    stacked_tensors = torch.stack(padded_tensors)
+    return stacked_tensors
+
+# todo: move these classes!
+# and clean up -- don't like having to manually define all these
+# collate functions
+class PredScore(Batchable):
+    dist: torch.Tensor
+    score: torch.Tensor
 
     @staticmethod
-    def get_name():
-        return "twister"
+    def collate_dist(x):
+        return collate_padded_tensors(x)
 
-    def get_tasks(self):
-        return [ "score_activity_class",
-                 "classify_activity",
-                 "score_pose",
-                 "predict_activity",
-                 # "score_activity_regr" 
-                ]
+    @staticmethod
+    def collate_score(x):
+        return collate_padded_tensors(x)
+    
+class TrueScore(Batchable):
+    dist: torch.Tensor
+    noise: torch.Tensor
+    rmsd: torch.Tensor
+
+    @staticmethod
+    def collate_dist(x):
+        return collate_padded_tensors(x)
+
+    @staticmethod
+    def collate_noise(x):
+        return collate_padded_tensors(x)
+
+    @staticmethod
+    def collate_rmsd(x):
+        return collate_padded_tensors(x)
+
+class TwistFFCoef(Batchable):
+    l_rf_coef: torch.Tensor
+    ll_coef: torch.Tensor
+    inv_dist_mat: torch.Tensor
+
+class TwistPoseScore(TwistModule):
 
     def get_input_feats(self):
-        ret = [ "lig_graph", "rec_graph", "lig_docked_poses" ]
-        if self.cfg.project_full_atom:
-            ret.append("full_rec_data")
-        return ret
+        return [ "lig_graph", "rec_graph", "full_rec_data" ]
 
-    def make_normalization(self):
-        if self.cfg.normalization == "layer":
-            return self.make(LazyLayerNorm)
-        raise ValueError(f"Unsupported normalization {self.cfg.normalization}")
-
-    def run_linear(self, out_size, hid):
-        hid = self.make(LazyLinear, out_size)(F.leaky_relu(hid))
-        return self.make_normalization()(hid)
-
-    def get_hidden_feat(self, enc_cfg, graph):
-        assert not self.cfg.inner_attention
-        node_feats, edge_feats = self.make(GraphEmbedding, enc_cfg)(graph)
-        hid = self.run_linear(enc_cfg.node_out_size, node_feats)
-
-        prev_hid = []
-        for layer in range(self.cfg.num_mpnn_layers):
-            hid = self.make(MPNN)(graph, F.leaky_relu(hid), edge_feats)
-            hid = self.make_normalization()(hid)
-            prev_layer = layer - 2
-            if prev_layer >= 0:
-                hid = hid + prev_hid[prev_layer]
-            prev_hid.append(hid)
-
-        return hid
-
-    def forward(self, x, lig_poses=None):
+    def get_hidden_feat(self, x):
         self.start_forward()
-        
-        if lig_poses is None:
-            lig_poses = x.lig_docked_poses
 
-        inter_mat = self.get_initial_interaction_matrix(x)
-        flat_output = self.get_outputs_from_inter_mat(inter_mat, 3).unsqueeze(1)
+        twist_index = TwistIndex(x)
 
-        if x.lig_docked_poses[0].coord.shape[0] > 0:
-            dist_inter_mat = self.get_dist_inter_mat(x, inter_mat, lig_poses)
-            dist_output = self.get_outputs_from_inter_mat(dist_inter_mat, 3)
-            pose_scores = dist_output[:,:,1]
+        td = self.make(TwistEncoder, self.cfg)(x, twist_index)
+        for i in range(self.cfg.num_super_blocks):
+            td = td + self.make(TwistSuperBlock, self.cfg)(x, twist_index, td)
+            if self.cfg.get("norm_after_add", False):
+                td = self.make(FullNorm, self.cfg)(td)
+
+        self.scale_output = self.make(ScaleOutput, self.cfg.score_bias)
+        self.inv_dist_out = self.make(LazyLinear, 1)
+
+        return Batch(TwistFFCoef,
+            l_rf_coef = self.make(LazyLinear, self.cfg.rbf_steps)(F.leaky_relu(td.l_rf_feat)),
+            ll_coef = self.make(LazyLinear, self.cfg.rbf_steps)(F.leaky_relu(td.ll_feat)),
+            inv_dist_mat = self.make(LazyLinear, 1)(F.leaky_relu(td.l_rf_feat))[...,0]
+        )
+
+    @staticmethod
+    def static_get_score(mcfg,
+                        coef,
+                        lig_pose,
+                        lig_graph,
+                        full_rec_data,
+                        weight,
+                        bias):
+
+        l_rf_coef = coef.l_rf_coef
+        ll_coef = coef.ll_coef
+
+        lig_coord = torch.cat(lig_pose.coord, -2)
+        if lig_coord.dim() == 3:
+            lig_coord = lig_coord.transpose(0,1)
+        rec_coord = full_rec_data.ndata.coord
+        if lig_graph is None:
+            lig_coord = lig_coord.unsqueeze(0)
+            rec_coord = rec_coord.unsqueeze(0)
         else:
-            dist_output = torch.zeros((len(x), 0, 3), device=flat_output.device)
-            pose_scores =torch.zeros((len(x), 0),  device=flat_output.device)
+            lig_coord = dF.pad_packed_tensor(lig_coord, lig_graph.dgl().batch_num_nodes(), 0.0)
+            rec_coord = dF.pad_packed_tensor(rec_coord, full_rec_data.dgl().batch_num_nodes(), 0.0)
+        if lig_coord.dim() == 4:
+            lig_coord = lig_coord.transpose(1,2)
+            rec_coord = rec_coord.unsqueeze(1)
+            l_rf_coef = l_rf_coef.unsqueeze(1)
+            ll_coef = ll_coef.unsqueeze(1)
 
-        full_output = torch.cat((flat_output, dist_output), 1)
-        preds = full_output[:,:,0]
-        atn = full_output[:,:,1]
-        act_preds = self.make(ScaleOutput, 6.0)(full_output[:,:,2])
+        l_rf_dist = cdist_diff(lig_coord, rec_coord)
+        ll_dist = cdist_diff(lig_coord, lig_coord)
+
+        l_rf_mask = (lig_coord[...,0] != 0.0).unsqueeze(-1) & (rec_coord[...,0] != 0.0).unsqueeze(-2)
+        ll_mask =  (lig_coord[...,0] != 0.0).unsqueeze(-1) & (lig_coord[...,0] != 0.0).unsqueeze(-2)
+
+        extra_ll = ~torch.eye(ll_mask.shape[-1], dtype=bool, device=ll_mask.device).unsqueeze(0)
+        if lig_coord.dim() == 4:
+            extra_ll = extra_ll.unsqueeze(1)
+        ll_mask = ll_mask & extra_ll
+
+        l_rf_rbfs = rbf_encode(l_rf_dist, mcfg.rbf_start,mcfg.rbf_end,mcfg.rbf_steps)
+        ll_rbfs = rbf_encode(ll_dist, mcfg.rbf_start,mcfg.rbf_end,mcfg.rbf_steps)
+
+        l_rf_U = (l_rf_rbfs*l_rf_coef)
+        l_rf_U[~l_rf_mask] = 0.0
+        ll_U = (ll_rbfs*ll_coef)
+        ll_U[~ll_mask] = 0.0
+
+        pred_dist = ((l_rf_U.sum((-1,-2)) + ll_U.sum((-1,-2)))*weight + bias)
+        U = pred_dist.mean(-1)
+        pred_dist = pred_dist.transpose(-1,-2).contiguous()
+        return Batch(PredScore, dist=pred_dist, score=U)
+
+    @staticmethod
+    def get_score_single(mcfg,
+                        ll_coef,
+                        l_rf_coef,
+                        rec_coord,
+                        lig_coord,
+                        weight,
+                        bias):
         
-        atn = torch.softmax(atn, -1)
-        score = (preds*atn).sum(-1)
-        act = (act_preds*atn).sum(-1)
+        l_rf_dist = cdist_diff(lig_coord, rec_coord)
+        ll_dist = cdist_diff(lig_coord, lig_coord)
+        ll_mask = ~torch.eye(ll_dist.shape[0], dtype=bool, device=ll_dist.device).unsqueeze(-1)
+        
 
-        full_pose_scores = full_output[:,:,1]
+        l_rf_rbfs = rbf_encode(l_rf_dist, mcfg.rbf_start,mcfg.rbf_end,mcfg.rbf_steps)
+        ll_rbfs = rbf_encode(ll_dist, mcfg.rbf_start,mcfg.rbf_end,mcfg.rbf_steps)
 
-        return Batch(DFRow,
-                     score=score,
-                     activity=act,
-                     activity_score=act,
-                     pose_scores=pose_scores,
-                     full_pose_scores=full_pose_scores,
-                     full_activity_scores=preds,
-                     full_activities=act_preds)
+        ll_coef = ll_coef[:ll_rbfs.shape[0],:ll_rbfs.shape[1]]
+        l_rf_coef = l_rf_coef[:l_rf_rbfs.shape[0],:l_rf_rbfs.shape[1]]
 
-    def predict_train(self, x, y, task_names, split, batch_idx):
-        if hasattr(y, "lig_crystal_pose"):
-            lig_poses = MultiPose(coord=[coord.unsqueeze(0) for coord in y.lig_crystal_pose.coord])
-        else:
-            lig_poses = x.lig_docked_poses
-        return self.finalize_prediction(x, self(x, lig_poses), task_names)
+        l_rf_U = (l_rf_rbfs*l_rf_coef)
+        ll_U = (ll_rbfs*ll_coef)
 
-    def get_initial_interaction_matrix(self, x):
-        """ Returns tensor of shape L x R x H, for use in further no-pose and pose classification """
+        dist_U = (l_rf_U.sum((-1,-2)) + ll_U.sum((-1,-2)))*weight + bias
+        return dist_U.mean()
 
-        lig_hid = self.get_hidden_feat(self.cfg.lig_encoder, x.lig_graph)
-        lig_hid = self.run_linear(self.cfg.single_out_size, lig_hid)
-
-
-        rec_hid = self.get_hidden_feat(self.cfg.rec_encoder, x.rec_graph)
-        if self.cfg.project_full_atom:
-            full_cat_scal = self.make(CatScalEmbedding, self.cfg.full_atom_embed_size)
-            full_ln = self.make_normalization()
-            full_linear_out = self.make(LazyLinear, self.cfg.single_out_size)
-
-            full_rec_hid = []
-            tot_rec = 0
-            rec_graph = x.rec_graph.dgl()
-            for r, full_rec_data in zip(rec_graph.batch_num_nodes(), x.full_rec_data):
-                h1 = rec_hid[tot_rec + full_rec_data.res_index]
-                h2 = full_cat_scal(full_rec_data)
-                hid = torch.cat((h1, h2), -1)
-                hid = full_ln(hid)
-                hid = full_linear_out(F.leaky_relu(hid))
-                full_rec_hid.append(hid)
-                tot_rec += r
-            rec_hid = full_rec_hid
-
-        ret = []
-        # inter_ln = self.make_normalization()
-        inter_linear_out = self.make(LazyLinear, self.cfg.interact_out_size)
-        # out_ln = self.make_normalization()
-        for i in range(len(x)):
-            lf = lig_hid[x.lig_graph.node_slices[i]]
-            rf = rec_hid[i]
-            op_mat = torch.einsum("xi,yj->xyij", lf, rf).reshape((lf.shape[0], rf.shape[0], -1))
-            # inter_hid = inter_ln(op_mat)
-            inter_hid = op_mat
-            inter_hid = inter_linear_out(F.leaky_relu(inter_hid))
-            # inter_hid = out_ln(inter_hid)
-            ret.append(inter_hid)
-
-        return ret
-
-    def get_outputs_from_inter_mat(self, inter_mats, num_outputs):
-        out = []
-        atn_linear = self.make(LazyLinear, 1)
-        out_mat_linear = self.make(LazyLinear, self.cfg.interact_out_size)
-        for mat in inter_mats:
-            atn = atn_linear(mat)
-            out_mat = out_mat_linear(mat)
-            if mat.dim() == 4:
-                atn = F.softmax(atn.reshape((atn.shape[0], -1)),1).reshape(*atn.shape)
-                out.append((atn*out_mat).sum(1).sum(1))
-            else:
-                atn = F.softmax(atn.reshape(-1),0).reshape(*atn.shape)
-                out.append((atn*out_mat).sum(0).sum(0))
-        out = torch.stack(out)
-        return self.run_linear(num_outputs, out.reshape((-1, out.shape[-1]))).reshape((*out.shape[:-1], -1))
-
-    def get_dist_inter_mat(self, x, inter_mats, lig_poses):
-        # in_ln = self.make_normalization()
-        linear_in = self.make(LazyLinear, self.cfg.interact_dist_in_size)
-        # out_ln = self.make_normalization()
-        linear_out = self.make(LazyLinear, self.cfg.interact_hid_size)
-        ret = []
-        for mat, rec_coord, lig_coord in zip(inter_mats, x.full_rec_data.coord, lig_poses.coord):
-            dist = cdist_diff(lig_coord, rec_coord)
-            rbfs = rbf_encode(dist, self.cfg.rbf_start,self.cfg.rbf_end,self.cfg.rbf_steps)
-            in_mat = linear_in(F.leaky_relu(mat))
-            combo_mat = torch.einsum("...i,...j->...ij", in_mat, rbfs).reshape(*rbfs.shape[:-1], -1)
-            # combo_mat = in_ln(combo_mat)
-            out_mat = linear_out(F.leaky_relu(combo_mat))
-            # out_mat = out_ln(out_mat)
-            ret.append(out_mat)
-        return ret
+    def get_score(self, x, coef, lig_pose, inference=False):
+        bias, weight = self.scale_output.parameters()
+        lig_graph = None if inference else x.lig_graph
+        return TwistPoseScore.static_get_score(self.cfg, coef, lig_pose, lig_graph, x.full_rec_data, weight, bias)

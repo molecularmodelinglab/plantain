@@ -84,13 +84,13 @@ def main():
         None: [
             "vina",
             "gnina",
-            # "plantain",
+            "plantain",
         ],
         "diffdock": [
             "vina",
             "gnina",
             "diffdock",
-            # "plantain",
+            "plantain",
         ]
     }
 
