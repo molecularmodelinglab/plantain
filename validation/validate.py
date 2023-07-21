@@ -24,7 +24,7 @@ def pred_key(cfg, model, dataset_name, split, num_batches, shuffle_val, timing):
 @torch.no_grad()
 def get_preds(cfg, model, dataset_name, split, num_batches, shuffle_val=True, timing=False):
 
-    # only use 1 cpu if we want to rigoursly time the outputs
+    # only use 1 cpu if we want to rigorously time the outputs
     if timing:
         torch.set_num_threads(1)
 

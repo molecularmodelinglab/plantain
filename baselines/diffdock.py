@@ -74,7 +74,7 @@ if __name__ == "__main__":
     make_diffdock_dataset(cfg, split)
     os.chdir(cfg.platform.diffdock_dir)
     cmd = f"""
-    conda run -n {cfg.platform.diffdock_env} \
+    conda run --no-capture-output -n {cfg.platform.diffdock_env} \
     /usr/bin/time -o diffdock_timer_crossdocked_{split}.txt \
     python -m inference \
         --protein_ligand_csv data/crossdocked_{split}.csv \
@@ -83,4 +83,4 @@ if __name__ == "__main__":
         --batch_size 2 --actual_steps 18 --no_final_step_noise
     """
     print(cmd)
-    #subprocess.run(cmd, shell=True)
+    subprocess.run(cmd, shell=True)
