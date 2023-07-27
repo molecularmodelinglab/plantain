@@ -1,5 +1,7 @@
 # PLANTAIN
 
+[Check out the paper!](https://arxiv.org/abs/2307.12090)
+
 Implementation of PLANTAIN (Predicting LigANd pose wiTh an AI scoring functioN). PLANTAIN is a new AI docking algorithm that achieves state-of-the-art results while being significantly faster than alternatives. This repository contains everything necessary to run PLANTAIN on your own complexes.
 
 If you have any questions, notice any issues, or just want to say hi, please reach out! Email me at [mixarcid@unc.edu](mailto:mixarcid@unc.edu).
