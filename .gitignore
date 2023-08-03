@@ -24,7 +24,6 @@ notebooks
 .idea
 .vscode
 *.prof
-*.pdb
 *.pqr
 *.json
 *.log
