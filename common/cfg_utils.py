@@ -81,9 +81,9 @@ def get_config(cfg_name, folder="./configs"):
     confs = [ base_conf ]
     try:
         platform_conf = OmegaConf.load(folder + "/local.yaml")
-        confs.append(platform_conf)
     except FileNotFoundError:
-        pass
+        platform_conf = OmegaConf.create({"platform": {}})
+    confs.append(platform_conf)
     cli_conf = OmegaConf.from_cli()
     confs.append(cli_conf)
     cfg = OmegaConf.merge(*confs)
