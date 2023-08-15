@@ -13,8 +13,10 @@ def get_and_embed_mol(smiles):
     mol = Chem.AddHs(mol)
     conf_id = AllChem.EmbedMolecule(mol)
     if conf_id != 0: return None
-    success = AllChem.UFFOptimizeMolecule(mol)
-    if success != 0: return None
+    niter = 500
+    success = AllChem.UFFOptimizeMolecule(mol, niter)
+    if success != 0:
+        print(f"Warning: UFF optimization failed to converge in {niter} iterations. This probably won't affect PLANTAIN's performance too much.")
 
     mol = Chem.RemoveHs(mol)
     return mol
