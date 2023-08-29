@@ -56,6 +56,10 @@ platform:
   diffdock_dir: "/path/to/diffdock/repo"
   diffdock_env: "diffdock conda environment"
 
+  # path where you downloaded the SIFTS database (ftp://ftp.ebi.ac.uk/pub/databases/msd/sifts/flatfiles/csv/pdb_chain_uniprot.csv.gz)
+  # This is necessary to map from pdb id to uniprot id. Only needed for the DiffDock comparison
+  sifts_csv: "/path/to/sifts/csv"
+
 ```
 
 Additionally, you'll need to download the [preprocessed CrossDocked dataset](https://storage.googleapis.com/plantain_data/CrossDockedPreproc.tar.gz) to the `crossdocked_dir` folder specified above.
@@ -64,7 +68,7 @@ Once you have these, you're ready to train. Start by running:
 ```bash
 python train.py icml
 ```
-This will start training PLANTAIN using the configuration from `configs/icml.yaml`. If you want to mess around with the hyperparameters, I'd recommend creating a new config file. You can also override the configuration from the command line; for instance, running `python train.py icml learn_rate=1e-5` will train with a lower learn rate.
+This will start training PLANTAIN using the configuration from `configs/icml.yaml`. If you want to mess around with the hyperparameters, I'd recommend creating a new config file. You can also override the configuration from the command line; for instance, running `python train.py icml learn_rate=1e-5` will train with a lower learning rate.
 
 If you've specified a [wandb](wandb.ai/) project in the local config file, the training code will automatically log model weights and metrics to your project.
 
@@ -83,4 +87,4 @@ Now that you've saved the baseline results, run:
 ```bash
 python -m analysis.model_comparison
 ```
-This will print out all the the metrics used in the paper. It also saves more comprehensive metrics to `outputs/model_comparison_test.csv`.
+This will print out all the metrics used in the paper. It also saves more comprehensive metrics to `outputs/model_comparison_test.csv`.
