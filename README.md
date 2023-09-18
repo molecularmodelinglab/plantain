@@ -8,7 +8,7 @@ If you have any questions, notice any issues, or just want to say hi, please rea
 
 Start by setting up your environment. Once you have [conda](https://docs.conda.io) installed, simply run:
 ```bash
-./create_env.sh
+source create_env.sh
 ```
 This will create a new `plantain` environment, which you can use to run everything below.
 
