@@ -15,7 +15,6 @@ lightning_logs
 timewarps
 artifacts
 outputs/*
-prior_work
 # *.pt
 notebooks
 .vscode
